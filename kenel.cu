@@ -29,7 +29,6 @@
 #include <time.h>
 #include <assert.h>
 
-
 // CUDA runtime
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
@@ -47,17 +46,18 @@
 //#include "settings_KC30_2fl_1uni.cu"
 //#include "settings_KC30_2fl_2uni.cu"
 
-__global__ void curand_setup(curandState *state, int seed){
+__global__ void curand_setup(curandState *state, int seed) {
 
-  int idx = threadIdx.x+blockDim.x*blockIdx.x;
-  curand_init(seed, idx, 0, &state[idx]);
+	int idx = threadIdx.x + blockDim.x * blockIdx.x;
+	curand_init(seed, idx, 0, &state[idx]);
 }
-
 
 /**
  * This function shuffles chromosomes genes randomly over all population
-*/
-__global__ void shuffle_population_genes(curandState *my_curandstate, const unsigned *max_rand_int, const unsigned *min_rand_int, int population[POPULATION_SIZE][FACILITIES_LOCATIONS]) {
+ */
+__global__ void shuffle_population_genes(curandState *my_curandstate,
+		const unsigned *max_rand_int, const unsigned *min_rand_int,
+		int population[][FACILITIES_LOCATIONS + OBJECTIVES]) {
 
 	int i = blockIdx.x;
 	if (i < POPULATION_SIZE) {
@@ -79,13 +79,22 @@ __global__ void shuffle_population_genes(curandState *my_curandstate, const unsi
 /**
  * This function creates the base population with POPULATION_SIZE chromosomes
  */
- __global__ void generateBasePopulation(int population[POPULATION_SIZE][FACILITIES_LOCATIONS]){
-      int i = blockIdx.x;
-      int j = threadIdx.x;
-      if (i < POPULATION_SIZE && j < FACILITIES_LOCATIONS) {
-    	  population[i][j] = j;
-      }
-  }
+__global__ void generateBasePopulation(
+		int population[][FACILITIES_LOCATIONS + OBJECTIVES]) {
+
+	int i = blockIdx.x;
+	int j = threadIdx.x;
+
+	if (i < POPULATION_SIZE && j < FACILITIES_LOCATIONS + OBJECTIVES) {
+		if (j < FACILITIES_LOCATIONS) {
+			population[i][j] = j;
+		} else {
+			/* This positions will be use to allocate the fitness value
+			 * for each objective and is initialized with 0 */
+			population[i][j] = 0;
+		}
+	}
+}
 
 int main() {
 	/* To measure the execution time */
@@ -102,26 +111,29 @@ int main() {
 	int seed = rand() % 10000;
 
 	/* Variable for population in host memory */
-	int *h_population[POPULATION_SIZE][FACILITIES_LOCATIONS];
+	int h_population[POPULATION_SIZE][FACILITIES_LOCATIONS + OBJECTIVES];
 
 	/* Variable for population in device memory */
-	int *d_population;
-	cudaMalloc((void**)&d_population, sizeof(int) * POPULATION_SIZE * FACILITIES_LOCATIONS);
+	int (*d_population)[FACILITIES_LOCATIONS + OBJECTIVES];
+	cudaMalloc((void**) &d_population,
+			sizeof(int) * POPULATION_SIZE * (FACILITIES_LOCATIONS + OBJECTIVES));
 
 	/* Generation of all base chromosomes (genes ordered ascending) */
-	generateBasePopulation<<<POPULATION_SIZE, 32>>>((int (*)[FACILITIES_LOCATIONS]) d_population);
+	generateBasePopulation<<<POPULATION_SIZE, 32>>>(d_population);
 	cudaStatus = cudaDeviceSynchronize();
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "Sync CudaError!");
 	}
 	/* Set population in host memory from device memory */
-	cudaMemcpy(h_population, d_population, POPULATION_SIZE*(FACILITIES_LOCATIONS)*sizeof(int), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_population, d_population,
+			POPULATION_SIZE * (FACILITIES_LOCATIONS + OBJECTIVES) * sizeof(int),
+			cudaMemcpyDeviceToHost);
 
 	/* Uncommet this section of code to print the base population
-	printf("Base Population\n");
+	printf("\nBase Population\n");
 	for (int i = 0; i < POPULATION_SIZE; i++) {
 		printf("Chromosome %d\n", i);
-		for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+		for (int j = 0; j < FACILITIES_LOCATIONS + OBJECTIVES; j++) {
 			printf("%d ", h_population[i][j]);
 		}
 		printf("\n");
@@ -138,8 +150,10 @@ int main() {
 	h_min_rand_int = (unsigned *) malloc(sizeof(unsigned));
 	*h_max_rand_int = FACILITIES_LOCATIONS;
 	*h_min_rand_int = 0;
-	cudaMemcpy(d_max_rand_int, h_max_rand_int, sizeof(unsigned),cudaMemcpyHostToDevice);
-	cudaMemcpy(d_min_rand_int, h_min_rand_int, sizeof(unsigned),cudaMemcpyHostToDevice);
+	cudaMemcpy(d_max_rand_int, h_max_rand_int, sizeof(unsigned),
+			cudaMemcpyHostToDevice);
+	cudaMemcpy(d_min_rand_int, h_min_rand_int, sizeof(unsigned),
+			cudaMemcpyHostToDevice);
 
 	curand_setup<<<POPULATION_SIZE, 32>>>(d_state, seed);
 	cudaStatus = cudaDeviceSynchronize();
@@ -148,7 +162,7 @@ int main() {
 	}
 	/* Shuffles chromosome genes randomly over all population */
 	shuffle_population_genes<<<POPULATION_SIZE, 1>>>(d_state, d_max_rand_int,
-			d_min_rand_int, (int (*)[FACILITIES_LOCATIONS]) d_population);
+			d_min_rand_int, d_population);
 
 	cudaStatus = cudaDeviceSynchronize();
 	if (cudaStatus != cudaSuccess) {
@@ -156,17 +170,19 @@ int main() {
 	}
 
 	/* Set current population (with Shuffled genes) in host memory from device memory */
-	 cudaMemcpy(h_population, d_population, POPULATION_SIZE*(FACILITIES_LOCATIONS)*sizeof(int), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_population, d_population,
+			POPULATION_SIZE * (FACILITIES_LOCATIONS + OBJECTIVES) * sizeof(int),
+			cudaMemcpyDeviceToHost);
 	cudaStatus = cudaDeviceSynchronize();
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "Sync CudaError!");
 	}
 
 	/* Uncommet this section of code to print the base population
-	printf("Shuffled Population\n");
+	printf("\nShuffled Population\n");
 	for (int i = 0; i < POPULATION_SIZE; i++) {
 		printf("Chromosome %d\n", i);
-		for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+		for (int j = 0; j < FACILITIES_LOCATIONS + OBJECTIVES; j++) {
 			printf("%d ", h_population[i][j]);
 		}
 		printf("\n");
