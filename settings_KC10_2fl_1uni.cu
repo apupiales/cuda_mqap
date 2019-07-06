@@ -1,5 +1,5 @@
 /*
- * Executed in an "GeForce GTX 950M" with
+ * Executed in a "GeForce GTX 950M" with
  * (5) Multiprocessors, (128) CUDA Cores/MP
  */
 
@@ -19,8 +19,8 @@
  * (blocks of up to 64 threads) are processed simultaneously in each
  * Multiprocessor (950M has 5 Multiprocessors)
  */
-//#define POPULATION_SIZE (160)
-#define POPULATION_SIZE (32)
+//#define POPULATION_SIZE (2)
+#define POPULATION_SIZE (160)
 
 /*
  * Variable with transpose distances matrix in constant device memory.
