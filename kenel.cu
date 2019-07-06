@@ -274,7 +274,7 @@ void calculatePopulationfitness(
 			sizeof(int) * POPULATION_SIZE * FACILITIES_LOCATIONS
 					* FACILITIES_LOCATIONS);
 	/*
-	 * Variable to keep F1*X result in device memory (F2: Flow matrix 2).
+	 * Variable to keep F2*X result in device memory (F2: Flow matrix 2).
 	 * This variable is also use to keep F2*X*DT*XT result
 	 */
 	int (*d_temporal_2)[FACILITIES_LOCATIONS];
