@@ -6,12 +6,12 @@
 /*
  * Number of Facilities/locations in the mQAP problem
  */
-#define FACILITIES_LOCATIONS (10)
+#define FACILITIES_LOCATIONS 10
 
 /*
  * Number of objectives in the mQAP problem
  */
-#define OBJECTIVES (2)
+#define OBJECTIVES 2
 
 /*
  * Number of chromosomes (population size)
@@ -19,8 +19,14 @@
  * (blocks of up to 64 threads) are processed simultaneously in each
  * Multiprocessor (950M has 5 Multiprocessors)
  */
-//#define POPULATION_SIZE (2)
-#define POPULATION_SIZE (160)
+#define POPULATION_SIZE 661
+//#define POPULATION_SIZE (160)
+//#define POPULATION_SIZE (320)
+
+/*
+ * Number of times the genetic algorithm is executed
+ */
+#define ITERATIONS 1
 
 /*
  * Variable with transpose distances matrix in constant device memory.
