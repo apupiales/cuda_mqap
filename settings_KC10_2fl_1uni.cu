@@ -1,30 +1,27 @@
 /*
- * Executed in a "GeForce GTX 950M" with
- * (5) Multiprocessors, (128) CUDA Cores/MP
+ * Executed in a "GeForce RTX 2060M" with
+ * (30) Multiprocessors, (64) CUDA Cores/MP.
  */
 
 /*
- * Number of Facilities/locations in the mQAP problem
+ * Number of Facilities/locations in the mQAP problem.
  */
 #define FACILITIES_LOCATIONS 10
 
 /*
- * Number of objectives in the mQAP problem
+ * Number of objectives in the mQAP problem.
  */
 #define OBJECTIVES 2
 
 /*
- * Number of chromosomes (population size)
- * Note: like 950M has 5.0 CUDA Compute Capability, it means 32 blocks
- * (blocks of up to 64 threads) are processed simultaneously in each
- * Multiprocessor (950M has 5 Multiprocessors)
+ * Pt population size.
  */
-#define POPULATION_SIZE 661
-//#define POPULATION_SIZE (160)
-//#define POPULATION_SIZE (320)
+#define POPULATION_SIZE 1
+	//#define POPULATION_SIZE (160)
+	//#define POPULATION_SIZE (320)
 
 /*
- * Number of times the genetic algorithm is executed
+ * Number of times the genetic algorithm is executed.
  */
 #define ITERATIONS 1
 
