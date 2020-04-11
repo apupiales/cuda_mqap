@@ -16,7 +16,7 @@
 /*
  * Pt population size.
  */
-#define POPULATION_SIZE 1
+#define POPULATION_SIZE 9
 	//#define POPULATION_SIZE (160)
 	//#define POPULATION_SIZE (320)
 

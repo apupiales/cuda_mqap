@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <assert.h>
+#include <stdbool.h>
 
 // CUDA runtime
 #include "cuda_runtime.h"
@@ -74,7 +75,7 @@ __global__ void shufflePopulationGenes(curandState* my_curandstate,
 	const unsigned* max_rand_int, const unsigned* min_rand_int,
 	short population[][FACILITIES_LOCATIONS]) {
 
-#pragma unroll
+	#pragma unroll
 	for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
 		int idx = j + blockDim.x * blockIdx.x;
 
@@ -129,6 +130,7 @@ __global__ void multiplicationWithFlowMatrix(int flow_matrix_id,
 
 	if (j < FACILITIES_LOCATIONS && k < FACILITIES_LOCATIONS) {
 		unsigned int sum = 0;
+		#pragma unroll
 		for (int x = 0; x < FACILITIES_LOCATIONS; x++) {
 			sum += d_flowMatrices[flow_matrix_id][j][x]
 				* input_matrix[x + (i * FACILITIES_LOCATIONS)][k];
@@ -151,7 +153,7 @@ __global__ void multiplicationWithTranposedDistanceMatrix(
 
 	if (j < FACILITIES_LOCATIONS && k < FACILITIES_LOCATIONS) {
 		int sum = 0;
-
+		#pragma unroll
 		for (int x = 0; x < FACILITIES_LOCATIONS; x++) {
 			sum += input_matrix[j + (i * FACILITIES_LOCATIONS)][x]
 				* d_transposeDistancesMatrix[x][k];
@@ -173,6 +175,7 @@ __global__ void matrixMultiplication(unsigned int input_matrix_a[][FACILITIES_LO
 
 	if (j < FACILITIES_LOCATIONS && k < FACILITIES_LOCATIONS) {
 		int sum = 0;
+		#pragma unroll
 		for (int x = 0; x < FACILITIES_LOCATIONS; x++) {
 			sum += input_matrix_a[j + (i * FACILITIES_LOCATIONS)][x]
 				* input_matrix_b[x + (i * FACILITIES_LOCATIONS)][k];
@@ -187,6 +190,7 @@ __global__ void calculateTrace(short objective_id,
 
 	int i = blockIdx.x;
 	unsigned int sum = 0;
+	#pragma unroll
 	for (int x = 0; x < FACILITIES_LOCATIONS; x++) {
 		sum += input_matrix[x + (i * FACILITIES_LOCATIONS)][x];
 	}
@@ -202,7 +206,7 @@ __global__ void calculateTrace(short objective_id,
  * fitness. The fitness must be calculated for each flow matrix.
  * Trace(Fn*X*DT*XT)
  */
-void calculatePopulationFitness(
+void parallelPopulationFitnessCalculation(
 	short h_population[][FACILITIES_LOCATIONS], unsigned int h_population_fitness[][OBJECTIVES], 
 	short d_population[][FACILITIES_LOCATIONS], unsigned int d_population_fitness[][OBJECTIVES]) {
 
@@ -213,30 +217,30 @@ void calculatePopulationFitness(
 	 * Comment this section if you don't need to print partial results of fitness calculation.
 	 */
 
-	// Variable for population binary 2d representation in host memory (X)
+	// Variable for population binary 2d representation in host memory (X).
 	short h_2d_population[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
 
-	// Variable for population binary 2d representation transposed in host memory (XT)
+	// Variable for population binary 2d representation transposed in host memory (XT).
 	short h_2d_transposed_population[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
 
-	// Variable to keep Fn*X result in host memory (Fn: Flow matrix n)
+	// Variable to keep Fn*X result in host memory (Fn: Flow matrix n).
 	int h_temporal_1[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
 
-	// Variable to keep Fn*X*DT result in host memory (DT: Transposed Distances matrix)
+	// Variable to keep Fn*X*DT result in host memory (DT: Transposed Distances matrix).
 	int h_temporal_2[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
 
-	// Variable to keep Fn*X*DT*XT result in host memory
+	// Variable to keep Fn*X*DT*XT result in host memory.
 	int h_temporal_3[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
 
 	/********************************************************************************************/
 
-	/* Variable for population binary 2d representation in device memory (X) */
+	// Variable for population binary 2d representation in device memory (X).
 	short(*d_2d_population)[FACILITIES_LOCATIONS];
 	cudaMalloc((void**)&d_2d_population,
 		sizeof(short) * NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS
 		* FACILITIES_LOCATIONS);
 
-	/* Variable for population binary 2d representation transposed in device memory (XT) */
+	// Variable for population binary 2d representation transposed in device memory (XT).
 	short(*d_2d_transposed_population)[FACILITIES_LOCATIONS];
 	cudaMalloc((void**)&d_2d_transposed_population,
 		sizeof(short) * NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS
@@ -244,14 +248,14 @@ void calculatePopulationFitness(
 
 	/*
 	 * Variable to keep Fn*X result in device memory (Fn: Flow matrix n).
-	 * This variable is also used to keep Fn*X*DT*XT result
+	 * This variable is also used to keep Fn*X*DT*XT result.
 	 */
 	unsigned int(*d_temporal_1)[FACILITIES_LOCATIONS];
 	cudaMalloc((void**)&d_temporal_1,
 		sizeof(unsigned int) * NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS
 		* FACILITIES_LOCATIONS);
 
-	/* Variable to keep Fn*X*DT result in device memory (DT: Transposed Distances matrix) */
+	// Variable to keep Fn*X*DT result in device memory (DT: Transposed Distances matrix).
 	unsigned int(*d_temporal_2)[FACILITIES_LOCATIONS];
 	cudaMalloc((void**)&d_temporal_2,
 		sizeof(unsigned int) * NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS
@@ -260,7 +264,7 @@ void calculatePopulationFitness(
 	for (int obj = 0; obj < OBJECTIVES; obj++) {
 
 		dim3 threads(32, 32);
-		populationTo2DRepresentation <<<NSGA2_POPULATION_SIZE, threads >>> (d_population,
+		populationTo2DRepresentation <<<NSGA2_POPULATION_SIZE, threads>>> (d_population,
 			d_2d_population, d_2d_transposed_population);
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess) {
@@ -285,7 +289,7 @@ void calculatePopulationFitness(
 		/*
 		 * Fn*X
 		 */
-		multiplicationWithFlowMatrix <<<NSGA2_POPULATION_SIZE, threads >>> (obj,
+		multiplicationWithFlowMatrix <<<NSGA2_POPULATION_SIZE, threads>>> (obj,
 			d_2d_population, d_temporal_1);
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess) {
@@ -306,7 +310,7 @@ void calculatePopulationFitness(
 		/*
 		 * Fn*X*DT
 		 */
-		multiplicationWithTranposedDistanceMatrix <<<NSGA2_POPULATION_SIZE, threads >>> (
+		multiplicationWithTranposedDistanceMatrix <<<NSGA2_POPULATION_SIZE, threads>>> (
 			d_temporal_1, d_temporal_2);
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess) {
@@ -327,7 +331,7 @@ void calculatePopulationFitness(
 		/*
 		 * Fn*X*DT*XT
 		 */
-		matrixMultiplication <<<NSGA2_POPULATION_SIZE, threads >>> (d_temporal_2,
+		matrixMultiplication <<<NSGA2_POPULATION_SIZE, threads>>> (d_temporal_2,
 			d_2d_transposed_population, d_temporal_1);
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess) {
@@ -428,6 +432,234 @@ void calculatePopulationFitness(
 }
 
 
+/**
+ * Set initial values to total dominance, rank and crowding variables (fill with zeros).
+ */
+__global__ void initializeNSGA2Variables(short d_population_total_dominance[], short d_population_rank[], float d_population_crowding[], unsigned int d_population_fitness[][OBJECTIVES]) {
+	d_population_total_dominance[blockIdx.x] = 0;
+	d_population_rank[blockIdx.x] = 0;
+	d_population_crowding[blockIdx.x] = 0;
+
+	/*
+	 * Test values to verify the Pareto fronts calculation, works with POPULATION = 9
+	 * must be removed after verification, also d_population_fitness must be removed
+	 * in kernel calls and definition
+	 */
+	d_population_fitness[0][0] = 10;
+	d_population_fitness[0][1] = 625;
+	d_population_fitness[1][0] = 40;
+	d_population_fitness[1][1] = 600;
+	d_population_fitness[2][0] = 30;
+	d_population_fitness[2][1] = 500;
+	d_population_fitness[3][0] = 0;
+	d_population_fitness[3][1] = 400;
+	d_population_fitness[4][0] = 20;
+	d_population_fitness[4][1] = 325;
+	d_population_fitness[5][0] = 60;
+	d_population_fitness[5][1] = 450;
+	d_population_fitness[6][0] = 70;
+	d_population_fitness[6][1] = 375;
+	d_population_fitness[7][0] = 60;
+	d_population_fitness[7][1] = 275;
+	d_population_fitness[8][0] = 80;
+	d_population_fitness[8][1] = 125;
+
+
+	d_population_fitness[9][0] = 100;
+	d_population_fitness[9][1] = 0;
+	d_population_fitness[10][0] = 90;
+	d_population_fitness[10][1] = 290;
+	d_population_fitness[11][0] = 100;
+	d_population_fitness[11][1] = 400;
+	d_population_fitness[12][0] = 120;
+	d_population_fitness[12][1] = 375;
+	d_population_fitness[13][0] = 140;
+	d_population_fitness[13][1] = 350;
+	d_population_fitness[14][0] = 150;
+	d_population_fitness[14][1] = 250;
+	d_population_fitness[15][0] = 170;
+	d_population_fitness[15][1] = 75;
+	d_population_fitness[16][0] = 170;
+	d_population_fitness[16][1] = 300;
+	d_population_fitness[17][0] = 180;
+	d_population_fitness[17][1] = 50;
+	/*****************************************/
+}
+
+
+/**
+ * This function get the population dominancen matrix for 2-objective problems.
+ */
+__global__ void get2ObjectivePopulationDominanceMatrix(bool d_population_dominance_matrix[][NSGA2_POPULATION_SIZE], unsigned int d_population_fitness[][OBJECTIVES]) {
+
+	d_population_dominance_matrix[blockIdx.x][threadIdx.x] =
+	(
+		(d_population_fitness[threadIdx.x][0] <= d_population_fitness[blockIdx.x][0]) &&
+		(d_population_fitness[threadIdx.x][1] <= d_population_fitness[blockIdx.x][1])
+	) &&
+	(
+		(d_population_fitness[threadIdx.x][0] < d_population_fitness[blockIdx.x][0]) ||
+		(d_population_fitness[threadIdx.x][1] < d_population_fitness[blockIdx.x][1])
+	);
+}
+
+/**
+ * This function get the population dominancen matrix for 3-objective problems.
+ */
+__global__ void get3ObjectivePopulationDominanceMatrix(bool d_population_dominance_matrix[][NSGA2_POPULATION_SIZE], unsigned int d_population_fitness[][OBJECTIVES]) {
+
+	d_population_dominance_matrix[blockIdx.x][threadIdx.x] =
+	(
+		(d_population_fitness[threadIdx.x][0] <= d_population_fitness[blockIdx.x][0]) &&
+		(d_population_fitness[threadIdx.x][1] <= d_population_fitness[blockIdx.x][1]) &&
+		(d_population_fitness[threadIdx.x][2] <= d_population_fitness[blockIdx.x][2])
+	) &&
+	(
+		(d_population_fitness[threadIdx.x][0] < d_population_fitness[blockIdx.x][0]) ||
+		(d_population_fitness[threadIdx.x][1] < d_population_fitness[blockIdx.x][1]) ||
+		(d_population_fitness[threadIdx.x][2] < d_population_fitness[blockIdx.x][2])
+	);
+
+}
+
+__global__ void getParallelTotalDominance(short d_population_total_dominance[], bool d_population_dominance_matrix[][NSGA2_POPULATION_SIZE]) {
+
+	unsigned int sum = 0;
+	#pragma unroll
+	for (int x = 0; x < NSGA2_POPULATION_SIZE; x++) {
+		sum += d_population_dominance_matrix[blockIdx.x][x];
+	}
+	d_population_total_dominance[blockIdx.x] = sum;
+}
+
+__global__ void setRank(int iteration, short d_population_total_dominance[], short d_population_rank[]) {
+
+	if (d_population_total_dominance[blockIdx.x] == 0 && d_population_rank[blockIdx.x] == 0) {
+		d_population_rank[blockIdx.x] = iteration;
+	}
+
+}
+
+__global__ void cleanDominanceMatrix(int iteration, bool d_population_dominance_matrix[][NSGA2_POPULATION_SIZE], short d_population_rank[]) {
+
+	if (d_population_rank[threadIdx.x] == iteration) {
+		d_population_dominance_matrix[blockIdx.x][threadIdx.x] = 0;
+	}
+
+}
+
+void parallelNSGA2(
+	short h_population[][FACILITIES_LOCATIONS], unsigned int h_population_fitness[][OBJECTIVES],
+	short h_population_total_dominance[], short h_population_rank[], float h_population_crowding[],
+	short d_population[][FACILITIES_LOCATIONS], unsigned int d_population_fitness[][OBJECTIVES],
+	short d_population_total_dominance[], short d_population_rank[], float d_population_crowding[]) {
+
+	/* Variable to check correct synchronization */
+	cudaError_t cudaStatus;
+
+	/*******************************************************************************************
+	 * Comment this section if you don't need to print partial results of NSGA2.
+	 */
+
+	// Variable to store the population dominance in host memory.
+	bool h_population_dominance_matrix[NSGA2_POPULATION_SIZE][NSGA2_POPULATION_SIZE];
+
+	/*******************************************************************************************/
+
+	// Variable to store the population dominancen in device memory.
+	bool(*d_population_dominance_matrix)[NSGA2_POPULATION_SIZE];
+	cudaMalloc((void**)&d_population_dominance_matrix,
+		sizeof(bool) * NSGA2_POPULATION_SIZE * NSGA2_POPULATION_SIZE);
+
+	/*
+	 * Set initial values to totaldominance, rank and crowding variables (fill with zeros).
+	 */
+	initializeNSGA2Variables <<<NSGA2_POPULATION_SIZE, 1 >>> (d_population_total_dominance, d_population_rank, d_population_crowding, d_population_fitness);
+
+	/*
+	 * calculate the populaton dominace matrix.
+	 */
+	if (OBJECTIVES == 2) {
+		get2ObjectivePopulationDominanceMatrix <<<NSGA2_POPULATION_SIZE, NSGA2_POPULATION_SIZE>>> (d_population_dominance_matrix, d_population_fitness);
+		cudaStatus = cudaDeviceSynchronize();
+		if (cudaStatus != cudaSuccess) {
+			fprintf(stderr, "get2ObjectivePopulationDominanceMatrix Sync CudaError!\n");
+		}
+	}
+	else if (OBJECTIVES == 3) {
+		get3ObjectivePopulationDominanceMatrix <<<NSGA2_POPULATION_SIZE, NSGA2_POPULATION_SIZE>>> (d_population_dominance_matrix, d_population_fitness);
+		cudaStatus = cudaDeviceSynchronize();
+		if (cudaStatus != cudaSuccess) {
+			fprintf(stderr, "get3ObjectivePopulationDominanceMatrix Sync CudaError!\n");
+		}
+	}
+	else {
+		printf("\nThis solution only suport 2 and 3 objetives QAP\n");
+		exit(0);
+	}
+
+	/*
+	 * calculate the total dominance per solution.
+	 */
+	getParallelTotalDominance <<<NSGA2_POPULATION_SIZE, 1 >>> (d_population_total_dominance, d_population_dominance_matrix);
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "getParallelTotalDominance Sync CudaError!\n");
+	}
+
+
+	/*********************************************************************
+	 * Comment this section if you don't need to print the partial results
+	 * of  population dominace matrix calculation.
+	 */
+
+	// Set current population dominance matrix in host memory from device memory.
+	cudaMemcpy(h_population_dominance_matrix, d_population_dominance_matrix,
+		NSGA2_POPULATION_SIZE * NSGA2_POPULATION_SIZE * sizeof(bool),
+		cudaMemcpyDeviceToHost);
+	// Set current population total dominance in host memory from device memory.
+	cudaMemcpy(h_population_total_dominance, d_population_total_dominance,
+		NSGA2_POPULATION_SIZE * sizeof(short),
+		cudaMemcpyDeviceToHost);
+
+	printf("\nPopulation dominace matrix\n");
+	for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
+		for (int j = 0; j < NSGA2_POPULATION_SIZE; j++) {
+			printf("%d ", h_population_dominance_matrix[i][j]);
+		}
+		printf("| %d\n", h_population_total_dominance[i]);
+		printf("\n");
+	}
+	/*********************************************************************/
+
+	// Routine to calculate Pareto Fronts (until NSGA2_POPULATION_SIZE, the worst case).
+	for (int i = 1; i < NSGA2_POPULATION_SIZE; i++) {
+		// Set NSGA2 Rank.
+		setRank <<<NSGA2_POPULATION_SIZE,1 >>> (i, d_population_total_dominance, d_population_rank);
+		cudaStatus = cudaDeviceSynchronize();
+		if (cudaStatus != cudaSuccess) {
+			fprintf(stderr, "setRank Sync CudaError!\n");
+		}
+
+		// Remove the current Pareto Front elements from the dominance matrix.
+		cleanDominanceMatrix <<<NSGA2_POPULATION_SIZE, NSGA2_POPULATION_SIZE >>> (i, d_population_dominance_matrix, d_population_rank);
+		cudaStatus = cudaDeviceSynchronize();
+		if (cudaStatus != cudaSuccess) {
+			fprintf(stderr, "cleanDominanceMatrix Sync CudaError!\n");
+		}
+
+		// Calculate the new total dominance per solution.
+		getParallelTotalDominance <<<NSGA2_POPULATION_SIZE, 1 >>> (d_population_total_dominance, d_population_dominance_matrix);
+		cudaStatus = cudaDeviceSynchronize();
+		if (cudaStatus != cudaSuccess) {
+			fprintf(stderr, "getParallelTotalDominance in NSGA2 iteration Sync CudaError!\n");
+		}
+
+	}
+}
+
+
+
 int main()
 {
 	// In NSGA2, the Rt population size.
@@ -448,6 +680,8 @@ int main()
 	short h_population[NSGA2_POPULATION_SIZE][FACILITIES_LOCATIONS];
 	// Variable for population fitness in host memory.
 	unsigned int h_population_fitness[NSGA2_POPULATION_SIZE][OBJECTIVES];
+	// Variable for population total dominace in host memory.
+	short h_population_total_dominance[NSGA2_POPULATION_SIZE];
 	// Variable for population rank in host memory.
 	short h_population_rank[NSGA2_POPULATION_SIZE];
 	// Variable for population crowding distance in host memory.
@@ -459,7 +693,10 @@ int main()
 	cudaMalloc((void**)&d_population, sizeof(short) * NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS);
 	// Variable for population fitness in device memory.
 	unsigned int(*d_population_fitness)[OBJECTIVES];
-	cudaMalloc((void**)&d_population_fitness, sizeof(unsigned int) * FACILITIES_LOCATIONS);
+	cudaMalloc((void**)&d_population_fitness, sizeof(unsigned int) * NSGA2_POPULATION_SIZE * OBJECTIVES);
+	// Variable for population total dominace in device memory.
+	short(*d_population_total_dominance);
+	cudaMalloc((void**)&d_population_total_dominance, sizeof(short) * NSGA2_POPULATION_SIZE);
 	// Variable for population rank in device memory.
 	short(*d_population_rank);
 	cudaMalloc((void**)&d_population_rank, sizeof(short) * NSGA2_POPULATION_SIZE);
@@ -539,7 +776,7 @@ int main()
 
 	/* Set all chromosomes with 1 2 7 9 6 5 0 4 3 8 0 0 for test purposes 
 	 * expected fitness: F0 = 228322 F1 = 193446
-	 */
+	 *
 	
 	for (int a = 0; a < POPULATION_SIZE; a++) {
 		h_population[a][0] = 1;
@@ -582,7 +819,8 @@ int main()
 	for (int iteration = 1; iteration <= ITERATIONS; iteration++) {
 
 		/* Calculate fitness on each population chromosome */
-		calculatePopulationFitness(h_population, h_population_fitness, d_population, d_population_fitness);
+		parallelPopulationFitnessCalculation(h_population, h_population_fitness, d_population, d_population_fitness);
+		parallelNSGA2(h_population, h_population_fitness, h_population_total_dominance, h_population_rank, h_population_crowding, d_population, d_population_fitness, d_population_total_dominance, d_population_rank, d_population_crowding);
 
 	}
 	printf("\nfitness\n");
