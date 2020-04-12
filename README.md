@@ -10,3 +10,4 @@ What it covers so far?
   3.2 Total dominance.
   3.3 Pareto fronts.
   3.4 Rank.
+  3.5 Pupulation fitness ordered by firts objective (will be used in crowding calculation)
