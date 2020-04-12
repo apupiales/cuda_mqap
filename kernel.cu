@@ -186,7 +186,7 @@ __global__ void matrixMultiplication(unsigned int input_matrix_a[][FACILITIES_LO
 
 __global__ void calculateTrace(short objective_id,
 	unsigned int input_matrix[][FACILITIES_LOCATIONS],
-	unsigned int d_population_fitness[][OBJECTIVES]) {
+	unsigned int d_population_fitness[][OBJECTIVES + 1]) {
 
 	int i = blockIdx.x;
 	unsigned int sum = 0;
@@ -195,6 +195,11 @@ __global__ void calculateTrace(short objective_id,
 		sum += input_matrix[x + (i * FACILITIES_LOCATIONS)][x];
 	}
 	d_population_fitness[i][objective_id] = sum;
+}
+
+__global__ void setOriginalIndex(unsigned int d_population_fitness[][OBJECTIVES + 1]) {
+
+	d_population_fitness[blockIdx.x][OBJECTIVES] = blockIdx.x;
 }
 
 /**
@@ -207,8 +212,8 @@ __global__ void calculateTrace(short objective_id,
  * Trace(Fn*X*DT*XT)
  */
 void parallelPopulationFitnessCalculation(
-	short h_population[][FACILITIES_LOCATIONS], unsigned int h_population_fitness[][OBJECTIVES], 
-	short d_population[][FACILITIES_LOCATIONS], unsigned int d_population_fitness[][OBJECTIVES]) {
+	short h_population[][FACILITIES_LOCATIONS], unsigned int h_population_fitness[][OBJECTIVES + 1],
+	short d_population[][FACILITIES_LOCATIONS], unsigned int d_population_fitness[][OBJECTIVES + 1]) {
 
 	/* Variable to check correct synchronization */
 	cudaError_t cudaStatus;
@@ -358,9 +363,12 @@ void parallelPopulationFitnessCalculation(
 			fprintf(stderr, "calculateTrace 1 Sync CudaError!\n");
 		}
 
+		// Set original index. this is used in sorting operation.
+		setOriginalIndex << <NSGA2_POPULATION_SIZE, 1 >> > (d_population_fitness);
+
 		/* Set current population fitness in host memory from device memory */
 		cudaMemcpy(h_population_fitness, d_population_fitness,
-			NSGA2_POPULATION_SIZE * OBJECTIVES * sizeof(unsigned int),
+			NSGA2_POPULATION_SIZE * (OBJECTIVES + 1) * sizeof(unsigned int),
 			cudaMemcpyDeviceToHost);
 
 		/*********************************************************************
@@ -435,7 +443,7 @@ void parallelPopulationFitnessCalculation(
 /**
  * Set initial values to total dominance, rank and crowding variables (fill with zeros).
  */
-__global__ void initializeNSGA2Variables(short d_population_total_dominance[], short d_population_rank[], float d_population_crowding[], unsigned int d_population_fitness[][OBJECTIVES]) {
+__global__ void initializeNSGA2Variables(short d_population_total_dominance[], short d_population_rank[], float d_population_crowding[], unsigned int d_population_fitness[][OBJECTIVES + 1]) {
 	d_population_total_dominance[blockIdx.x] = 0;
 	d_population_rank[blockIdx.x] = 0;
 	d_population_crowding[blockIdx.x] = 0;
@@ -444,7 +452,7 @@ __global__ void initializeNSGA2Variables(short d_population_total_dominance[], s
 	 * Test values to verify the Pareto fronts calculation, works with POPULATION = 9
 	 * must be removed after verification, also d_population_fitness must be removed
 	 * in kernel calls and definition
-	 */
+	 *
 	d_population_fitness[0][0] = 10;
 	d_population_fitness[0][1] = 625;
 	d_population_fitness[1][0] = 40;
@@ -490,7 +498,7 @@ __global__ void initializeNSGA2Variables(short d_population_total_dominance[], s
 /**
  * This function get the population dominancen matrix for 2-objective problems.
  */
-__global__ void get2ObjectivePopulationDominanceMatrix(bool d_population_dominance_matrix[][NSGA2_POPULATION_SIZE], unsigned int d_population_fitness[][OBJECTIVES]) {
+__global__ void get2ObjectivePopulationDominanceMatrix(bool d_population_dominance_matrix[][NSGA2_POPULATION_SIZE], unsigned int d_population_fitness[][OBJECTIVES + 1]) {
 
 	d_population_dominance_matrix[blockIdx.x][threadIdx.x] =
 	(
@@ -506,7 +514,7 @@ __global__ void get2ObjectivePopulationDominanceMatrix(bool d_population_dominan
 /**
  * This function get the population dominancen matrix for 3-objective problems.
  */
-__global__ void get3ObjectivePopulationDominanceMatrix(bool d_population_dominance_matrix[][NSGA2_POPULATION_SIZE], unsigned int d_population_fitness[][OBJECTIVES]) {
+__global__ void get3ObjectivePopulationDominanceMatrix(bool d_population_dominance_matrix[][NSGA2_POPULATION_SIZE], unsigned int d_population_fitness[][OBJECTIVES + 1]) {
 
 	d_population_dominance_matrix[blockIdx.x][threadIdx.x] =
 	(
@@ -548,10 +556,101 @@ __global__ void cleanDominanceMatrix(int iteration, bool d_population_dominance_
 
 }
 
+__global__ void bitonicSortStep(unsigned int d_population_fitness[][OBJECTIVES + 1], int j, int k) {
+	unsigned int i, ixj;
+	i = threadIdx.x + blockDim.x * blockIdx.x;
+	ixj = i ^ j;
+	// Threads with the lowest ids sort the array.
+	if ((ixj) > i) {
+		if ((i & k) == 0) {
+			// Sorting ascending.
+			if (d_population_fitness[i][0] > d_population_fitness[ixj][0]) {
+				unsigned int temp0 = d_population_fitness[i][0];
+				unsigned int temp1 = d_population_fitness[i][1];
+				unsigned int temp2 = d_population_fitness[i][2];
+
+				d_population_fitness[i][0] = d_population_fitness[ixj][0];
+				d_population_fitness[i][1] = d_population_fitness[ixj][1];
+				d_population_fitness[i][2] = d_population_fitness[ixj][2];
+
+				d_population_fitness[ixj][0] = temp0;
+				d_population_fitness[ixj][1] = temp1;
+				d_population_fitness[ixj][2] = temp2;
+
+				if (OBJECTIVES == 3) {
+					unsigned int temp3= d_population_fitness[i][3];
+					d_population_fitness[i][3] = d_population_fitness[ixj][3];
+					d_population_fitness[ixj][3] = temp3;
+				}
+			}
+		}
+		if ((i & k) != 0) {
+			// Sorting descending.
+			if (d_population_fitness[i][0] < d_population_fitness[ixj][0]) {
+
+				unsigned int temp0 = d_population_fitness[i][0];
+				unsigned int temp1 = d_population_fitness[i][1];
+				unsigned int temp2 = d_population_fitness[i][2];
+
+				d_population_fitness[i][0] = d_population_fitness[ixj][0];
+				d_population_fitness[i][1] = d_population_fitness[ixj][1];
+				d_population_fitness[i][2] = d_population_fitness[ixj][2];
+
+				d_population_fitness[ixj][0] = temp0;
+				d_population_fitness[ixj][1] = temp1;
+				d_population_fitness[ixj][2] = temp2;
+
+				if (OBJECTIVES == 3) {
+					unsigned int temp3 = d_population_fitness[i][3];
+					d_population_fitness[i][3] = d_population_fitness[ixj][3];
+					d_population_fitness[ixj][3] = temp3;
+				}
+			}
+		}
+	}
+}
+
+/**
+ * Desc population sort by the firts objective using bitonic sort.
+ */
+void sortPopulationByFitness1(unsigned int h_population_fitness[][OBJECTIVES + 1], unsigned int d_population_fitness[][OBJECTIVES + 1])
+{
+	printf("\nUNSORTED fitness\n");
+	for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
+		for (int j = 0; j < OBJECTIVES + 1; j++) {
+			printf("|%d ", h_population_fitness[i][j]);
+		}
+		printf("\n");
+	}
+
+	int j, k;
+	// Major step.
+	for (k = 2; k <= NSGA2_POPULATION_SIZE; k <<= 1) {
+		// Minor step.
+		for (j = k >> 1; j > 0; j = j >> 1) {
+			bitonicSortStep <<<POPULATION_SIZE, 2 >> > (d_population_fitness, j, k);
+		}
+	}
+
+	/* Set current population fitness in host memory from device memory */
+	cudaMemcpy(h_population_fitness, d_population_fitness,
+		NSGA2_POPULATION_SIZE * (OBJECTIVES + 1) * sizeof(unsigned int),
+		cudaMemcpyDeviceToHost);
+
+	printf("\nSORTED fitness\n");
+	for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
+		for (int j = 0; j < OBJECTIVES + 1; j++) {
+			printf("|%d ", h_population_fitness[i][j]);
+		}
+		printf("\n");
+	}
+
+}
+
 void parallelNSGA2(
-	short h_population[][FACILITIES_LOCATIONS], unsigned int h_population_fitness[][OBJECTIVES],
+	short h_population[][FACILITIES_LOCATIONS], unsigned int h_population_fitness[][OBJECTIVES + 1],
 	short h_population_total_dominance[], short h_population_rank[], float h_population_crowding[],
-	short d_population[][FACILITIES_LOCATIONS], unsigned int d_population_fitness[][OBJECTIVES],
+	short d_population[][FACILITIES_LOCATIONS], unsigned int d_population_fitness[][OBJECTIVES + 1],
 	short d_population_total_dominance[], short d_population_rank[], float d_population_crowding[]) {
 
 	/* Variable to check correct synchronization */
@@ -632,7 +731,9 @@ void parallelNSGA2(
 	}
 	/*********************************************************************/
 
-	// Routine to calculate Pareto Fronts (until NSGA2_POPULATION_SIZE, the worst case).
+	sortPopulationByFitness1(h_population_fitness, d_population_fitness);
+
+	// Routine to calculate Pareto Fronts (until NSGA2_POPULATION_SIZE, the worst case or offspring population completed).
 	for (int i = 1; i < NSGA2_POPULATION_SIZE; i++) {
 		// Set NSGA2 Rank.
 		setRank <<<NSGA2_POPULATION_SIZE,1 >>> (i, d_population_total_dominance, d_population_rank);
@@ -640,6 +741,9 @@ void parallelNSGA2(
 		if (cudaStatus != cudaSuccess) {
 			fprintf(stderr, "setRank Sync CudaError!\n");
 		}
+
+		// Set NSGA2 Crowding.
+		//setCrowding << <NSGA2_POPULATION_SIZE, 1 >> > (i, d_population_rank, d_population_fitness);
 
 		// Remove the current Pareto Front elements from the dominance matrix.
 		cleanDominanceMatrix <<<NSGA2_POPULATION_SIZE, NSGA2_POPULATION_SIZE >>> (i, d_population_dominance_matrix, d_population_rank);
@@ -679,7 +783,7 @@ int main()
 	// Variable for population  in host memory.
 	short h_population[NSGA2_POPULATION_SIZE][FACILITIES_LOCATIONS];
 	// Variable for population fitness in host memory.
-	unsigned int h_population_fitness[NSGA2_POPULATION_SIZE][OBJECTIVES];
+	unsigned int h_population_fitness[NSGA2_POPULATION_SIZE][OBJECTIVES + 1];
 	// Variable for population total dominace in host memory.
 	short h_population_total_dominance[NSGA2_POPULATION_SIZE];
 	// Variable for population rank in host memory.
@@ -692,8 +796,8 @@ int main()
 	short(*d_population)[FACILITIES_LOCATIONS];
 	cudaMalloc((void**)&d_population, sizeof(short) * NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS);
 	// Variable for population fitness in device memory.
-	unsigned int(*d_population_fitness)[OBJECTIVES];
-	cudaMalloc((void**)&d_population_fitness, sizeof(unsigned int) * NSGA2_POPULATION_SIZE * OBJECTIVES);
+	unsigned int(*d_population_fitness)[OBJECTIVES + 1];
+	cudaMalloc((void**)&d_population_fitness, sizeof(unsigned int) * NSGA2_POPULATION_SIZE * (OBJECTIVES + 1));
 	// Variable for population total dominace in device memory.
 	short(*d_population_total_dominance);
 	cudaMalloc((void**)&d_population_total_dominance, sizeof(short) * NSGA2_POPULATION_SIZE);
@@ -840,7 +944,7 @@ int main()
 		NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
 		cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_population_fitness, d_population_fitness,
-		NSGA2_POPULATION_SIZE * OBJECTIVES * sizeof(unsigned int),
+		NSGA2_POPULATION_SIZE * (OBJECTIVES + 1) * sizeof(unsigned int),
 		cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_population_rank, d_population_rank,
 		NSGA2_POPULATION_SIZE * sizeof(short),

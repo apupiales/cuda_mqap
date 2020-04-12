@@ -14,11 +14,10 @@
 #define OBJECTIVES 2
 
 /*
- * Pt population size.
+ * Pt population size. MUST BE A POWER OF TWO
+ * due to bitonic sort limitation.
  */
-#define POPULATION_SIZE 9
-	//#define POPULATION_SIZE (160)
-	//#define POPULATION_SIZE (320)
+#define POPULATION_SIZE 8
 
 /*
  * Number of times the genetic algorithm is executed.
