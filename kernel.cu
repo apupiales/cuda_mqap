@@ -682,7 +682,7 @@ __global__ void crowdingCalcualtion(
 			(
 				(float)(d_population_fitness[(int)d_temporal_population_crowding[blockIdx.x + 1][1]][objective] - 
 				 d_population_fitness[(int)d_temporal_population_crowding[blockIdx.x - 1][1]][objective]) /
-				(float)(d_sorted_population_fitness[0][objective] - d_sorted_population_fitness[NSGA2_POPULATION_SIZE][objective])
+				(float)(d_sorted_population_fitness[NSGA2_POPULATION_SIZE - 1][objective] - d_sorted_population_fitness[0][objective])
 			);
 	}
 	d_population_crowding[(int)d_temporal_population_crowding[blockIdx.x][1]] = d_temporal_population_crowding[blockIdx.x][2];
@@ -1173,6 +1173,25 @@ int main()
 		h_population[a][8] = 3;
 		h_population[a][9] = 8;	
 	}
+
+	*/
+
+	h_population[0][0] =1; h_population[0][1] =9; h_population[0][2] =6; h_population[0][3] =2; h_population[0][4] =8; h_population[0][5] =0; h_population[0][6] =4; h_population[0][7] =3; h_population[0][8] =5; h_population[0][9] =7;
+	h_population[1][0] =3; h_population[1][1] =7; h_population[1][2] =4; h_population[1][3] =6; h_population[1][4] =2; h_population[1][5] =9; h_population[1][6] =1; h_population[1][7] =8; h_population[1][8] =0; h_population[1][9] =5;
+	h_population[2][0] =4; h_population[2][1] =9; h_population[2][2] =8; h_population[2][3] =5; h_population[2][4] =6; h_population[2][5] =0; h_population[2][6] =7; h_population[2][7] =3; h_population[2][8] =2; h_population[2][9] =1;
+	h_population[3][0] =2; h_population[3][1] =9; h_population[3][2] =1; h_population[3][3] =5; h_population[3][4] =4; h_population[3][5] =0; h_population[3][6] =3; h_population[3][7] =8; h_population[3][8] =6; h_population[3][9] =7;
+	h_population[4][0] =6; h_population[4][1] =9; h_population[4][2] =0; h_population[4][3] =1; h_population[4][4] =8; h_population[4][5] =4; h_population[4][6] =3; h_population[4][7] =2; h_population[4][8] =5; h_population[4][9] =7;
+	h_population[5][0] =8; h_population[5][1] =7; h_population[5][2] =5; h_population[5][3] =1; h_population[5][4] =4; h_population[5][5] =6; h_population[5][6] =9; h_population[5][7] =2; h_population[5][8] =0; h_population[5][9] =3;
+	h_population[6][0] =4; h_population[6][1] =9; h_population[6][2] =3; h_population[6][3] =6; h_population[6][4] =0; h_population[6][5] =7; h_population[6][6] =8; h_population[6][7] =5; h_population[6][8] =2; h_population[6][9] =1;
+	h_population[7][0] =3; h_population[7][1] =5; h_population[7][2] =1; h_population[7][3] =6; h_population[7][4] =7; h_population[7][5] =0; h_population[7][6] =9; h_population[7][7] =2; h_population[7][8] =8; h_population[7][9] =4;
+	h_population[8][0] =6; h_population[8][1] =9; h_population[8][2] =1; h_population[8][3] =8; h_population[8][4] =2; h_population[8][5] =5; h_population[8][6] =7; h_population[8][7] =0; h_population[8][8] =4; h_population[8][9] =3;
+	h_population[9][0] =4; h_population[9][1] =8; h_population[9][2] =7; h_population[9][3] =6; h_population[9][4] =9; h_population[9][5] =5; h_population[9][6] =1; h_population[9][7] =0; h_population[9][8] =3; h_population[9][9] =2;
+	h_population[10][0] =8; h_population[10][1] =5; h_population[10][2] =4; h_population[10][3] =2; h_population[10][4] =0; h_population[10][5] =1; h_population[10][6] =7; h_population[10][7] =9; h_population[10][8] =3; h_population[10][9] =6;
+	h_population[11][0] =3; h_population[11][1] =8; h_population[11][2] =0; h_population[11][3] =6; h_population[11][4] =2; h_population[11][5] =7; h_population[11][6] =4; h_population[11][7] =9; h_population[11][8] =5; h_population[11][9] =1;
+	h_population[12][0] =1; h_population[12][1] =6; h_population[12][2] =5; h_population[12][3] =9; h_population[12][4] =8; h_population[12][5] =3; h_population[12][6] =0; h_population[12][7] =2; h_population[12][8] =4; h_population[12][9] =7;
+	h_population[13][0] =2; h_population[13][1] =6; h_population[13][2] =3; h_population[13][3] =4; h_population[13][4] =9; h_population[13][5] =0; h_population[13][6] =1; h_population[13][7] =8; h_population[13][8] =5; h_population[13][9] =7;
+	h_population[14][0] =4; h_population[14][1] =9; h_population[14][2] =5; h_population[14][3] =7; h_population[14][4] =2; h_population[14][5] =6; h_population[14][6] =0; h_population[14][7] =8; h_population[14][8] =1; h_population[14][9] =3;
+	h_population[15][0] =6; h_population[15][1] =0; h_population[15][2] =9; h_population[15][3] =8; h_population[15][4] =2; h_population[15][5] =4; h_population[15][6] =7; h_population[15][7] =3; h_population[15][8] =1; h_population[15][9] =5;
 
 	// Set Initial population in device memory from host memory with a fixed solution
 	cudaMemcpy(d_population, h_population,
