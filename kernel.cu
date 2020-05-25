@@ -705,8 +705,8 @@ __global__ void paretoFrontBitonicSortStep(float d_temporal_population_crowding[
 	// Threads with the lowest ids sort the array.
 	if ((ixj) > i) {
 		if ((i & k) == 0) {
-			// Sorting ascending.
-			if (d_temporal_population_crowding[i][2] > d_temporal_population_crowding[ixj][2]) {
+			// Sorting descending.
+			if (d_temporal_population_crowding[i][2] < d_temporal_population_crowding[ixj][2]) {
 				float temp0 = d_temporal_population_crowding[i][0];
 				float temp1 = d_temporal_population_crowding[i][1];
 				float temp2 = d_temporal_population_crowding[i][2];
@@ -722,8 +722,8 @@ __global__ void paretoFrontBitonicSortStep(float d_temporal_population_crowding[
 			}
 		}
 		if ((i & k) != 0) {
-			// Sorting descending.
-			if (d_temporal_population_crowding[i][2] < d_temporal_population_crowding[ixj][2]) {
+			// Sorting ascending.
+			if (d_temporal_population_crowding[i][2] > d_temporal_population_crowding[ixj][2]) {
 
 				float temp0 = d_temporal_population_crowding[i][0];
 				float temp1 = d_temporal_population_crowding[i][1];
@@ -857,11 +857,30 @@ short crowding(
 	return top_total;
 }
 
+__global__ void moveSolutionsToOffspring(
+	short offspring_count, short d_population[][FACILITIES_LOCATIONS],
+	float d_temporal_population_crowding[][3], short d_offspring[][FACILITIES_LOCATIONS]) {
+		if ((offspring_count + blockIdx.x + 1) <= POPULATION_SIZE) {
+			d_offspring[blockIdx.x + offspring_count][threadIdx.x] = d_population[(int)d_temporal_population_crowding[blockIdx.x][1]][threadIdx.x];
+		}
+}
+
+__global__ void moveRankAndCrowdingToOffspring(
+	short offspring_count, float d_temporal_population_crowding[][3],
+	short d_offspring_rank[], float d_offspring_crowding[]) {
+	if ((offspring_count + blockIdx.x + 1) <= POPULATION_SIZE) {
+		d_offspring_rank[blockIdx.x + offspring_count] = d_temporal_population_crowding[blockIdx.x][0];
+		d_offspring_crowding[blockIdx.x + offspring_count] = d_temporal_population_crowding[blockIdx.x][2];
+	}
+}
+
 void parallelNSGA2(
 	short h_population[][FACILITIES_LOCATIONS], unsigned int h_population_fitness[][OBJECTIVES + 1],
 	short h_population_total_dominance[], short h_population_rank[], float h_population_crowding[],
+	short h_offspring[][FACILITIES_LOCATIONS], short h_offspring_rank[], float h_offspring_crowding[],
 	short d_population[][FACILITIES_LOCATIONS], unsigned int d_population_fitness[][OBJECTIVES + 1], unsigned int d_sorted_population_fitness[][OBJECTIVES + 1],
-	short d_population_total_dominance[], short d_population_rank[], float d_population_crowding[]) {
+	short d_population_total_dominance[], short d_population_rank[], float d_population_crowding[],
+	short d_offspring[][FACILITIES_LOCATIONS], short d_offspring_rank[], float d_offspring_crowding[]) {
 
 	/* Variable to check correct synchronization */
 	cudaError_t cudaStatus;
@@ -881,7 +900,7 @@ void parallelNSGA2(
 	// [2] crowding distance.
 	float h_temporal_population_crowding[NSGA2_POPULATION_SIZE][3];
 
-	// Variable to store the the total count of selected solution in each iteration.
+	// Variable to store the total count of selected solution in each iteration (host).
 	short offspring_count = 0;
 
 	// Number of solutions in the Parto front.
@@ -891,6 +910,7 @@ void parallelNSGA2(
 	bool(*d_population_dominance_matrix)[NSGA2_POPULATION_SIZE];
 	cudaMalloc((void**)&d_population_dominance_matrix,
 		sizeof(bool) * NSGA2_POPULATION_SIZE * NSGA2_POPULATION_SIZE);
+
 
 	// Variable to store temporarily the population crowding in device memory.
 	// will be use for crauding calculation and offspring selection
@@ -1004,12 +1024,39 @@ void parallelNSGA2(
 			}
 			printf("\n");
 		}
-		/*********************************************************************/
 
-		// @todo Move selected pareto front solutions to the offspring.
-		//moveSolutionsToOffspring <<<NSGA2_POPULATION_SIZE, pareto_front_count >> > (offspring_count, pareto_front_count, d_population, d_temporal_population_crowding);
-		//moveRankToOffspring <<<NSGA2_POPULATION_SIZE, 1 >> > (offspring_count, pareto_front_count, d_rank, d_temporal_population_crowding);
-		//moveCrowdingToOffspring <<<NSGA2_POPULATION_SIZE, 1 >> > (offspring_count, pareto_front_count, d_population_crowding, d_temporal_population_crowding);
+		// Move selected pareto front solutions and related required data to the offspring.
+		moveSolutionsToOffspring <<<pareto_front_count, FACILITIES_LOCATIONS >>> (offspring_count, d_population, d_temporal_population_crowding, d_offspring);
+		moveRankAndCrowdingToOffspring <<<pareto_front_count, 1 >>> (offspring_count, d_temporal_population_crowding, d_offspring_rank, d_offspring_crowding);
+		
+		/* Set offspring population in host memory from device memory */
+		cudaMemcpy(h_offspring, d_offspring,
+			POPULATION_SIZE* (FACILITIES_LOCATIONS) * sizeof(short),
+			cudaMemcpyDeviceToHost);
+		/* Set offspring rank in host memory from device memory */
+		cudaMemcpy(h_offspring_rank, d_offspring_rank,
+			POPULATION_SIZE * sizeof(short),
+			cudaMemcpyDeviceToHost);
+		/* Set offspring crowding in host memory from device memory */
+		cudaMemcpy(h_offspring_crowding, d_offspring_crowding,
+			POPULATION_SIZE * sizeof(float),
+			cudaMemcpyDeviceToHost);
+
+		printf("\n OFFSPRING Population\n");
+		for (int x = 0; x < POPULATION_SIZE; x++) {
+			printf("Chromosome %d\n", x);
+			// Print solution.
+			for (int y = 0; y < FACILITIES_LOCATIONS; y++) {
+				printf("%d ", h_offspring[x][y]);
+			}
+			// Print rank.
+			printf("|%d ", h_offspring_rank[x]);
+			// Print crowding.
+			printf("%f", h_offspring_crowding[x]);
+			printf("\n");
+		}
+
+		/******************************************************************/
 
 		offspring_count += pareto_front_count;
 
@@ -1066,6 +1113,12 @@ int main()
 	short h_population_rank[NSGA2_POPULATION_SIZE];
 	// Variable for population crowding distance in host memory.
 	float h_population_crowding[NSGA2_POPULATION_SIZE];
+	// Variable for offspring  in host memory.
+	short h_offspring[POPULATION_SIZE][FACILITIES_LOCATIONS];
+	// Variable for population rank in host memory.
+	short h_offspring_rank[POPULATION_SIZE];
+	// Variable for population crowding distance in host memory.
+	float h_offspring_crowding[POPULATION_SIZE];
 
 	/**********VARIABLES IN DEVICE MEMORY********/
 	// Variable for population in device memory.
@@ -1086,6 +1139,15 @@ int main()
 	// Variable for population crowding distance in device memory.
 	float(*d_population_crowding);
 	cudaMalloc((void**)&d_population_crowding, sizeof(float) * NSGA2_POPULATION_SIZE);
+	// Variable for offspring in device memory.
+	short(*d_offspring)[FACILITIES_LOCATIONS];
+	cudaMalloc((void**)&d_offspring, sizeof(short) * POPULATION_SIZE * FACILITIES_LOCATIONS);
+	// Variable for offspring rank in device memory.
+	short(*d_offspring_rank);
+	cudaMalloc((void**)&d_offspring_rank, sizeof(short) * POPULATION_SIZE);
+	// Variable for offspring crowding distance in device memory.
+	float(*d_offspring_crowding);
+	cudaMalloc((void**)&d_offspring_crowding, sizeof(float) * POPULATION_SIZE);
 
 	/* Generation of all base chromosomes (genes ordered ascending).
 	 * 64 threads are defined here because we are going to tackle instances upto 60 FACILITIES/LOCATIONS.
@@ -1174,8 +1236,6 @@ int main()
 		h_population[a][9] = 8;	
 	}
 
-	*/
-
 	h_population[0][0] =1; h_population[0][1] =9; h_population[0][2] =6; h_population[0][3] =2; h_population[0][4] =8; h_population[0][5] =0; h_population[0][6] =4; h_population[0][7] =3; h_population[0][8] =5; h_population[0][9] =7;
 	h_population[1][0] =3; h_population[1][1] =7; h_population[1][2] =4; h_population[1][3] =6; h_population[1][4] =2; h_population[1][5] =9; h_population[1][6] =1; h_population[1][7] =8; h_population[1][8] =0; h_population[1][9] =5;
 	h_population[2][0] =4; h_population[2][1] =9; h_population[2][2] =8; h_population[2][3] =5; h_population[2][4] =6; h_population[2][5] =0; h_population[2][6] =7; h_population[2][7] =3; h_population[2][8] =2; h_population[2][9] =1;
@@ -1192,6 +1252,8 @@ int main()
 	h_population[13][0] =2; h_population[13][1] =6; h_population[13][2] =3; h_population[13][3] =4; h_population[13][4] =9; h_population[13][5] =0; h_population[13][6] =1; h_population[13][7] =8; h_population[13][8] =5; h_population[13][9] =7;
 	h_population[14][0] =4; h_population[14][1] =9; h_population[14][2] =5; h_population[14][3] =7; h_population[14][4] =2; h_population[14][5] =6; h_population[14][6] =0; h_population[14][7] =8; h_population[14][8] =1; h_population[14][9] =3;
 	h_population[15][0] =6; h_population[15][1] =0; h_population[15][2] =9; h_population[15][3] =8; h_population[15][4] =2; h_population[15][5] =4; h_population[15][6] =7; h_population[15][7] =3; h_population[15][8] =1; h_population[15][9] =5;
+
+	*/
 
 	// Set Initial population in device memory from host memory with a fixed solution
 	cudaMemcpy(d_population, h_population,
@@ -1222,8 +1284,12 @@ int main()
 
 		/* Calculate fitness on each population chromosome */
 		parallelPopulationFitnessCalculation(h_population, h_population_fitness, d_population, d_population_fitness, d_sorted_population_fitness);
-		parallelNSGA2(h_population, h_population_fitness, h_population_total_dominance, h_population_rank, h_population_crowding, d_population, d_population_fitness, d_sorted_population_fitness, d_population_total_dominance, d_population_rank, d_population_crowding);
-
+		parallelNSGA2(
+			h_population, h_population_fitness, h_population_total_dominance, h_population_rank, h_population_crowding,
+			h_offspring, h_offspring_rank, h_offspring_crowding,
+			d_population, d_population_fitness, d_sorted_population_fitness, d_population_total_dominance, d_population_rank, d_population_crowding,
+			d_offspring, d_offspring_rank, d_offspring_crowding
+		);
 	}
 	printf("\nfitness\n");
 	for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
