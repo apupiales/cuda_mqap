@@ -13,3 +13,4 @@ What it covers so far?
   - [3.5] Pupulation fitness ordered by objectives (will be used in crowding calculation).
   - [3.6] Crowding distance.
   - [3.7] Get offspring population.
+ 4. Binary tournament selection
