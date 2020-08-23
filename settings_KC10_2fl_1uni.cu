@@ -22,7 +22,7 @@
 /*
  * Number of times the genetic algorithm is executed.
  */
-#define ITERATIONS 1
+#define ITERATIONS 2
 
 /*
  * Variable with transpose distances matrix in constant device memory.
