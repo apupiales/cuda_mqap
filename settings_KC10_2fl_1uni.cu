@@ -17,12 +17,43 @@
  * Pt population size. MUST BE A POWER OF TWO
  * due to bitonic sort limitation.
  */
-#define POPULATION_SIZE 8
+#define POPULATION_SIZE 32
 
 /*
  * Number of times the genetic algorithm is executed.
  */
-#define ITERATIONS 2
+#define ITERATIONS 500
+
+/*
+ * Variable to control the print of verification prompts.
+ */
+#define DEV_MODE false
+
+#define PRINT_ITERATION true
+
+#define PRINT_BASE_POPULATION false
+
+#define PRINT_SHUFFLED_POPULATION false
+
+#define PRINT_INITIAL_POPULATION false
+
+#define PRINT_POPULATION_WITH_FITNESS false
+
+#define PRINT_FITNESS_DETAILS false
+
+#define PRINT_SORT_BY_FITNESS_DETAILS false
+
+#define PRINT_CROWDING_DETAILS false
+
+#define PRINT_NSGA2_DETAILS false
+
+#define PRINT_OFFSPRING_POPULATION false
+
+#define PRINT_OFFSPRING_AND_WINNERS true
+
+#define PRINT_WINNERS_MUTATED true
+
+#define PRINT_TOURNAMENT_DETAILS false
 
 /*
  * Variable with transpose distances matrix in constant device memory.
