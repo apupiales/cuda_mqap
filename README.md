@@ -1,4 +1,5 @@
-# cuda_mqap (WIP)
+# (cuda_mqap) Parallel Implementation of NSGA-2 in CUDA to solve mQAP
+
 Program to solve instances of multiobjective quadratic assignment problems in CUDA C
 
 What it covers so far?
@@ -13,4 +14,7 @@ What it covers so far?
   - [3.5] Pupulation fitness ordered by objectives (will be used in crowding calculation).
   - [3.6] Crowding distance.
   - [3.7] Get offspring population.
- 4. Binary tournament selection
+ 4. Binary tournament selection.
+ 5. Mutation.
+
+Next challenge... implement an additional heuristic to improve the results.
