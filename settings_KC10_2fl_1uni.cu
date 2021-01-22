@@ -25,6 +25,16 @@
 #define ITERATIONS 500
 
 /*
+* Probability to execute an exchange mutation in a single population member.
+*/
+#define EXCHANGE_MUTATION_PROBABILITY 1
+
+/*
+* Probability to execute transposition mutation in a single population member.
+*/
+#define TRANSPOSITION_MUTATION_PROBABILITY 0.4
+
+/*
  * Variable to control the print of verification prompts.
  */
 #define DEV_MODE false
@@ -36,6 +46,8 @@
 #define PRINT_SHUFFLED_POPULATION false
 
 #define PRINT_INITIAL_POPULATION false
+
+#define PRINT_FIRST_POPULATION_WITH_FITNESS true
 
 #define PRINT_POPULATION_WITH_FITNESS false
 
@@ -51,7 +63,7 @@
 
 #define PRINT_OFFSPRING_AND_WINNERS true
 
-#define PRINT_WINNERS_MUTATED true
+#define PRINT_WINNERS_MUTATED false
 
 #define PRINT_TOURNAMENT_DETAILS false
 

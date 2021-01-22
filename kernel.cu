@@ -73,7 +73,6 @@ __global__ void generateBasePopulation(short population[][FACILITIES_LOCATIONS])
  * This function shuffles chromosomes genes randomly over all population
  */
 __global__ void shufflePopulationGenes(curandState* my_curandstate,
-	const unsigned* max_rand_int, const unsigned* min_rand_int,
 	short population[][FACILITIES_LOCATIONS]) {
 
 	#pragma unroll
@@ -81,7 +80,8 @@ __global__ void shufflePopulationGenes(curandState* my_curandstate,
 		int idx = j + blockDim.x * blockIdx.x;
 
 		float myrandf = curand_uniform(my_curandstate + idx);
-		int myrand = int(myrandf * 10);
+		myrandf *= (FACILITIES_LOCATIONS - 1 + 0.999999);
+		int myrand = (int)truncf(myrandf);
 
 		if (myrand != population[blockIdx.x][j]) {
 			short current_value = population[blockIdx.x][j];
@@ -1250,7 +1250,6 @@ void BinaryTournamentSelection(
  * This function shuffles two chromosomes genes randomly over all winners.
  */
 __global__ void exchangeMutation(curandState* my_curandstate,
-	const unsigned* max_rand_int, const unsigned* min_rand_int,
 	short population[][FACILITIES_LOCATIONS]) {
 	int position = blockIdx.x + POPULATION_SIZE;
 	short second_gen_position = 0;
@@ -1258,22 +1257,47 @@ __global__ void exchangeMutation(curandState* my_curandstate,
 		int idx = 1 + blockDim.x * blockIdx.x;
 
 		float myrandf = curand_uniform(my_curandstate + idx);
-		int first_gen_position = int(myrandf * 10);
+		if (myrandf <= EXCHANGE_MUTATION_PROBABILITY) {
+			myrandf *= (FACILITIES_LOCATIONS - 1 + 0.999999);
+			int first_gen_position = (int)truncf(myrandf);
 
-		if (first_gen_position != population[position][first_gen_position]) {
-			second_gen_position = population[position][first_gen_position];
+			float myrandf2 = curand_uniform(my_curandstate + idx);
+			myrandf2 *= (FACILITIES_LOCATIONS - 1 + 0.999999);
+			int second_gen_position = (int)truncf(myrandf2);
+
+			short firts_gen_copy = population[position][first_gen_position];
+			population[position][first_gen_position] = population[position][second_gen_position];
+			population[position][second_gen_position] = firts_gen_copy;
 		}
-		else {
-			if (first_gen_position < FACILITIES_LOCATIONS - 1) {
-				second_gen_position = first_gen_position + 1;
-			}
-			else {
-				second_gen_position = first_gen_position - 1;
-			}
+}
+
+/**
+ * This function shuffles two chromosomes genes randomly over all winners.
+ */
+__global__ void transpositionMutation(curandState* my_curandstate,
+	short population[][FACILITIES_LOCATIONS]) {
+	int position = blockIdx.x + POPULATION_SIZE;
+	short second_gen_position = 0;
+
+
+	int idx = 1 + blockDim.x * blockIdx.x;
+
+	float myrandf = curand_uniform(my_curandstate + idx);
+	if (myrandf <= TRANSPOSITION_MUTATION_PROBABILITY) {
+		myrandf *= (FACILITIES_LOCATIONS - 1 + 0.999999);
+		int first_gen_position = (int)truncf(myrandf);
+		float myrandf2 = curand_uniform(my_curandstate + idx);
+		myrandf2 *= (FACILITIES_LOCATIONS - 1 + 0.999999);
+		int second_gen_position = (int)truncf(myrandf2);
+
+		if (first_gen_position > second_gen_position) {
+			int temp = first_gen_position;
+			first_gen_position = second_gen_position;
+			second_gen_position = temp;
 		}
-		short firts_gen_copy = population[position][first_gen_position];
-		population[position][first_gen_position] = population[position][second_gen_position];
-		population[position][second_gen_position] = firts_gen_copy;
+		//printf("idx: %d | first_gen_position: %d | second_gen_position: %d \n", idx, first_gen_position, second_gen_position);
+	}
+
 }
 
 int main()
@@ -1390,8 +1414,7 @@ int main()
 	}
 
 	/* Shuffles chromosome genes randomly over all population */
-	shufflePopulationGenes <<<NSGA2_POPULATION_SIZE, 1 >>> (d_state, d_max_rand_int,
-		d_min_rand_int, d_population);
+	shufflePopulationGenes <<<NSGA2_POPULATION_SIZE, 1 >>> (d_state, d_population);
 	cudaStatus = cudaDeviceSynchronize();
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "shufflePopulationGenes Sync CudaError!");
@@ -1460,7 +1483,7 @@ int main()
 			NSGA2_POPULATION_SIZE * (FACILITIES_LOCATIONS) * sizeof(short),
 				cudaMemcpyHostToDevice);
 
-	if (DEV_MODE && PRINT_INITIAL_POPULATION) {
+	if (DEV_MODE || PRINT_INITIAL_POPULATION) {
 		printf("\nInitial Population\n");
 		for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
 			printf("Chromosome %d\n", i);
@@ -1492,10 +1515,10 @@ int main()
 			NSGA2_POPULATION_SIZE * (OBJECTIVES + 1) * sizeof(unsigned int),
 			cudaMemcpyDeviceToHost);
 
-		if (DEV_MODE && PRINT_POPULATION_WITH_FITNESS) {
+		if (DEV_MODE || PRINT_POPULATION_WITH_FITNESS || (iteration == 0 && PRINT_FIRST_POPULATION_WITH_FITNESS)) {
 			printf("\nPOPULATION WITH FINTESS CALCULATED\n");
 			for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
-				printf("Chromosome %d\n", i);
+				//printf("Chromosome %d\n", i);
 				// Print solution.
 				for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
 					printf("%d ", h_population[i][j]);
@@ -1507,6 +1530,7 @@ int main()
 				printf("\n");
 			}
 		}
+
 
 		parallelNSGA2(
 			h_population, h_population_fitness, h_population_total_dominance, h_population_rank, h_population_crowding,
@@ -1573,26 +1597,28 @@ int main()
 		}
 
 		/* Exchange mutation */
+		seed = rand() % 10000;
 		curand_setup << <POPULATION_SIZE, 128 >> > (d_state, seed);
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess) {
 			fprintf(stderr, "curand_setup Sync CudaError!");
 		}
 
-		exchangeMutation << <POPULATION_SIZE, 1 >> > (d_state, d_max_rand_int, d_min_rand_int, d_population);
+		exchangeMutation << <POPULATION_SIZE, 1 >> > (d_state, d_population);
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess) {
 			fprintf(stderr, "mutation Sync CudaError!");
 		}
 
 		/* Exchange mutation */
+		seed = rand() % 10000;
 		curand_setup << <POPULATION_SIZE, 128 >> > (d_state, seed);
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess) {
 			fprintf(stderr, "curand_setup Sync CudaError!");
 		}
 
-		exchangeMutation << <POPULATION_SIZE, 1 >> > (d_state, d_max_rand_int, d_min_rand_int, d_population);
+		exchangeMutation << <POPULATION_SIZE, 1 >> > (d_state, d_population);
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess) {
 			fprintf(stderr, "mutation Sync CudaError!");
@@ -1602,7 +1628,7 @@ int main()
 			NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
 			cudaMemcpyDeviceToHost);
 
-		if (DEV_MODE && PRINT_WINNERS_MUTATED) {
+		if (DEV_MODE || PRINT_WINNERS_MUTATED) {
 			printf("\nWINNERS MUTATED\n");
 			for (int i = POPULATION_SIZE; i < NSGA2_POPULATION_SIZE; i++) {
 				printf("Chromosome %d\n", i);
@@ -1613,6 +1639,21 @@ int main()
 				printf("\n");
 			}
 		}
+
+		/* transposition mutation */
+		seed = rand() % 10000;
+		curand_setup << <POPULATION_SIZE, 128 >> > (d_state, seed);
+		cudaStatus = cudaDeviceSynchronize();
+		if (cudaStatus != cudaSuccess) {
+			fprintf(stderr, "curand_setup Sync CudaError!");
+		}
+
+		transpositionMutation << <POPULATION_SIZE, 1 >> > (d_state, d_population);
+		cudaStatus = cudaDeviceSynchronize();
+		if (cudaStatus != cudaSuccess) {
+			fprintf(stderr, "mutation Sync CudaError!");
+		}
+
 
 
 		//@todo 2opt() and/or another heuristic
@@ -1642,7 +1683,7 @@ int main()
 		}
 		// Print fitness.
 		for (int j = 0; j < OBJECTIVES; j++) {
-			printf("%d ", h_population_fitness[i][j]);
+			printf("|%d ", h_population_fitness[i][j]);
 		}
 		printf("\n");
 	}
