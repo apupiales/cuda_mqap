@@ -1272,15 +1272,12 @@ __global__ void exchangeMutation(curandState* my_curandstate,
 }
 
 /**
- * This function shuffles two chromosomes genes randomly over all winners.
+ * This function gets the positions to perform the transposition mutation.
  */
-__global__ void transpositionMutation(curandState* my_curandstate,
-	short population[][FACILITIES_LOCATIONS]) {
+__global__ void getPositionsForTranspositionMutation(curandState* my_curandstate, short positions_for_trasposition[][2]) {
 	int position = blockIdx.x + POPULATION_SIZE;
-	short second_gen_position = 0;
 
-
-	int idx = 1 + blockDim.x * blockIdx.x;
+	int idx = threadIdx.x + blockDim.x * blockIdx.x;
 
 	float myrandf = curand_uniform(my_curandstate + idx);
 	if (myrandf <= TRANSPOSITION_MUTATION_PROBABILITY) {
@@ -1295,7 +1292,138 @@ __global__ void transpositionMutation(curandState* my_curandstate,
 			first_gen_position = second_gen_position;
 			second_gen_position = temp;
 		}
-		//printf("idx: %d | first_gen_position: %d | second_gen_position: %d \n", idx, first_gen_position, second_gen_position);
+		positions_for_trasposition[blockIdx.x][0] = first_gen_position; //min
+		positions_for_trasposition[blockIdx.x][1] = second_gen_position; //max
+	}
+	else {
+		positions_for_trasposition[blockIdx.x][0] = positions_for_trasposition[blockIdx.x][1] = 0;
+	}
+}
+
+/**
+ * This function creates a copy of the offspring.
+ */
+__global__ void copyOffspring(
+	short population[][FACILITIES_LOCATIONS], short offsrping_copy[][FACILITIES_LOCATIONS]) {
+	int position = blockIdx.x + POPULATION_SIZE;
+
+	offsrping_copy[blockIdx.x][threadIdx.x] = population[position][threadIdx.x];
+}
+
+/**
+ * This function gets the positions to perform the transposition mutation.
+ */
+__global__ void transpositionMutation(
+	short population[][FACILITIES_LOCATIONS], short offsprint_copy[][FACILITIES_LOCATIONS], short positions_for_trasposition[][2]) {
+	int position = blockIdx.x + POPULATION_SIZE;
+	if (threadIdx.x <= (positions_for_trasposition[blockIdx.x][1]) - positions_for_trasposition[blockIdx.x][0]) {
+		population[position][threadIdx.x + positions_for_trasposition[blockIdx.x][0]] = offsprint_copy[blockIdx.x][positions_for_trasposition[blockIdx.x][1] - threadIdx.x];
+	}
+}
+
+
+void transpositionMutation(short h_population[][FACILITIES_LOCATIONS], short d_population[][FACILITIES_LOCATIONS], int seed) {
+	/* Variable to check correct synchronization */
+	cudaError_t cudaStatus;
+
+	curandState* d_state;
+	cudaMalloc(&d_state, sizeof(curandState));
+
+	// Variable for a offspring in device memory.
+	short(*d_offspring_copy)[FACILITIES_LOCATIONS];
+	cudaMalloc((void**)&d_offspring_copy, sizeof(short) * POPULATION_SIZE * FACILITIES_LOCATIONS);
+	// Variable to store the positions for transposition mutation.
+	short(*d_positions_for_trasposition)[2];
+	cudaMalloc((void**)&d_positions_for_trasposition, sizeof(short) * POPULATION_SIZE * 2);
+
+	// Variable for offspring copy in host memory.
+	short h_offspring_copy[POPULATION_SIZE][FACILITIES_LOCATIONS];
+
+	short h_positions_for_trasposition[POPULATION_SIZE][2];
+
+	curand_setup << <POPULATION_SIZE, 1 >> > (d_state, seed);
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "curand_setup Sync CudaError!");
+	}
+	getPositionsForTranspositionMutation << <POPULATION_SIZE, 1 >> > (d_state, d_positions_for_trasposition);
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "getPositionsForTranspositionMutation Sync CudaError!");
+	}
+
+	cudaMemcpy(h_positions_for_trasposition, d_positions_for_trasposition,
+		POPULATION_SIZE * 2 * sizeof(short),
+		cudaMemcpyDeviceToHost);
+
+	if (DEV_MODE || PRINT_POSITIONS_FOR_TRNASPOSITION) {
+		printf("\nPossitions for transposition mutation\n");
+		for (int i = 0; i < POPULATION_SIZE; i++) {
+			for (int j = 0; j < 2; j++) {
+				printf("%d ", h_positions_for_trasposition[i][j]);
+			}
+			printf("\n");
+		}
+	}
+
+	copyOffspring << <POPULATION_SIZE, FACILITIES_LOCATIONS>> > (d_population, d_offspring_copy);
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "copyOffspring Sync CudaError!");
+	}
+
+	cudaMemcpy(h_offspring_copy, d_offspring_copy,
+		POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
+		cudaMemcpyDeviceToHost);
+
+	if (DEV_MODE || PRINT_OFFSPRING_COPY) {
+		printf("\nOffspring Copy\n");
+		for (int i = 0; i < POPULATION_SIZE; i++) {
+			for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+				printf("%d ", h_offspring_copy[i][j]);
+			}
+			printf("\n");
+		}
+	}
+
+	cudaMemcpy(h_population, d_population,
+		NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
+		cudaMemcpyDeviceToHost);
+
+	if (DEV_MODE || PRINT_TRANSPOSITION_MUTATION) {
+		printf("\nOriginal Population\n");
+		for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
+			for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+				printf("%d ", h_population[i][j]);
+			}
+			printf("\n");
+			if (i == POPULATION_SIZE - 1) {
+				printf("\n");
+			}
+		}
+	}
+
+	transpositionMutation << <POPULATION_SIZE, FACILITIES_LOCATIONS >> > (d_population, d_offspring_copy, d_positions_for_trasposition);
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "transpositionMutation Sync CudaError!");
+	}
+
+	cudaMemcpy(h_population, d_population,
+		NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
+		cudaMemcpyDeviceToHost);
+
+	if (DEV_MODE || PRINT_TRANSPOSITION_MUTATION) {
+		printf("\nWith transposition Mutation \n");
+		for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
+			for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+				printf("%d ", h_population[i][j]);
+			}
+			printf("\n");
+			if (i == POPULATION_SIZE - 1) {
+				printf("\n");
+			}
+		}
 	}
 
 }
@@ -1642,19 +1770,7 @@ int main()
 
 		/* transposition mutation */
 		seed = rand() % 10000;
-		curand_setup << <POPULATION_SIZE, 128 >> > (d_state, seed);
-		cudaStatus = cudaDeviceSynchronize();
-		if (cudaStatus != cudaSuccess) {
-			fprintf(stderr, "curand_setup Sync CudaError!");
-		}
-
-		transpositionMutation << <POPULATION_SIZE, 1 >> > (d_state, d_population);
-		cudaStatus = cudaDeviceSynchronize();
-		if (cudaStatus != cudaSuccess) {
-			fprintf(stderr, "mutation Sync CudaError!");
-		}
-
-
+		transpositionMutation(h_population, d_population, seed);
 
 		//@todo 2opt() and/or another heuristic
 		if (DEV_MODE && PRINT_ITERATION) {

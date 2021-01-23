@@ -32,7 +32,7 @@
 /*
 * Probability to execute transposition mutation in a single population member.
 */
-#define TRANSPOSITION_MUTATION_PROBABILITY 0.4
+#define TRANSPOSITION_MUTATION_PROBABILITY 1
 
 /*
  * Variable to control the print of verification prompts.
@@ -66,6 +66,12 @@
 #define PRINT_WINNERS_MUTATED false
 
 #define PRINT_TOURNAMENT_DETAILS false
+
+#define PRINT_POSITIONS_FOR_TRNASPOSITION false
+
+#define PRINT_OFFSPRING_COPY false
+
+#define PRINT_TRANSPOSITION_MUTATION false
 
 /*
  * Variable with transpose distances matrix in constant device memory.
