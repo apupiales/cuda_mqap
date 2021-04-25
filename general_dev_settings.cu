@@ -1,0 +1,42 @@
+﻿/*
+ * Variables to control the print of verification prompts.
+ */
+#define DEV_MODE false
+
+#define PRINT_ITERATION true
+
+#define PRINT_BASE_POPULATION false
+
+#define PRINT_SHUFFLED_POPULATION false
+
+#define PRINT_INITIAL_POPULATION false
+
+#define PRINT_FIRST_POPULATION_WITH_FITNESS true
+
+#define PRINT_POPULATION_WITH_FITNESS false
+
+#define PRINT_FITNESS_DETAILS false
+
+#define PRINT_SORT_BY_FITNESS_DETAILS false
+
+#define PRINT_CROWDING_DETAILS false
+
+#define PRINT_NSGA2_DETAILS false
+
+#define PRINT_OFFSPRING_POPULATION false
+
+#define PRINT_OFFSPRING_AND_WINNERS true
+
+#define PRINT_WINNERS_MUTATED false
+
+#define PRINT_TOURNAMENT_DETAILS false
+
+#define PRINT_POSITIONS_FOR_TRNASPOSITION false
+
+#define PRINT_OFFSPRING_COPY false
+
+#define PRINT_TRANSPOSITION_MUTATION false
+
+#define PRINT_MODIFIED_OFFSPRING false
+
+#define PRINT_MUTATED_OFFSPRING_WITH_FITNESS false

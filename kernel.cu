@@ -40,6 +40,7 @@
 #include "cufft.h"
 
 //Custom sources
+#include "general_dev_settings.cu"
 #include "settings_KC10_2fl_1uni.cu"
 //#include "settings_KC10_2fl_1uni.cu"
 //#include "settings_KC10_2fl_2uni.cu"
@@ -1321,7 +1322,6 @@ __global__ void transpositionMutation(
 	}
 }
 
-
 void transpositionMutation(short h_population[][FACILITIES_LOCATIONS], short d_population[][FACILITIES_LOCATIONS], int seed) {
 	/* Variable to check correct synchronization */
 	cudaError_t cudaStatus;
@@ -1428,6 +1428,201 @@ void transpositionMutation(short h_population[][FACILITIES_LOCATIONS], short d_p
 
 }
 
+/**
+ * This function creates a copy of the offspring.
+ */
+__global__ void setMutableOffspring(short offsrping[][FACILITIES_LOCATIONS]) {
+	int position = blockIdx.x + POPULATION_SIZE;
+
+	offsrping[position][threadIdx.x] = offsrping[blockIdx.x][threadIdx.x];
+}
+
+/**
+ * Function that set in offspring the best solution after greedy2opt swap.
+ */
+__global__ void updateOffspring(short offsrping[][FACILITIES_LOCATIONS], unsigned int d_population_fitness[][OBJECTIVES + 1], int type) {
+	int position = blockIdx.x + POPULATION_SIZE;
+
+	if (type == 0) {
+		int original_fitness = 0;
+		int mutated_fitness = 0;
+		for (int i = 0; i < OBJECTIVES; i++) {
+			//to get the average, the fitness for the objetive is divided firts by
+			//the number of objetives due to size data type limitations.
+			original_fitness += d_population_fitness[blockIdx.x][i]/OBJECTIVES;
+			mutated_fitness += d_population_fitness[position][i]/OBJECTIVES;
+		}
+
+		if (mutated_fitness < original_fitness) {
+			offsrping[blockIdx.x][threadIdx.x] = offsrping[position][threadIdx.x];
+		}
+
+	}
+	else if (type == 1) {
+		if (d_population_fitness[position][0] < d_population_fitness[blockIdx.x][0]) {
+			offsrping[blockIdx.x][threadIdx.x] = offsrping[position][threadIdx.x];
+		}
+	}
+	else if (type == 2) {
+		if (d_population_fitness[position][1] < d_population_fitness[blockIdx.x][1]) {
+			offsrping[blockIdx.x][threadIdx.x] = offsrping[position][threadIdx.x];
+		}
+	}
+	else if (type == 3) {
+		if (d_population_fitness[position][2] < d_population_fitness[blockIdx.x][2]) {
+			offsrping[blockIdx.x][threadIdx.x] = offsrping[position][threadIdx.x];
+		}
+	}
+
+	offsrping[position][threadIdx.x] = offsrping[blockIdx.x][threadIdx.x];
+}
+
+/**
+ * Switch the positions defined by greedy 2opt algorithm.
+ */
+__global__ void swapOffsring(short d_offspring[][FACILITIES_LOCATIONS], int position_a, int position_b) {
+	int offspring_item = blockIdx.x;
+	int modified_offspring_item = blockIdx.x + POPULATION_SIZE;
+	d_offspring[offspring_item][position_a] = d_offspring[modified_offspring_item][position_b];
+	d_offspring[offspring_item][position_b] = d_offspring[modified_offspring_item][position_a];
+
+}
+
+/**
+ * Move the final result of greedy 2opt to the NSGA2 popolation (Q).
+ */
+__global__ void setFinalOffspringInPopulation(short d_offsrping[][FACILITIES_LOCATIONS], short d_population[][FACILITIES_LOCATIONS]) {
+	int position = blockIdx.x + POPULATION_SIZE;
+
+	d_population[position][threadIdx.x] = d_offsrping[blockIdx.x][threadIdx.x];
+}
+
+/**
+ * Adjusted greedy 2opt algorithm for the MQAP.
+ * The criteria to define if a modified solution is better than the original
+ * is selected ramdomly between using only one of the objectives or an average off
+ * all objectives. See https://arxiv.org/ftp/arxiv/papers/1109/1109.1276.pdf
+ */
+void greedy2Opt(short h_population[][FACILITIES_LOCATIONS], short d_population[][FACILITIES_LOCATIONS]) {
+	/* Variable to check correct synchronization */
+	cudaError_t cudaStatus;
+
+	// Variable for offspring fitness in host memory.
+	unsigned int h_offspring_fitness[NSGA2_POPULATION_SIZE][OBJECTIVES + 1];
+
+	// Variable for offspring in host memory.
+	short h_offspring[NSGA2_POPULATION_SIZE][FACILITIES_LOCATIONS];
+
+	/* Variable to store the posible swaps for each iteration in device memory.
+	 * Each solution has n*(n-1)/s posile swaps, it means the same number of iterations.
+	 */
+	short(*d_offspring)[FACILITIES_LOCATIONS];
+	cudaMalloc((void**)&d_offspring, sizeof(short) * NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS);
+
+	// Variable for population fitness in device memory.
+	unsigned int(*d_offspring_fitness)[OBJECTIVES + 1];
+	cudaMalloc((void**)&d_offspring_fitness, sizeof(unsigned int) * NSGA2_POPULATION_SIZE * (OBJECTIVES + 1));
+
+	copyOffspring << <POPULATION_SIZE, FACILITIES_LOCATIONS >> > (d_population, d_offspring);
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "copyOffspring in greedy2Opt Sync CudaError!");
+	}
+
+	/* Set modified offspring in host memory from device memory */
+	cudaMemcpy(h_offspring, d_offspring,
+		NSGA2_POPULATION_SIZE * (FACILITIES_LOCATIONS) * sizeof(short),
+		cudaMemcpyDeviceToHost);
+
+	/*
+	 * @type: the fitness will be evaluated as follow:
+	 * 0: average fitness in all ojectives
+	 * n: only n-objective fitness
+	 */
+	int type = rand() % (OBJECTIVES + 1);
+
+	if (PRINT_MODIFIED_OFFSPRING && false) {
+		printf("\Original Offspring\n");
+		for (int i = 0; i < POPULATION_SIZE; i++) {
+			printf("Chromosome %d\n", i);
+			for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+				printf("%d ", h_offspring[i][j]);
+			}
+			printf("\n");
+		}
+	}
+
+	for (int i = 0; i < (FACILITIES_LOCATIONS - 1); i++) {
+		for (int j = 1; j < FACILITIES_LOCATIONS; j++) {
+
+			setMutableOffspring << <POPULATION_SIZE, FACILITIES_LOCATIONS >> > (d_offspring);
+			cudaStatus = cudaDeviceSynchronize();
+			if (cudaStatus != cudaSuccess) {
+				fprintf(stderr, "setMutableOffspring in greedy2Opt Sync CudaError!");
+			}
+
+			swapOffsring <<<POPULATION_SIZE, 1 >>> (d_offspring, i, j);
+			cudaStatus = cudaDeviceSynchronize();
+			if (cudaStatus != cudaSuccess) {
+				fprintf(stderr, "swapOffsring Sync CudaError!");
+			}
+
+			/* Calculate fitness on each population chromosome */
+			parallelPopulationFitnessCalculation(h_offspring, h_offspring_fitness, d_offspring, d_offspring_fitness, d_offspring_fitness);
+
+			cudaMemcpy(h_offspring, d_offspring,
+				NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
+				cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_offspring_fitness, d_offspring_fitness,
+				NSGA2_POPULATION_SIZE * (OBJECTIVES + 1) * sizeof(unsigned int),
+				cudaMemcpyDeviceToHost);
+
+			if (DEV_MODE && PRINT_MUTATED_OFFSPRING_WITH_FITNESS) {
+				printf("\MUTATED OFFSRING WITH FINTESS CALCULATED\n");
+				for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
+					//printf("Chromosome %d\n", i);
+					// Print solution.
+					for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+						printf("%d ", h_offspring[i][j]);
+					}
+					// Print fitness.
+					for (int j = 0; j < OBJECTIVES; j++) {
+						printf("|%d ", h_offspring_fitness[i][j]);
+					}
+					printf("\n");
+				}
+			}
+
+			updateOffspring <<<POPULATION_SIZE, FACILITIES_LOCATIONS>>> (d_offspring, d_offspring_fitness, type);
+			cudaStatus = cudaDeviceSynchronize();
+			if (cudaStatus != cudaSuccess) {
+				fprintf(stderr, "updateOffspring in greedy2opt Sync CudaError!");
+			}
+
+			/* Set modified offspring in host memory from device memory */
+			cudaMemcpy(h_offspring, d_offspring,
+				NSGA2_POPULATION_SIZE * (FACILITIES_LOCATIONS) * sizeof(short),
+				cudaMemcpyDeviceToHost);
+			if (DEV_MODE && PRINT_MODIFIED_OFFSPRING) {
+				printf("\nModified Offspring\n");
+				for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
+					printf("Chromosome %d\n", i);
+					for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+						printf("%d ", h_offspring[i][j]);
+					}
+					printf("\n");
+				}
+			}
+		}
+	}
+
+	setFinalOffspringInPopulation << <POPULATION_SIZE, FACILITIES_LOCATIONS >> > (d_offspring, d_population);
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "setFinalOffspringInPopulation in greedy2opt Sync CudaError!");
+	}
+
+}
 int main()
 {
 	// In NSGA2, the Rt population size.
@@ -1772,7 +1967,9 @@ int main()
 		seed = rand() % 10000;
 		transpositionMutation(h_population, d_population, seed);
 
-		//@todo 2opt() and/or another heuristic
+		/* Greedy 2opt mutation */
+		greedy2Opt(h_population, d_population);
+
 		if (DEV_MODE && PRINT_ITERATION) {
 			printf("\n ITERATION %d FINISHED ********************************************", iteration);
 		}
@@ -1799,7 +1996,7 @@ int main()
 		}
 		// Print fitness.
 		for (int j = 0; j < OBJECTIVES; j++) {
-			printf("|%d ", h_population_fitness[i][j]);
+			printf("%d ", h_population_fitness[i][j]);
 		}
 		printf("\n");
 	}

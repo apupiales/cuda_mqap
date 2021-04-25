@@ -1,8 +1,8 @@
-# (cuda_mqap) Parallel Implementation of NSGA-2 in CUDA to solve mQAP
+# (cuda_mqap) Parallel Implementation of NSGA-2 + Addapted Greedy 2opt in CUDA to solve mQAP
 
 Program to solve instances of multiobjective quadratic assignment problems in CUDA C
 
-What it covers so far?
+What it includes:
 
 1. Creation of initial population.
 2. Fitness calculation for each objective.
@@ -16,5 +16,4 @@ What it covers so far?
   - [3.7] Get offspring population.
  4. Binary tournament selection.
  5. Mutation.
-
-Next challenge... implement an additional heuristic to improve the results.
+ 6. Addapted Greedy 2opt. 
