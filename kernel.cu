@@ -41,11 +41,10 @@
 
 //Custom sources
 #include "general_dev_settings.cu"
-#include "settings_KC10_2fl_1uni.cu"
 //#include "settings_KC10_2fl_1uni.cu"
 //#include "settings_KC10_2fl_2uni.cu"
 //#include "settings_KC10_2fl_3uni.cu"
-//#include "settings_KC20_2fl_1uni.cu"
+#include "settings_KC20_2fl_1uni.cu"
 //#include "settings_KC20_2fl_2uni.cu"
 //#include "settings_KC20_2fl_3uni.cu"
 //#include "settings_KC30_2fl_1uni.cu"
