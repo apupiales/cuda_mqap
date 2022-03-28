@@ -17,12 +17,12 @@
  * Pt population size. MUST BE A POWER OF TWO
  * due to bitonic sort limitation.
  */
-#define POPULATION_SIZE 32
+#define POPULATION_SIZE 16
 
 /*
  * Number of times the genetic algorithm is executed.
  */
-#define ITERATIONS 300
+#define ITERATIONS 70
 
 /*
 * Probability to execute an exchange mutation in a single population member.
@@ -39,7 +39,7 @@
  * Variable with transpose distances matrix in constant device memory.
  * This transpose distances matrix correspond with KC10-2fl-1uni.dat
  * @see http://www.cs.bham.ac.uk/~jdk/mQAP/
- * @see https://raw.githubusercontent.com/fredizzimo/keyboardlayout/master/tests/mQAPData/KC10-2fl-1uni.dat
+ * @see https://github.com/fredizzimo/keyboardlayout/tree/master/tests/mQAPData
  */
 __constant__ int d_transposeDistancesMatrix[FACILITIES_LOCATIONS][FACILITIES_LOCATIONS] =
 {
@@ -59,7 +59,7 @@ __constant__ int d_transposeDistancesMatrix[FACILITIES_LOCATIONS][FACILITIES_LOC
  * Variable with flow matrices in constant device memory.
  * These flow matrices correspond with KC10-2fl-1uni.dat
  * @see http://www.cs.bham.ac.uk/~jdk/mQAP/
- * @see https://raw.githubusercontent.com/fredizzimo/keyboardlayout/master/tests/mQAPData/KC10-2fl-1uni.dat
+ * @see https://github.com/fredizzimo/keyboardlayout/tree/master/tests/mQAPData
  */
 __constant__ int d_flowMatrices[OBJECTIVES][FACILITIES_LOCATIONS][FACILITIES_LOCATIONS] =
 {

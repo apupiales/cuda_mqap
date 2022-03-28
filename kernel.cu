@@ -31,6 +31,7 @@
 #include <stdbool.h>
 #include <math.h>
 
+
 // CUDA runtime
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
@@ -41,9 +42,14 @@
 
 //Custom sources
 #include "general_dev_settings.cu"
-#include "settings_KC10_2fl_1uni.cu"
+//#include "settings_KC10_2fl_1rl.cu"
+//#include "settings_KC10_2fl_1uni.cu"
+//#include "settings_KC10_2fl_2rl.cu"
 //#include "settings_KC10_2fl_2uni.cu"
+#include "settings_KC10_2fl_3rl.cu"
 //#include "settings_KC10_2fl_3uni.cu"
+//#include "settings_KC10_2fl_4rl.cu"
+//#include "settings_KC10_2fl_5rl.cu"
 //#include "settings_KC20_2fl_1uni.cu"
 //#include "settings_KC20_2fl_2uni.cu"
 //#include "settings_KC20_2fl_3uni.cu"
@@ -789,7 +795,7 @@ short crowding(
 		NSGA2_POPULATION_SIZE * sizeof(float),
 		cudaMemcpyDeviceToHost);
 	
-	for (short objective = 0; objective < OBJECTIVES; objective++) {
+	for (int objective = 0; objective < OBJECTIVES; objective++) {
 		sortPopulationByFitness(d_sorted_population_fitness, objective);
 		/* Set current Sorted by F(i-objective) population in host memory from device memory */
 		cudaMemcpy(h_sorted_population_fitness, d_sorted_population_fitness,
@@ -798,8 +804,7 @@ short crowding(
 
 		top_total = botton_total = 0;
 
-		for (short i = 0; i < NSGA2_POPULATION_SIZE; i++) {
-
+		for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
 			if (h_population_rank[h_sorted_population_fitness[i][OBJECTIVES]] == current_pareto_front) {
 				h_temporal_population_crowding[top_total][0] = current_pareto_front;
 				h_temporal_population_crowding[top_total][1] = h_sorted_population_fitness[i][OBJECTIVES];
@@ -1204,7 +1209,7 @@ void BinaryTournamentSelection(
 		fprintf(stderr, "BinaryTournamentSelection - generate Sync CudaError!\n");
 	}
 
-	cudaMemcpy(h_result, d_result, POPULATION_SIZE * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_result, d_result, POPULATION_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
 
 	if (DEV_MODE && PRINT_TOURNAMENT_DETAILS) {
 		for (int i = 0; i < POPULATION_SIZE; i++)
@@ -1222,12 +1227,16 @@ void BinaryTournamentSelection(
 	}
 
 	/*
-	 * Select the solutions fot with binary tournament.
+	 * Select the solutions with binary tournament.
 	 */
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "BinaryTournamentSelection - A binaryTournament Sync CudaError!\n");
+	}
 	binaryTournament <<<NSGA2_POPULATION_SIZE, 1 >>> (d_offspring, d_offspring_rank, d_offspring_crowding, d_result);
 	cudaStatus = cudaDeviceSynchronize();
 	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "BinaryTournamentSelection - binaryTournament Sync CudaError!\n");
+		fprintf(stderr, "BinaryTournamentSelection - B binaryTournament Sync CudaError!\n");
 	}
 
 	cudaMemcpy(h_result, d_result, POPULATION_SIZE * sizeof(float), cudaMemcpyDeviceToHost);
@@ -1800,6 +1809,7 @@ int main()
 				cudaMemcpyHostToDevice);
 	*/
 
+
 	if (DEV_MODE || PRINT_INITIAL_POPULATION) {
 		printf("\nInitial Population\n");
 		for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
@@ -1882,6 +1892,8 @@ int main()
 			break;
 		}
 
+		//printf("\niteration: %d\n", iteration);
+
 		BinaryTournamentSelection(
 			h_population,
 			h_offspring, h_offspring_rank, h_offspring_crowding,
@@ -1923,7 +1935,7 @@ int main()
 		exchangeMutation << <POPULATION_SIZE, 1 >> > (d_state, d_population);
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess) {
-			fprintf(stderr, "mutation Sync CudaError!");
+			fprintf(stderr, "Exchangemutation 1 Sync CudaError!");
 		}
 
 		/* Exchange mutation */
@@ -1937,7 +1949,7 @@ int main()
 		exchangeMutation << <POPULATION_SIZE, 1 >> > (d_state, d_population);
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess) {
-			fprintf(stderr, "mutation Sync CudaError!");
+			fprintf(stderr, "Exchangemutation 2 Sync CudaError!");
 		}
 
 		cudaMemcpy(h_population, d_population,
