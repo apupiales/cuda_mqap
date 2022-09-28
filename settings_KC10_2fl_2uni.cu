@@ -17,12 +17,12 @@
  * Pt population size. MUST BE A POWER OF TWO
  * due to bitonic sort limitation.
  */
-#define POPULATION_SIZE 2
+#define POPULATION_SIZE 4
 
 /*
  * Number of times the genetic algorithm is executed.
  */
-#define ITERATIONS 30
+#define ITERATIONS 70
 
 /*
 * Probability to execute an exchange mutation in a single population member.

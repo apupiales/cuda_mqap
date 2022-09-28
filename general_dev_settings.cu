@@ -1,6 +1,8 @@
 ﻿/*
  * Variables to control the print of verification prompts.
  */
+#define TIMES 1
+
 #define DEV_MODE false
 
 #define PRINT_ITERATION true

@@ -22,7 +22,7 @@
 /*
  * Number of times the genetic algorithm is executed.
  */
-#define ITERATIONS 300
+#define ITERATIONS 70
 
 /*
 * Probability to execute an exchange mutation in a single population member.

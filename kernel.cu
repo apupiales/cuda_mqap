@@ -42,19 +42,21 @@
 
 //Custom sources
 #include "general_dev_settings.cu"
-//#include "settings_KC10_2fl_1rl.cu"
+#include "settings_KC10_2fl_1rl.cu"
 //#include "settings_KC10_2fl_1uni.cu"
 //#include "settings_KC10_2fl_2rl.cu"
 //#include "settings_KC10_2fl_2uni.cu"
-#include "settings_KC10_2fl_3rl.cu"
+//#include "settings_KC10_2fl_3rl.cu"
 //#include "settings_KC10_2fl_3uni.cu"
 //#include "settings_KC10_2fl_4rl.cu"
 //#include "settings_KC10_2fl_5rl.cu"
+//#include "settings_KC20_2fl_1rl.cu"
 //#include "settings_KC20_2fl_1uni.cu"
 //#include "settings_KC20_2fl_2uni.cu"
 //#include "settings_KC20_2fl_3uni.cu"
+//#include "settings_KC30_3fl_1rl.cu"
 //#include "settings_KC30_3fl_1uni.cu"
-//#include "settings_KC30_2fl_2uni.cu"
+//#include "settings_KC30_3fl_2uni.cu"
 
 // In NSGA2, the Rt population size.
 const int NSGA2_POPULATION_SIZE = POPULATION_SIZE * 2;
@@ -147,7 +149,7 @@ __global__ void multiplicationWithFlowMatrix(int flow_matrix_id,
 }
 
 /**
- *  Multiplication between Transposed distance matrix and input_matrix
+ *  Multiplication between input_matrix and Transposed distance matrix
  *  (in this strict order)
  */
 __global__ void multiplicationWithTranposedDistanceMatrix(
@@ -621,7 +623,7 @@ __global__ void bitonicSortStep(unsigned int d_population_fitness[][OBJECTIVES +
 /**
  * Desc population sort by the input objective using bitonic sort.
  */
-void sortPopulationByFitness(unsigned int d_population_fitness[][OBJECTIVES + 1], unsigned int objective)
+void sortPopulationByFitness(unsigned int d_population_fitness[][OBJECTIVES + 1], unsigned int objective, bool last = false)
 {
 	// Variable for population fitness in host memory.
 	unsigned int h_population_fitness[NSGA2_POPULATION_SIZE][OBJECTIVES + 1];
@@ -630,7 +632,7 @@ void sortPopulationByFitness(unsigned int d_population_fitness[][OBJECTIVES + 1]
 	cudaMemcpy(h_population_fitness, d_population_fitness,
 		NSGA2_POPULATION_SIZE * (OBJECTIVES + 1) * sizeof(unsigned int),
 		cudaMemcpyDeviceToHost);
-	if (DEV_MODE && PRINT_SORT_BY_FITNESS_DETAILS) {
+	if (DEV_MODE && PRINT_SORT_BY_FITNESS_DETAILS && last) {
 		printf("\nUNSORTED fitness ojective %d \n", objective);
 		for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
 			for (int j = 0; j < OBJECTIVES + 1; j++) {
@@ -642,7 +644,12 @@ void sortPopulationByFitness(unsigned int d_population_fitness[][OBJECTIVES + 1]
 
 	int j, k;
 	// Major step.
-	for (k = 2; k <= NSGA2_POPULATION_SIZE; k <<= 1) {
+
+	int times = NSGA2_POPULATION_SIZE;
+	if (last) {
+		times = POPULATION_SIZE;
+	}
+	for (k = 2; k <= times; k <<= 1) {
 		// Minor step.
 		for (j = k >> 1; j > 0; j = j >> 1) {
 			bitonicSortStep <<<POPULATION_SIZE, 2 >> > (d_population_fitness, j, k, objective);
@@ -653,7 +660,7 @@ void sortPopulationByFitness(unsigned int d_population_fitness[][OBJECTIVES + 1]
 	cudaMemcpy(h_population_fitness, d_population_fitness,
 		NSGA2_POPULATION_SIZE * (OBJECTIVES + 1) * sizeof(unsigned int),
 		cudaMemcpyDeviceToHost);
-	if (DEV_MODE && PRINT_SORT_BY_FITNESS_DETAILS) {
+	if (DEV_MODE && PRINT_SORT_BY_FITNESS_DETAILS || last) {
 		printf("\nSORTED fitness ojective %d \n", objective);
 		for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
 			for (int j = 0; j < OBJECTIVES + 1; j++) {
@@ -759,7 +766,8 @@ void sortParetoFrontByCrowding(float d_temporal_population_crowding[][3])
 }
 
 /*
- * Caculates the crowding distance of all elements in a Parteto Front
+ * Caculates the crowding distance of all elements in a Parteto Front.
+ * At the end, this funtion short descending the temporal population by crowding distance.
  */
 
 short crowding(
@@ -863,6 +871,7 @@ short crowding(
 __global__ void moveSolutionsToOffspring(
 	short offspring_count, short d_population[][FACILITIES_LOCATIONS],
 	float d_temporal_population_crowding[][3], short d_offspring[][FACILITIES_LOCATIONS]) {
+		// only moves solutions until offspring is completed
 		if ((offspring_count + blockIdx.x + 1) <= POPULATION_SIZE) {
 			d_offspring[blockIdx.x + offspring_count][threadIdx.x] = d_population[(int)d_temporal_population_crowding[blockIdx.x][1]][threadIdx.x];
 		}
@@ -886,17 +895,11 @@ __global__ void movefitnessToOffspring(
 }
 
 __global__ void setNewBasePopulation(short d_offspring[][FACILITIES_LOCATIONS], short d_population[][FACILITIES_LOCATIONS]) {
-
-	if ((blockIdx.x) < POPULATION_SIZE) {
-		d_population[blockIdx.x][threadIdx.x] = d_offspring[blockIdx.x][threadIdx.x];
-	}
+	d_population[blockIdx.x][threadIdx.x] = d_offspring[blockIdx.x][threadIdx.x];
 }
 
 __global__ void setNewBasePopulationFitness(unsigned int d_offspring_fitness[][OBJECTIVES], unsigned int d_population_fitness[][OBJECTIVES + 1]) {
-
-	if ((blockIdx.x) < POPULATION_SIZE) {
-		d_population_fitness[blockIdx.x][threadIdx.x] = d_offspring_fitness[blockIdx.x][threadIdx.x];
-	}
+	d_population_fitness[blockIdx.x][threadIdx.x] = d_offspring_fitness[blockIdx.x][threadIdx.x];
 }
 
 void parallelNSGA2(
@@ -905,7 +908,8 @@ void parallelNSGA2(
 	short h_offspring[][FACILITIES_LOCATIONS], short h_offspring_rank[], float h_offspring_crowding[],
 	short d_population[][FACILITIES_LOCATIONS], unsigned int d_population_fitness[][OBJECTIVES + 1], unsigned int d_sorted_population_fitness[][OBJECTIVES + 1],
 	short d_population_total_dominance[], short d_population_rank[], float d_population_crowding[],
-	short d_offspring[][FACILITIES_LOCATIONS], short d_offspring_rank[], float d_offspring_crowding[], unsigned int d_offspring_fitness[][OBJECTIVES]) {
+	short d_offspring[][FACILITIES_LOCATIONS], short d_offspring_rank[], float d_offspring_crowding[], unsigned int d_offspring_fitness[][OBJECTIVES],
+	int iteration) {
 
 	/* Variable to check correct synchronization */
 	cudaError_t cudaStatus;
@@ -1068,7 +1072,7 @@ void parallelNSGA2(
 			POPULATION_SIZE * sizeof(float),
 			cudaMemcpyDeviceToHost);
 
-		if (DEV_MODE && PRINT_NSGA2_DETAILS) {
+		if (DEV_MODE && PRINT_NSGA2_DETAILS && iteration == ITERATIONS) {
 			printf("\n OFFSPRING Population\n");
 			for (int x = 0; x < POPULATION_SIZE; x++) {
 				printf("Chromosome %d\n", x);
@@ -1088,17 +1092,17 @@ void parallelNSGA2(
 
 		offspring_count += pareto_front_count;
 
-		if (DEV_MODE && PRINT_NSGA2_DETAILS) {
+		if (DEV_MODE && PRINT_NSGA2_DETAILS && iteration == ITERATIONS) {
 			printf("\nPareto front %d count: %d\n", i, pareto_front_count);
 			printf("\nPareto front %d OFFSpring count: %d\n", i, offspring_count);
 		}
 
 		// End the loop if the offspring is complete.
-		if (offspring_count >= POPULATION_SIZE) {
+		if (offspring_count >= POPULATION_SIZE || iteration == ITERATIONS) {
 
-			setNewBasePopulation << <NSGA2_POPULATION_SIZE, FACILITIES_LOCATIONS >> > (d_offspring, d_population);
+			setNewBasePopulation << <POPULATION_SIZE, FACILITIES_LOCATIONS >> > (d_offspring, d_population);
 
-			setNewBasePopulationFitness << <NSGA2_POPULATION_SIZE, OBJECTIVES >> > (d_offspring_fitness, d_population_fitness);
+			setNewBasePopulationFitness << <POPULATION_SIZE, OBJECTIVES >> > (d_offspring_fitness, d_population_fitness);
 
 			break;
 		}
@@ -1325,7 +1329,7 @@ __global__ void copyOffspring(
 __global__ void transpositionMutation(
 	short population[][FACILITIES_LOCATIONS], short offsprint_copy[][FACILITIES_LOCATIONS], short positions_for_trasposition[][2]) {
 	int position = blockIdx.x + POPULATION_SIZE;
-	if (threadIdx.x <= (positions_for_trasposition[blockIdx.x][1]) - positions_for_trasposition[blockIdx.x][0]) {
+	if (threadIdx.x <= (positions_for_trasposition[blockIdx.x][1] - positions_for_trasposition[blockIdx.x][0])) {
 		population[position][threadIdx.x + positions_for_trasposition[blockIdx.x][0]] = offsprint_copy[blockIdx.x][positions_for_trasposition[blockIdx.x][1] - threadIdx.x];
 	}
 }
@@ -1563,6 +1567,10 @@ void greedy2Opt(short h_population[][FACILITIES_LOCATIONS], short d_population[]
 	for (int i = 0; i < (FACILITIES_LOCATIONS - 1); i++) {
 		for (int j = 1; j < FACILITIES_LOCATIONS; j++) {
 
+			if (i == j) {
+	           continue;
+			}
+
 			setMutableOffspring << <POPULATION_SIZE, FACILITIES_LOCATIONS >> > (d_offspring);
 			cudaStatus = cudaDeviceSynchronize();
 			if (cudaStatus != cudaSuccess) {
@@ -1636,215 +1644,185 @@ int main()
 {
 	// To measure the execution time.
 	clock_t begin = clock();
+	for (int tries = 0; tries < TIMES; tries++) {
 
-	/**
-	 * To set seed variable.
-	 */
-	time_t t;
-	// Initializes random number generator.
-	srand((unsigned)time(&t));
-	// Seed for curand.
-	int seed = rand() % 10000;
+		/**
+		 * To set seed variable.
+		 */
+		time_t t;
+		// Initializes random number generator.
+		srand((unsigned)time(&t));
+		// Seed for curand.
+		int seed = rand() % 10000;
 
-	// To check correct synchronization.
-	cudaError_t cudaStatus;
+		// To check correct synchronization.
+		cudaError_t cudaStatus;
 
-	/***********VARIABLES IN HOST MEMORY*********/
-	// Variable for population in host memory.
-	short h_population[NSGA2_POPULATION_SIZE][FACILITIES_LOCATIONS];
-	// Variable for population fitness in host memory.
-	unsigned int h_population_fitness[NSGA2_POPULATION_SIZE][OBJECTIVES + 1];
-	// Variable for population total dominace in host memory.
-	short h_population_total_dominance[NSGA2_POPULATION_SIZE];
-	// Variable for population rank in host memory.
-	short h_population_rank[NSGA2_POPULATION_SIZE];
-	// Variable for population crowding distance in host memory.
-	float h_population_crowding[NSGA2_POPULATION_SIZE];
-	// Variable for offspring in host memory.
-	short h_offspring[POPULATION_SIZE][FACILITIES_LOCATIONS];
-	// Variable for offspring rank in host memory.
-	short h_offspring_rank[POPULATION_SIZE];
-	// Variable for offspring crowding distance in host memory.
-	float h_offspring_crowding[POPULATION_SIZE];
+		/***********VARIABLES IN HOST MEMORY*********/
+		// Variable for population in host memory.
+		short h_population[NSGA2_POPULATION_SIZE][FACILITIES_LOCATIONS];
+		// Variable for population fitness in host memory.
+		unsigned int h_population_fitness[NSGA2_POPULATION_SIZE][OBJECTIVES + 1];
+		// Variable for population total dominace in host memory.
+		short h_population_total_dominance[NSGA2_POPULATION_SIZE];
+		// Variable for population rank in host memory.
+		short h_population_rank[NSGA2_POPULATION_SIZE];
+		// Variable for population crowding distance in host memory.
+		float h_population_crowding[NSGA2_POPULATION_SIZE];
+		// Variable for offspring in host memory.
+		short h_offspring[POPULATION_SIZE][FACILITIES_LOCATIONS];
+		// Variable for offspring rank in host memory.
+		short h_offspring_rank[POPULATION_SIZE];
+		// Variable for offspring crowding distance in host memory.
+		float h_offspring_crowding[POPULATION_SIZE];
 
-	/**********VARIABLES IN DEVICE MEMORY********/
-	// Variable for population in device memory.
-	short(*d_population)[FACILITIES_LOCATIONS];
-	cudaMalloc((void**)&d_population, sizeof(short) * NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS);
-	// Variable for population fitness in device memory.
-	unsigned int(*d_population_fitness)[OBJECTIVES + 1];
-	cudaMalloc((void**)&d_population_fitness, sizeof(unsigned int) * NSGA2_POPULATION_SIZE * (OBJECTIVES + 1));
-	// Variable for sorted population by fitness in device memory.
-	unsigned int(*d_sorted_population_fitness)[OBJECTIVES + 1];
-	cudaMalloc((void**)&d_sorted_population_fitness, sizeof(unsigned int) * NSGA2_POPULATION_SIZE * (OBJECTIVES + 1));
-	// Variable for population total dominace in device memory.
-	short(*d_population_total_dominance);
-	cudaMalloc((void**)&d_population_total_dominance, sizeof(short) * NSGA2_POPULATION_SIZE);
-	// Variable for population rank in device memory.
-	short(*d_population_rank);
-	cudaMalloc((void**)&d_population_rank, sizeof(short) * NSGA2_POPULATION_SIZE);
-	// Variable for population crowding distance in device memory.
-	float(*d_population_crowding);
-	cudaMalloc((void**)&d_population_crowding, sizeof(float) * NSGA2_POPULATION_SIZE);
-	// Variable for offspring in device memory.
-	short(*d_offspring)[FACILITIES_LOCATIONS];
-	cudaMalloc((void**)&d_offspring, sizeof(short) * POPULATION_SIZE * FACILITIES_LOCATIONS);
-	// Variable for offspring rank in device memory.
-	short(*d_offspring_rank);
-	cudaMalloc((void**)&d_offspring_rank, sizeof(short) * POPULATION_SIZE);
-	// Variable for offspring crowding distance in device memory.
-	float(*d_offspring_crowding);
-	cudaMalloc((void**)&d_offspring_crowding, sizeof(float) * POPULATION_SIZE);
-	// Variable for offspring fitness in device memory.
-	unsigned int(*d_offspring_fitness)[OBJECTIVES];
-	cudaMalloc((void**)&d_offspring_fitness, sizeof(unsigned int) * POPULATION_SIZE * OBJECTIVES);
+		/**********VARIABLES IN DEVICE MEMORY********/
+		// Variable for population in device memory.
+		short(*d_population)[FACILITIES_LOCATIONS];
+		cudaMalloc((void**)&d_population, sizeof(short) * NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS);
+		// Variable for population fitness in device memory.
+		unsigned int(*d_population_fitness)[OBJECTIVES + 1];
+		cudaMalloc((void**)&d_population_fitness, sizeof(unsigned int) * NSGA2_POPULATION_SIZE * (OBJECTIVES + 1));
+		// Variable for sorted population by fitness in device memory.
+		unsigned int(*d_sorted_population_fitness)[OBJECTIVES + 1];
+		cudaMalloc((void**)&d_sorted_population_fitness, sizeof(unsigned int) * NSGA2_POPULATION_SIZE * (OBJECTIVES + 1));
+		// Variable for population total dominace in device memory.
+		short(*d_population_total_dominance);
+		cudaMalloc((void**)&d_population_total_dominance, sizeof(short) * NSGA2_POPULATION_SIZE);
+		// Variable for population rank in device memory.
+		short(*d_population_rank);
+		cudaMalloc((void**)&d_population_rank, sizeof(short) * NSGA2_POPULATION_SIZE);
+		// Variable for population crowding distance in device memory.
+		float(*d_population_crowding);
+		cudaMalloc((void**)&d_population_crowding, sizeof(float) * NSGA2_POPULATION_SIZE);
+		// Variable for offspring in device memory.
+		short(*d_offspring)[FACILITIES_LOCATIONS];
+		cudaMalloc((void**)&d_offspring, sizeof(short) * POPULATION_SIZE * FACILITIES_LOCATIONS);
+		// Variable for offspring rank in device memory.
+		short(*d_offspring_rank);
+		cudaMalloc((void**)&d_offspring_rank, sizeof(short) * POPULATION_SIZE);
+		// Variable for offspring crowding distance in device memory.
+		float(*d_offspring_crowding);
+		cudaMalloc((void**)&d_offspring_crowding, sizeof(float) * POPULATION_SIZE);
+		// Variable for offspring fitness in device memory.
+		unsigned int(*d_offspring_fitness)[OBJECTIVES];
+		cudaMalloc((void**)&d_offspring_fitness, sizeof(unsigned int) * POPULATION_SIZE * OBJECTIVES);
 
-	/**
-	 * Generation of all base chromosomes (genes ordered ascending).
-	 * 64 threads are defined here because we are going to tackle instances upto 60 FACILITIES/LOCATIONS.
-	 */
-	generateBasePopulation <<<NSGA2_POPULATION_SIZE, 64 >>> (d_population);
-	cudaStatus = cudaDeviceSynchronize();
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "generateBasePopulation Sync CudaError!\n");
-	}
-
-	// Set base population in host memory from device memory.
-	cudaMemcpy(h_population, d_population,
-		NSGA2_POPULATION_SIZE * (FACILITIES_LOCATIONS) * sizeof(short),
-		cudaMemcpyDeviceToHost);
-
-	// Print the base population generated.
-	if (DEV_MODE && PRINT_BASE_POPULATION) {
-		printf("\nBase Population\n");
-		for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
-			printf("Chromosome %d\n", i);
-			for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
-				printf("%d ", h_population[i][j]);
-			}
-			printf("\n");
+		/**
+		 * Generation of all base chromosomes (genes ordered ascending).
+		 * 64 threads are defined here because we are going to tackle instances upto 60 FACILITIES/LOCATIONS.
+		 */
+		generateBasePopulation << <NSGA2_POPULATION_SIZE, 64 >> > (d_population);
+		cudaStatus = cudaDeviceSynchronize();
+		if (cudaStatus != cudaSuccess) {
+			fprintf(stderr, "generateBasePopulation Sync CudaError!\n");
 		}
-	}
 
-	/* Initialize variables for random values generation with curand */
-	curandState* d_state;
-	cudaMalloc(&d_state, sizeof(curandState));
-
-	// 64 threads are defined here because we are going to tackle instances upto 60 FACILITIES/LOCATIONS.
-	curand_setup <<<NSGA2_POPULATION_SIZE, 64 >>> (d_state, seed);
-	cudaStatus = cudaDeviceSynchronize();
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "curand_setup Sync CudaError!");
-	}
-
-	/* Shuffles chromosome genes randomly over all population */
-	shufflePopulationGenes <<<NSGA2_POPULATION_SIZE, 1 >>> (d_state, d_population);
-	cudaStatus = cudaDeviceSynchronize();
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "shufflePopulationGenes Sync CudaError!");
-	}
-
-	/* Set current population (with Shuffled genes) in host memory from device memory */
-	cudaMemcpy(h_population, d_population,
-		NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
-		cudaMemcpyDeviceToHost);
-
-	// Print the shuffled population generated.
-	if (DEV_MODE && PRINT_SHUFFLED_POPULATION) {
-		printf("\nShuffled Population\n");
-		for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
-			printf("Chromosome %d\n", i);
-			for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
-				printf("%d ", h_population[i][j]);
-			}
-			printf("\n");
-		}
-	}
-
-	/**
-	 * Set all chromosomes with 1 2 7 9 6 5 0 4 3 8 0 0 for test purposes
-	 * expected fitness: F0 = 228322 F1 = 193446
-	 * @todo remove when completed.
-	 */
-
-	/*
-	for (int a = 0; a < POPULATION_SIZE; a++) {
-		h_population[a][0] = 1;
-		h_population[a][1] = 2;
-		h_population[a][2] = 7;
-		h_population[a][3] = 9;
-		h_population[a][4] = 6;
-		h_population[a][5] = 5;
-		h_population[a][6] = 0;
-		h_population[a][7] = 4;
-		h_population[a][8] = 3;
-		h_population[a][9] = 8;	
-	}
-
-	h_population[0][0] =1; h_population[0][1] =9; h_population[0][2] =6; h_population[0][3] =2; h_population[0][4] =8; h_population[0][5] =0; h_population[0][6] =4; h_population[0][7] =3; h_population[0][8] =5; h_population[0][9] =7;
-	h_population[1][0] =3; h_population[1][1] =7; h_population[1][2] =4; h_population[1][3] =6; h_population[1][4] =2; h_population[1][5] =9; h_population[1][6] =1; h_population[1][7] =8; h_population[1][8] =0; h_population[1][9] =5;
-	h_population[2][0] =4; h_population[2][1] =9; h_population[2][2] =8; h_population[2][3] =5; h_population[2][4] =6; h_population[2][5] =0; h_population[2][6] =7; h_population[2][7] =3; h_population[2][8] =2; h_population[2][9] =1;
-	h_population[3][0] =2; h_population[3][1] =9; h_population[3][2] =1; h_population[3][3] =5; h_population[3][4] =4; h_population[3][5] =0; h_population[3][6] =3; h_population[3][7] =8; h_population[3][8] =6; h_population[3][9] =7;
-	h_population[4][0] =6; h_population[4][1] =9; h_population[4][2] =0; h_population[4][3] =1; h_population[4][4] =8; h_population[4][5] =4; h_population[4][6] =3; h_population[4][7] =2; h_population[4][8] =5; h_population[4][9] =7;
-	h_population[5][0] =8; h_population[5][1] =7; h_population[5][2] =5; h_population[5][3] =1; h_population[5][4] =4; h_population[5][5] =6; h_population[5][6] =9; h_population[5][7] =2; h_population[5][8] =0; h_population[5][9] =3;
-	h_population[6][0] =4; h_population[6][1] =9; h_population[6][2] =3; h_population[6][3] =6; h_population[6][4] =0; h_population[6][5] =7; h_population[6][6] =8; h_population[6][7] =5; h_population[6][8] =2; h_population[6][9] =1;
-	h_population[7][0] =3; h_population[7][1] =5; h_population[7][2] =1; h_population[7][3] =6; h_population[7][4] =7; h_population[7][5] =0; h_population[7][6] =9; h_population[7][7] =2; h_population[7][8] =8; h_population[7][9] =4;
-	h_population[8][0] =6; h_population[8][1] =9; h_population[8][2] =1; h_population[8][3] =8; h_population[8][4] =2; h_population[8][5] =5; h_population[8][6] =7; h_population[8][7] =0; h_population[8][8] =4; h_population[8][9] =3;
-	h_population[9][0] =4; h_population[9][1] =8; h_population[9][2] =7; h_population[9][3] =6; h_population[9][4] =9; h_population[9][5] =5; h_population[9][6] =1; h_population[9][7] =0; h_population[9][8] =3; h_population[9][9] =2;
-	h_population[10][0] =8; h_population[10][1] =5; h_population[10][2] =4; h_population[10][3] =2; h_population[10][4] =0; h_population[10][5] =1; h_population[10][6] =7; h_population[10][7] =9; h_population[10][8] =3; h_population[10][9] =6;
-	h_population[11][0] =3; h_population[11][1] =8; h_population[11][2] =0; h_population[11][3] =6; h_population[11][4] =2; h_population[11][5] =7; h_population[11][6] =4; h_population[11][7] =9; h_population[11][8] =5; h_population[11][9] =1;
-	h_population[12][0] =1; h_population[12][1] =6; h_population[12][2] =5; h_population[12][3] =9; h_population[12][4] =8; h_population[12][5] =3; h_population[12][6] =0; h_population[12][7] =2; h_population[12][8] =4; h_population[12][9] =7;
-	h_population[13][0] =2; h_population[13][1] =6; h_population[13][2] =3; h_population[13][3] =4; h_population[13][4] =9; h_population[13][5] =0; h_population[13][6] =1; h_population[13][7] =8; h_population[13][8] =5; h_population[13][9] =7;
-	h_population[14][0] =4; h_population[14][1] =9; h_population[14][2] =5; h_population[14][3] =7; h_population[14][4] =2; h_population[14][5] =6; h_population[14][6] =0; h_population[14][7] =8; h_population[14][8] =1; h_population[14][9] =3;
-	h_population[15][0] =6; h_population[15][1] =0; h_population[15][2] =9; h_population[15][3] =8; h_population[15][4] =2; h_population[15][5] =4; h_population[15][6] =7; h_population[15][7] =3; h_population[15][8] =1; h_population[15][9] =5;
-
-	// Solutions from one optimal parteo front for testing.
-	h_population[0][0] = 3; h_population[0][1] = 8; h_population[0][2] = 0; h_population[0][3] = 9; h_population[0][4] = 2; h_population[0][5] = 4; h_population[0][6] = 1; h_population[0][7] = 5; h_population[0][8] = 6; h_population[0][9] = 7;
-	h_population[1][0] = 7; h_population[1][1] = 4; h_population[1][2] = 5; h_population[1][3] = 0; h_population[1][4] = 6; h_population[1][5] = 8; h_population[1][6] = 2; h_population[1][7] = 3; h_population[1][8] = 1; h_population[1][9] = 9;
-	h_population[2][0] = 2; h_population[2][1] = 3; h_population[2][2] = 5; h_population[2][3] = 6; h_population[2][4] = 9; h_population[2][5] = 0; h_population[2][6] = 8; h_population[2][7] = 1; h_population[2][8] = 4; h_population[2][9] = 7;
-
-	// Set Initial population in device memory from host memory with a fixed solution
-	cudaMemcpy(d_population, h_population,
+		// Set base population in host memory from device memory.
+		cudaMemcpy(h_population, d_population,
 			NSGA2_POPULATION_SIZE * (FACILITIES_LOCATIONS) * sizeof(short),
-				cudaMemcpyHostToDevice);
-	*/
+			cudaMemcpyDeviceToHost);
 
-
-	if (DEV_MODE || PRINT_INITIAL_POPULATION) {
-		printf("\nInitial Population\n");
-		for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
-			printf("Chromosome %d\n", i);
-			// Print solution.
-			for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
-				printf("%d ", h_population[i][j]);
+		// Print the base population generated.
+		if (DEV_MODE && PRINT_BASE_POPULATION) {
+			printf("\nBase Population\n");
+			for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
+				printf("Chromosome %d\n", i);
+				for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+					printf("%d ", h_population[i][j]);
+				}
+				printf("\n");
 			}
-			// Print fitness.
-			for (int j = 0; j < OBJECTIVES; j++) {
-				printf("|%d ", h_population_fitness[i][j]);
-			}
-			// Print rank.
-			printf("|%d ", h_population_rank[i]);
-			// Print crowding.
-			printf("%f", h_population_crowding[i]);
-			printf("\n");
 		}
-	}
 
-	for (int iteration = 0; iteration <= ITERATIONS; iteration++) {
+		/* Initialize variables for random values generation with curand */
+		curandState* d_state;
+		cudaMalloc(&d_state, sizeof(curandState));
 
-		/* Calculate fitness on each population chromosome */
-		parallelPopulationFitnessCalculation(h_population, h_population_fitness, d_population, d_population_fitness, d_sorted_population_fitness);
+		// 64 threads are defined here because we are going to tackle instances upto 60 FACILITIES/LOCATIONS.
+		curand_setup << <NSGA2_POPULATION_SIZE, 64 >> > (d_state, seed);
+		cudaStatus = cudaDeviceSynchronize();
+		if (cudaStatus != cudaSuccess) {
+			fprintf(stderr, "curand_setup Sync CudaError!");
+		}
 
+		/* Shuffles chromosome genes randomly over all population */
+		shufflePopulationGenes << <NSGA2_POPULATION_SIZE, 1 >> > (d_state, d_population);
+		cudaStatus = cudaDeviceSynchronize();
+		if (cudaStatus != cudaSuccess) {
+			fprintf(stderr, "shufflePopulationGenes Sync CudaError!");
+		}
+
+		/* Set current population (with Shuffled genes) in host memory from device memory */
 		cudaMemcpy(h_population, d_population,
 			NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
 			cudaMemcpyDeviceToHost);
-		cudaMemcpy(h_population_fitness, d_population_fitness,
-			NSGA2_POPULATION_SIZE * (OBJECTIVES + 1) * sizeof(unsigned int),
-			cudaMemcpyDeviceToHost);
 
-		if ((DEV_MODE && PRINT_POPULATION_WITH_FITNESS) || (iteration == 0 && PRINT_FIRST_POPULATION_WITH_FITNESS)) {
-			printf("\nPOPULATION WITH FINTESS CALCULATED\n");
+		// Print the shuffled population generated.
+		if (DEV_MODE && PRINT_SHUFFLED_POPULATION) {
+			printf("\nShuffled Population\n");
 			for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
+				printf("Chromosome %d\n", i);
+				for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+					printf("%d ", h_population[i][j]);
+				}
+				printf("\n");
+			}
+		}
+
+		/**
+		 * Set all chromosomes with 1 2 7 9 6 5 0 4 3 8 0 0 for test purposes
+		 * expected fitness: F0 = 228322 F1 = 193446
+		 * @todo remove when completed.
+		 */
+
+		 /*
+		 for (int a = 0; a < POPULATION_SIZE; a++) {
+			 h_population[a][0] = 1;
+			 h_population[a][1] = 2;
+			 h_population[a][2] = 7;
+			 h_population[a][3] = 9;
+			 h_population[a][4] = 6;
+			 h_population[a][5] = 5;
+			 h_population[a][6] = 0;
+			 h_population[a][7] = 4;
+			 h_population[a][8] = 3;
+			 h_population[a][9] = 8;
+		 }
+
+		 h_population[0][0] =1; h_population[0][1] =9; h_population[0][2] =6; h_population[0][3] =2; h_population[0][4] =8; h_population[0][5] =0; h_population[0][6] =4; h_population[0][7] =3; h_population[0][8] =5; h_population[0][9] =7;
+		 h_population[1][0] =3; h_population[1][1] =7; h_population[1][2] =4; h_population[1][3] =6; h_population[1][4] =2; h_population[1][5] =9; h_population[1][6] =1; h_population[1][7] =8; h_population[1][8] =0; h_population[1][9] =5;
+		 h_population[2][0] =4; h_population[2][1] =9; h_population[2][2] =8; h_population[2][3] =5; h_population[2][4] =6; h_population[2][5] =0; h_population[2][6] =7; h_population[2][7] =3; h_population[2][8] =2; h_population[2][9] =1;
+		 h_population[3][0] =2; h_population[3][1] =9; h_population[3][2] =1; h_population[3][3] =5; h_population[3][4] =4; h_population[3][5] =0; h_population[3][6] =3; h_population[3][7] =8; h_population[3][8] =6; h_population[3][9] =7;
+		 h_population[4][0] =6; h_population[4][1] =9; h_population[4][2] =0; h_population[4][3] =1; h_population[4][4] =8; h_population[4][5] =4; h_population[4][6] =3; h_population[4][7] =2; h_population[4][8] =5; h_population[4][9] =7;
+		 h_population[5][0] =8; h_population[5][1] =7; h_population[5][2] =5; h_population[5][3] =1; h_population[5][4] =4; h_population[5][5] =6; h_population[5][6] =9; h_population[5][7] =2; h_population[5][8] =0; h_population[5][9] =3;
+		 h_population[6][0] =4; h_population[6][1] =9; h_population[6][2] =3; h_population[6][3] =6; h_population[6][4] =0; h_population[6][5] =7; h_population[6][6] =8; h_population[6][7] =5; h_population[6][8] =2; h_population[6][9] =1;
+		 h_population[7][0] =3; h_population[7][1] =5; h_population[7][2] =1; h_population[7][3] =6; h_population[7][4] =7; h_population[7][5] =0; h_population[7][6] =9; h_population[7][7] =2; h_population[7][8] =8; h_population[7][9] =4;
+		 h_population[8][0] =6; h_population[8][1] =9; h_population[8][2] =1; h_population[8][3] =8; h_population[8][4] =2; h_population[8][5] =5; h_population[8][6] =7; h_population[8][7] =0; h_population[8][8] =4; h_population[8][9] =3;
+		 h_population[9][0] =4; h_population[9][1] =8; h_population[9][2] =7; h_population[9][3] =6; h_population[9][4] =9; h_population[9][5] =5; h_population[9][6] =1; h_population[9][7] =0; h_population[9][8] =3; h_population[9][9] =2;
+		 h_population[10][0] =8; h_population[10][1] =5; h_population[10][2] =4; h_population[10][3] =2; h_population[10][4] =0; h_population[10][5] =1; h_population[10][6] =7; h_population[10][7] =9; h_population[10][8] =3; h_population[10][9] =6;
+		 h_population[11][0] =3; h_population[11][1] =8; h_population[11][2] =0; h_population[11][3] =6; h_population[11][4] =2; h_population[11][5] =7; h_population[11][6] =4; h_population[11][7] =9; h_population[11][8] =5; h_population[11][9] =1;
+		 h_population[12][0] =1; h_population[12][1] =6; h_population[12][2] =5; h_population[12][3] =9; h_population[12][4] =8; h_population[12][5] =3; h_population[12][6] =0; h_population[12][7] =2; h_population[12][8] =4; h_population[12][9] =7;
+		 h_population[13][0] =2; h_population[13][1] =6; h_population[13][2] =3; h_population[13][3] =4; h_population[13][4] =9; h_population[13][5] =0; h_population[13][6] =1; h_population[13][7] =8; h_population[13][8] =5; h_population[13][9] =7;
+		 h_population[14][0] =4; h_population[14][1] =9; h_population[14][2] =5; h_population[14][3] =7; h_population[14][4] =2; h_population[14][5] =6; h_population[14][6] =0; h_population[14][7] =8; h_population[14][8] =1; h_population[14][9] =3;
+		 h_population[15][0] =6; h_population[15][1] =0; h_population[15][2] =9; h_population[15][3] =8; h_population[15][4] =2; h_population[15][5] =4; h_population[15][6] =7; h_population[15][7] =3; h_population[15][8] =1; h_population[15][9] =5;
+
+		 // Solutions from one optimal parteo front for testing.
+		 h_population[0][0] = 3; h_population[0][1] = 8; h_population[0][2] = 0; h_population[0][3] = 9; h_population[0][4] = 2; h_population[0][5] = 4; h_population[0][6] = 1; h_population[0][7] = 5; h_population[0][8] = 6; h_population[0][9] = 7;
+		 h_population[1][0] = 7; h_population[1][1] = 4; h_population[1][2] = 5; h_population[1][3] = 0; h_population[1][4] = 6; h_population[1][5] = 8; h_population[1][6] = 2; h_population[1][7] = 3; h_population[1][8] = 1; h_population[1][9] = 9;
+		 h_population[2][0] = 2; h_population[2][1] = 3; h_population[2][2] = 5; h_population[2][3] = 6; h_population[2][4] = 9; h_population[2][5] = 0; h_population[2][6] = 8; h_population[2][7] = 1; h_population[2][8] = 4; h_population[2][9] = 7;
+
+		 // Set Initial population in device memory from host memory with a fixed solution
+		 cudaMemcpy(d_population, h_population,
+				 NSGA2_POPULATION_SIZE * (FACILITIES_LOCATIONS) * sizeof(short),
+					 cudaMemcpyHostToDevice);
+		 */
+
+
+		if (DEV_MODE || PRINT_INITIAL_POPULATION) {
+			printf("\nInitial Population\n");
+			for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
+				printf("Chromosome %d\n", i);
 				// Print solution.
 				for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
 					printf("%d ", h_population[i][j]);
@@ -1853,169 +1831,251 @@ int main()
 				for (int j = 0; j < OBJECTIVES; j++) {
 					printf("|%d ", h_population_fitness[i][j]);
 				}
+				// Print rank.
+				printf("|%d ", h_population_rank[i]);
+				// Print crowding.
+				printf("%f", h_population_crowding[i]);
 				printf("\n");
 			}
 		}
 
+		for (int iteration = 0; iteration <= ITERATIONS; iteration++) {
 
-		parallelNSGA2(
-			h_population, h_population_fitness, h_population_total_dominance, h_population_rank, h_population_crowding,
-			h_offspring, h_offspring_rank, h_offspring_crowding,
-			d_population, d_population_fitness, d_sorted_population_fitness, d_population_total_dominance, d_population_rank, d_population_crowding,
-			d_offspring, d_offspring_rank, d_offspring_crowding, d_offspring_fitness
-		);
+			/* Calculate fitness on each population chromosome */
+			parallelPopulationFitnessCalculation(h_population, h_population_fitness, d_population, d_population_fitness, d_sorted_population_fitness);
 
+			cudaMemcpy(h_population, d_population,
+				NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
+				cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_population_fitness, d_population_fitness,
+				NSGA2_POPULATION_SIZE * (OBJECTIVES + 1) * sizeof(unsigned int),
+				cudaMemcpyDeviceToHost);
+
+			if ((DEV_MODE && PRINT_POPULATION_WITH_FITNESS) || (iteration == 0 && PRINT_FIRST_POPULATION_WITH_FITNESS)) {
+				printf("\nPOPULATION WITH FINTESS CALCULATED\n");
+				for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
+					// Print solution.
+					for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+						printf("%d ", h_population[i][j]);
+					}
+					// Print fitness.
+					for (int j = 0; j < OBJECTIVES; j++) {
+						printf("|%d ", h_population_fitness[i][j]);
+					}
+					printf("\n");
+				}
+			}
+
+
+			parallelNSGA2(
+				h_population, h_population_fitness, h_population_total_dominance, h_population_rank, h_population_crowding,
+				h_offspring, h_offspring_rank, h_offspring_crowding,
+				d_population, d_population_fitness, d_sorted_population_fitness, d_population_total_dominance, d_population_rank, d_population_crowding,
+				d_offspring, d_offspring_rank, d_offspring_crowding, d_offspring_fitness, iteration
+			);
+
+			cudaMemcpy(h_population, d_population,
+				NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
+				cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_population_fitness, d_population_fitness,
+				NSGA2_POPULATION_SIZE * (OBJECTIVES + 1) * sizeof(unsigned int),
+				cudaMemcpyDeviceToHost);
+
+			if (DEV_MODE && PRINT_OFFSPRING_POPULATION) {
+				printf("\nOFFSPRING POPULATION\n");
+				for (int i = 0; i < POPULATION_SIZE; i++) {
+					printf("Chromosome %d\n", i);
+					// Print solution.
+					for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+						printf("%d ", h_population[i][j]);
+					}
+					// Print fitness.
+					for (int j = 0; j < OBJECTIVES; j++) {
+						printf("|%d ", h_population_fitness[i][j]);
+					}
+					printf("\n");
+				}
+			}
+
+			if (iteration == ITERATIONS) {
+				break;
+			}
+
+			//printf("\niteration: %d\n", iteration);
+
+			BinaryTournamentSelection(
+				h_population,
+				h_offspring, h_offspring_rank, h_offspring_crowding,
+				d_population,
+				d_offspring, d_offspring_rank, d_offspring_crowding, d_population_fitness, d_offspring_fitness
+			);
+
+			cudaMemcpy(h_population, d_population,
+				NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
+				cudaMemcpyDeviceToHost);
+			cudaMemcpy(h_population_fitness, d_population_fitness,
+				NSGA2_POPULATION_SIZE * (OBJECTIVES + 1) * sizeof(unsigned int),
+				cudaMemcpyDeviceToHost);
+
+			if (DEV_MODE && PRINT_OFFSPRING_AND_WINNERS) {
+				printf("\nOFFSPRING POPULATION AND WINNERS TO BE MUTATED\n");
+				for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
+					printf("Chromosome %d\n", i);
+					// Print solution.
+					for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+						printf("%d ", h_population[i][j]);
+					}
+					// Print fitness.
+					for (int j = 0; j < OBJECTIVES; j++) {
+						printf("|%d ", h_population_fitness[i][j]);
+					}
+					printf("\n");
+				}
+			}
+
+			/* Exchange mutation */
+			seed = rand() % 10000;
+			curand_setup << <POPULATION_SIZE, 128 >> > (d_state, seed);
+			cudaStatus = cudaDeviceSynchronize();
+			if (cudaStatus != cudaSuccess) {
+				fprintf(stderr, "curand_setup Sync CudaError!");
+			}
+
+			exchangeMutation << <POPULATION_SIZE, 1 >> > (d_state, d_population);
+			cudaStatus = cudaDeviceSynchronize();
+			if (cudaStatus != cudaSuccess) {
+				fprintf(stderr, "Exchangemutation 1 Sync CudaError!");
+			}
+
+			/* Exchange mutation */
+			seed = rand() % 10000;
+			curand_setup << <POPULATION_SIZE, 128 >> > (d_state, seed);
+			cudaStatus = cudaDeviceSynchronize();
+			if (cudaStatus != cudaSuccess) {
+				fprintf(stderr, "curand_setup Sync CudaError!");
+			}
+
+			exchangeMutation << <POPULATION_SIZE, 1 >> > (d_state, d_population);
+			cudaStatus = cudaDeviceSynchronize();
+			if (cudaStatus != cudaSuccess) {
+				fprintf(stderr, "Exchangemutation 2 Sync CudaError!");
+			}
+
+			cudaMemcpy(h_population, d_population,
+				NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
+				cudaMemcpyDeviceToHost);
+
+			if (DEV_MODE || PRINT_WINNERS_MUTATED) {
+				printf("\nWINNERS MUTATED\n");
+				for (int i = POPULATION_SIZE; i < NSGA2_POPULATION_SIZE; i++) {
+					printf("Chromosome %d\n", i);
+					// Print solution.
+					for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+						printf("%d ", h_population[i][j]);
+					}
+					printf("\n");
+				}
+			}
+
+			/* transposition mutation */
+			seed = rand() % 10000;
+			transpositionMutation(h_population, d_population, seed);
+
+			/* Greedy 2opt mutation */
+			greedy2Opt(h_population, d_population);
+
+			if (DEV_MODE && PRINT_ITERATION) {
+				printf("\n ITERATION %d FINISHED ********************************************", iteration);
+			}
+		}
+
+		/* Uncomment this section of code to print the FINAL SOLUTION
+		Set FINAL POPULATION in host memory from device memory */
 		cudaMemcpy(h_population, d_population,
-			NSGA2_POPULATION_SIZE* FACILITIES_LOCATIONS * sizeof(short),
+			NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
 			cudaMemcpyDeviceToHost);
+		cudaMemcpy(h_population_fitness, d_population_fitness,
+			NSGA2_POPULATION_SIZE * (OBJECTIVES + 1) * sizeof(unsigned int),
+			cudaMemcpyDeviceToHost);
+
+		FILE* f = fopen("result_KCX_Yfl_Z_nsga2_greedy_2opt.txt", "a");
+		if (f == NULL) {
+			printf("Error opening file!\n");
+		}
+		fprintf(f, "{\n");
+		printf("\nFINAL SOLUTION\n");
+		for (int i = 0; i < POPULATION_SIZE; i++) {
+			// Print solution.
+			fprintf(f, "'");
+			for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+				printf("%d ", h_population[i][j]);
+				fprintf(f, "%d", h_population[i][j]);
+			}
+			fprintf(f, "': [");
+			// Print fitness.
+			for (int j = 0; j < OBJECTIVES; j++) {
+				printf("%d ", h_population_fitness[i][j]);
+				fprintf(f, "%d", h_population_fitness[i][j]);
+				if (j != OBJECTIVES - 1) {
+					fprintf(f, ", ");
+				}
+			}
+			printf("\n");
+			fprintf(f, "],\n");
+		}
+		fprintf(f, "},\n");
+		fclose(f);
+
+		/*
+		 * Section of code to get the Pareto front ordered by fitness in some objective.
+
+		sortPopulationByFitness(d_population_fitness, 0, true);
+		// Set current Sorted by F(i - objective) population in host memory from device memory
 		cudaMemcpy(h_population_fitness, d_population_fitness,
 			NSGA2_POPULATION_SIZE* (OBJECTIVES + 1) * sizeof(unsigned int),
 			cudaMemcpyDeviceToHost);
 
-		if (DEV_MODE && PRINT_OFFSPRING_POPULATION) {
-			printf("\nOFFSPRING POPULATION\n");
-			for (int i = 0; i < POPULATION_SIZE; i++) {
-				printf("Chromosome %d\n", i);
-				// Print solution.
-				for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
-					printf("%d ", h_population[i][j]);
-				}
-				// Print fitness.
-				for (int j = 0; j < OBJECTIVES; j++) {
-					printf("|%d ", h_population_fitness[i][j]);
-				}
-				printf("\n");
+		FILE* f2 = fopen("test_nsga2_g2opt.txt", "a");
+		if (f2 == NULL) {
+			printf("Error opening file!\n");
+		}
+		fprintf(f2, "{\n");
+		for (int i = 0; i < POPULATION_SIZE; i++) {
+			// Print key.
+			fprintf(f2, "'");
+			for (int j = 0; j < OBJECTIVES; j++) {
+				fprintf(f2, "%d", h_population_fitness[i][j]);
 			}
-		}
 
-		if (iteration == ITERATIONS) {
-			break;
-		}
-
-		//printf("\niteration: %d\n", iteration);
-
-		BinaryTournamentSelection(
-			h_population,
-			h_offspring, h_offspring_rank, h_offspring_crowding,
-			d_population,
-			d_offspring, d_offspring_rank, d_offspring_crowding, d_population_fitness, d_offspring_fitness
-		);
-
-		cudaMemcpy(h_population, d_population,
-			NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
-			cudaMemcpyDeviceToHost);
-		cudaMemcpy(h_population_fitness, d_population_fitness,
-			NSGA2_POPULATION_SIZE * (OBJECTIVES + 1) * sizeof(unsigned int),
-			cudaMemcpyDeviceToHost);
-
-		if (DEV_MODE && PRINT_OFFSPRING_AND_WINNERS) {
-			printf("\nOFFSPRING POPULATION AND WINNERS TO BE MUTATED\n");
-			for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
-				printf("Chromosome %d\n", i);
-				// Print solution.
-				for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
-					printf("%d ", h_population[i][j]);
+			fprintf(f, "': [");
+			// Print fitness.
+			for (int j = 0; j < OBJECTIVES; j++) {
+				printf("%d ", h_population_fitness[i][j]);
+				fprintf(f2, "%d", h_population_fitness[i][j]);
+				if (j != OBJECTIVES - 1) {
+					fprintf(f2, ", ");
 				}
-				// Print fitness.
-				for (int j = 0; j < OBJECTIVES; j++) {
-					printf("|%d ", h_population_fitness[i][j]);
-				}
-				printf("\n");
 			}
+			printf("\n");
+			fprintf(f2, "],\n");
 		}
 
-		/* Exchange mutation */
-		seed = rand() % 10000;
-		curand_setup << <POPULATION_SIZE, 128 >> > (d_state, seed);
-		cudaStatus = cudaDeviceSynchronize();
+		fprintf(f2, "},\n");
+		fclose(f2);
+		*/
+		cudaStatus = cudaDeviceReset();
 		if (cudaStatus != cudaSuccess) {
-			fprintf(stderr, "curand_setup Sync CudaError!");
-		}
-
-		exchangeMutation << <POPULATION_SIZE, 1 >> > (d_state, d_population);
-		cudaStatus = cudaDeviceSynchronize();
-		if (cudaStatus != cudaSuccess) {
-			fprintf(stderr, "Exchangemutation 1 Sync CudaError!");
-		}
-
-		/* Exchange mutation */
-		seed = rand() % 10000;
-		curand_setup << <POPULATION_SIZE, 128 >> > (d_state, seed);
-		cudaStatus = cudaDeviceSynchronize();
-		if (cudaStatus != cudaSuccess) {
-			fprintf(stderr, "curand_setup Sync CudaError!");
-		}
-
-		exchangeMutation << <POPULATION_SIZE, 1 >> > (d_state, d_population);
-		cudaStatus = cudaDeviceSynchronize();
-		if (cudaStatus != cudaSuccess) {
-			fprintf(stderr, "Exchangemutation 2 Sync CudaError!");
-		}
-
-		cudaMemcpy(h_population, d_population,
-			NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
-			cudaMemcpyDeviceToHost);
-
-		if (DEV_MODE || PRINT_WINNERS_MUTATED) {
-			printf("\nWINNERS MUTATED\n");
-			for (int i = POPULATION_SIZE; i < NSGA2_POPULATION_SIZE; i++) {
-				printf("Chromosome %d\n", i);
-				// Print solution.
-				for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
-					printf("%d ", h_population[i][j]);
-				}
-				printf("\n");
-			}
-		}
-
-		/* transposition mutation */
-		seed = rand() % 10000;
-		transpositionMutation(h_population, d_population, seed);
-
-		/* Greedy 2opt mutation */
-		greedy2Opt(h_population, d_population);
-
-		if (DEV_MODE && PRINT_ITERATION) {
-			printf("\n ITERATION %d FINISHED ********************************************", iteration);
+			fprintf(stderr, "cudaDeviceReset failed!");
+			return 1;
 		}
 	}
 
 	clock_t end = clock();
 	double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-
-
-	/* Uncomment this section of code to print the FINAL SOLUTION
-	Set FINAL POPULATION in host memory from device memory */
-	cudaMemcpy(h_population, d_population,
-		NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
-		cudaMemcpyDeviceToHost);
-	cudaMemcpy(h_population_fitness, d_population_fitness,
-		NSGA2_POPULATION_SIZE * (OBJECTIVES + 1) * sizeof(unsigned int),
-		cudaMemcpyDeviceToHost);
-
-	printf("\nFINAL SOLUTION\n");
-	for (int i = 0; i < POPULATION_SIZE; i++) {
-		// Print solution.
-		for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
-			printf("%d ", h_population[i][j]);
-		}
-		// Print fitness.
-		for (int j = 0; j < OBJECTIVES; j++) {
-			printf("%d ", h_population_fitness[i][j]);
-		}
-		printf("\n");
-	}
-	/* */
-
 	printf("\n Time Spent: %f", time_spent);
-
 	// cudaDeviceReset must be called before exiting in order for profiling and
 	// tracing tools such as Nsight and Visual Profiler to show complete traces.
-	cudaStatus = cudaDeviceReset();
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaDeviceReset failed!");
-		return 1;
-	}
+
 	return 0;
 }
 

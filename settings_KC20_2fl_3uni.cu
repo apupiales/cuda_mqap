@@ -17,7 +17,7 @@
  * Pt population size. MUST BE A POWER OF TWO
  * due to bitonic sort limitation.
  */
-#define POPULATION_SIZE 32
+#define POPULATION_SIZE 64
 
 /*
  * Number of times the genetic algorithm is executed.
