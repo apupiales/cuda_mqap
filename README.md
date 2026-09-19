@@ -80,8 +80,10 @@ non-dominated solutions.
 
 ### Instances (`mQAPData/`)
 
-The instances come from Knowles and Corne's generator (<http://www.cs.bham.ac.uk/~jdk/mQAP/>),
-through the copy at <https://github.com/fredizzimo/keyboardlayout/tree/master/tests/mQAPData>.
+The instances are Knowles and Corne's mQAP test suite
+([archived page](https://web.archive.org/web/2019/http://www.cs.bham.ac.uk/~jdk/mQAP/)), taken from the copy at
+<https://github.com/fredizzimo/keyboardlayout/tree/master/tests/mQAPData>. They are third-party data, not
+covered by this project's license: see [Third-party data](#third-party-data).
 
 | File | Content |
 |---|---|
@@ -545,7 +547,7 @@ The speedup does not change the quality of the obtained front.
 ### Credits
 
 - **Author:** Andrés Pupiales Arévalo — <apupiales@gmail.com> — <https://github.com/apupiales>. Project started in May 2019.
-- **mQAP instances:** J. Knowles and D. Corne (<http://www.cs.bham.ac.uk/~jdk/mQAP/>).
+- **mQAP instances:** J. Knowles and D. Corne; Pareto optimal fronts by G. Lamont (see [Third-party data](#third-party-data)).
 - **Refactoring and optimization of the current version:** done with the assistance of Claude (Anthropic).
 
 ### License
@@ -564,3 +566,23 @@ Every source file carries the corresponding header.
 **is not part of this repository**: it is proprietary NVIDIA software, distributed under its own license
 (CUDA EULA), and it is required to build and run the program. The GPL v3 license covers only the code
 of this project.
+
+### Third-party data
+
+The files in `mQAPData/` are **not covered by the GPL v3** license of this project: they are
+third-party benchmark data, redistributed unmodified for academic and research use.
+
+- **Instances (`.dat`):** mQAP test suite by Joshua Knowles and David Corne, generated with their
+  generators `makeQAPuni`/`makeQAPrl` ((C) J. Knowles, 2002). The original page is no longer online;
+  [archived copy](https://web.archive.org/web/2019/http://www.cs.bham.ac.uk/~jdk/mQAP/).
+- **Pareto optimal fronts (`.PO`):** enumeration of the ten-facility instances by Gary Lamont, published
+  on the same page.
+- **Copy used:** [fredizzimo/keyboardlayout](https://github.com/fredizzimo/keyboardlayout/tree/master/tests/mQAPData)
+  (identical files). The MIT license of that repository does not cover this data, whose authors are the ones above.
+- **Terms:** no explicit license is published. The original page offers the generators as free software
+  *"for academic or educational use"* and asks to contact the author for commercial use; apply the
+  same criterion to the instances.
+- **Citation:** J. D. Knowles and D. W. Corne, *Instance Generators and Test Suites for the Multiobjective
+  Quadratic Assignment Problem*, EMO 2003, LNCS 2632, pp. 295–310, Springer, 2003.
+
+Details and BibTeX entry in [`mQAPData/README.txt`](mQAPData/README.txt).
