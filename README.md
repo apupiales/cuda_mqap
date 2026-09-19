@@ -93,6 +93,11 @@ GeForce RTX 2060 (sm_75), Release builds. The previous version is `kernel.cu` at
 |---|---|---|
 | KC10-2fl-1rl, P=64, 70 iterations, 1 run | 2.2 s | 0.15 s wall (15 ms GPU) |
 | KC10-2fl-1rl, P=64, 70 iterations, 10 runs | 23.7 s | 0.12 s wall (21 ms GPU) |
+| KC20-2fl-1rl, P=64, 300 iterations, 1 run | 48.8 s | 0.15 s wall (55 ms GPU) |
+| KC30-3fl-1rl, P=32, 70 iterations, 1 run | 42.4 s | 0.14 s wall (40 ms GPU) |
+| KC30-3fl-1rl, P=32, 70 iterations, 30 runs | ~21 min (estimated, 30 x 42.4 s) | 0.23 s wall (135 ms GPU) |
+
+The wall time of this version is dominated by the creation of the CUDA context (~0.1 s).
 
 Quality is unchanged: over 10 to 30 runs, the fraction of the published Pareto optimal front found
 was 68.4 % in both versions for KC10-2fl-1rl, and 44.2 % (previous) vs 45.0 % (this version) for
