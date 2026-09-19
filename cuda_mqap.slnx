@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="cuda_mqap.vcxproj" />
+  <Project Path="test_kernels.vcxproj" />
+</Solution>
