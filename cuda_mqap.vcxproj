@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{6B0F2C51-3E0A-4E0B-9C4B-2D8A1F5E7C01}</ProjectGuid>
+    <RootNamespace>cuda_mqap</RootNamespace>
+  </PropertyGroup>
+  <!-- Picks the installed CUDA Toolkit version (see cuda_toolkit.props). -->
+  <Import Project="cuda_toolkit.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <!-- Toolset of the Visual Studio that opens the project (v145 in Visual Studio 2026). -->
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA $(CudaVersion).props" Condition="Exists('$(VCTargetsPath)\BuildCustomizations\CUDA $(CudaVersion).props')" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="cuda_mqap.props" />
+  </ImportGroup>
+  <!-- kernel.cu is the only translation unit: it #includes general_dev_settings.cu and ONE settings_*.cu. -->
+  <ItemGroup>
+    <CudaCompile Include="kernel.cu" />
+  </ItemGroup>
+  <!-- Included by kernel.cu, never compiled on their own. -->
+  <ItemGroup>
+    <None Include="general_dev_settings.cu" />
+    <None Include="settings_KC10_2fl_1rl.cu" />
+    <None Include="settings_KC10_2fl_1uni.cu" />
+    <None Include="settings_KC10_2fl_2rl.cu" />
+    <None Include="settings_KC10_2fl_2uni.cu" />
+    <None Include="settings_KC10_2fl_3rl.cu" />
+    <None Include="settings_KC10_2fl_3uni.cu" />
+    <None Include="settings_KC10_2fl_4rl.cu" />
+    <None Include="settings_KC10_2fl_5rl.cu" />
+    <None Include="settings_KC20_2fl_1rl.cu" />
+    <None Include="settings_KC20_2fl_1uni.cu" />
+    <None Include="settings_KC20_2fl_2uni.cu" />
+    <None Include="settings_KC20_2fl_3uni.cu" />
+    <None Include="settings_KC30_3fl_1rl.cu" />
+    <None Include="settings_KC30_3fl_1uni.cu" />
+    <None Include="settings_KC30_3fl_2uni.cu" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" />
+    <None Include="LEEME.md" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA $(CudaVersion).targets" Condition="Exists('$(VCTargetsPath)\BuildCustomizations\CUDA $(CudaVersion).targets')" />
+  </ImportGroup>
+</Project>
