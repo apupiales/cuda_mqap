@@ -61,3 +61,6 @@ Debug/
 *.sln
 *.vcxproj
 *.vcxproj.user
+
+# Documento de análisis local (no se versiona)
+ANALISIS_CLAUDE_OPUS5.md
