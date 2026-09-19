@@ -1,266 +1,269 @@
-# cuda_mqap — NSGA-II + Greedy 2-opt adaptado en CUDA para el mQAP
+# cuda_mqap — NSGA-II + Adapted Greedy 2-opt in CUDA for the mQAP
 
-Implementación paralela en GPU (CUDA C++) del algoritmo evolutivo multiobjetivo **NSGA-II**,
-combinado con una búsqueda local **Greedy 2-opt adaptada**, para resolver instancias del
-**Problema de Asignación Cuadrática Multiobjetivo** (mQAP, *multiobjective Quadratic Assignment Problem*).
+**English** | [Español](LEEME.md)
 
-Todo el algoritmo se ejecuta en la GPU: la evaluación del fitness, la ordenación no dominada, el
-crowding distance, la selección, la mutación y la búsqueda local. Cada generación son **3 lanzamientos
-de kernel sin sincronización con el host**. Además, se pueden ejecutar **varias ejecuciones
-independientes de forma concurrente** en una sola llamada al programa.
+GPU-parallel implementation (CUDA C++) of the multiobjective evolutionary algorithm **NSGA-II**,
+combined with an **adapted Greedy 2-opt** local search, to solve instances of the
+**multiobjective Quadratic Assignment Problem** (mQAP).
 
----
-
-## Índice
-
-1. [Características](#características)
-2. [El problema: mQAP](#el-problema-mqap)
-3. [El algoritmo](#el-algoritmo)
-4. [Arquitectura del proyecto](#arquitectura-del-proyecto)
-5. [Diseño en GPU](#diseño-en-gpu)
-6. [Requisitos](#requisitos)
-7. [Compilación](#compilación)
-8. [Uso](#uso)
-9. [Experimentos y métricas](#experimentos-y-métricas)
-10. [Pruebas y validación](#pruebas-y-validación)
-11. [Rendimiento](#rendimiento)
-12. [Mejoras respecto a la versión original](#mejoras-respecto-a-la-versión-original)
-13. [Limitaciones y trabajo futuro](#limitaciones-y-trabajo-futuro)
-14. [Solución de problemas](#solución-de-problemas)
-15. [Créditos y licencia](#créditos-y-licencia)
+The whole algorithm runs on the GPU: fitness evaluation, non-dominated sorting, crowding distance,
+selection, mutation and local search. Each generation takes **3 kernel launches with no host
+synchronization**, and **several independent runs can execute concurrently** in a single call to
+the program.
 
 ---
 
-## Características
+## Contents
 
-**Algoritmo**
-- NSGA-II completo: ordenación no dominada rápida, crowding distance y selección elitista (μ + λ).
-- Selección por torneo binario, mutación por intercambio y mutación por transposición (inversión de un segmento).
-- Greedy 2-opt adaptado a varios objetivos: en cada generación se elige al azar si el criterio de mejora
-  es la suma de todos los objetivos o un único objetivo.
-- Instancias de 2 y 3 objetivos (flujos) y hasta 64 instalaciones.
-
-**Rendimiento en GPU**
-- Fitness en **O(n²)** por cromosoma (un *warp* por cromosoma, con las matrices en *shared memory*),
-  en lugar de tres productos de matrices densas de O(n³).
-- NSGA-II completo **dentro de un solo bloque por ejecución**: la matriz de dominancia está empaquetada
-  en bits, los frentes se extraen con `__ballot_sync`/`__popc` y los bitonic sorts se hacen en *shared memory*.
-- Greedy 2-opt con **evaluación incremental (delta) en O(n)** de cada intercambio; la búsqueda local de
-  toda la descendencia es un único kernel.
-- Estados aleatorios Philox persistentes, que se inicializan una sola vez.
-- **Ejecuciones independientes en paralelo** (`--runs R`) para aprovechar toda la GPU en las campañas de experimentos.
-
-**Ingeniería**
-- Separación estricta host/device: `main.cpp` no contiene código CUDA, y los kernels se exponen mediante funciones lanzadoras.
-- Instancias leídas de los ficheros `.dat` en tiempo de ejecución; los parámetros se pasan por línea de comandos.
-- Control de errores `CUDA_CHECK`/`CUDA_CHECK_KERNEL` y gestión de memoria RAII (`DeviceBuffer<T>`).
-- Solución de Visual Studio versionada (`cuda_mqap.slnx`) y `CMakeLists.txt` con `ctest`.
-- Batería de pruebas que compara cada kernel con una implementación independiente en CPU, y la opción
-  `--verify`, que valida los resultados de cada ejecución.
-- Resultados reproducibles mediante semilla (`--seed`).
+1. [Features](#features)
+2. [The problem: mQAP](#the-problem-mqap)
+3. [The algorithm](#the-algorithm)
+4. [Project architecture](#project-architecture)
+5. [GPU design](#gpu-design)
+6. [Requirements](#requirements)
+7. [Build](#build)
+8. [Usage](#usage)
+9. [Experiments and metrics](#experiments-and-metrics)
+10. [Tests and validation](#tests-and-validation)
+11. [Performance](#performance)
+12. [Improvements over the original version](#improvements-over-the-original-version)
+13. [Limitations and future work](#limitations-and-future-work)
+14. [Troubleshooting](#troubleshooting)
+15. [Credits and license](#credits-and-license)
 
 ---
 
-## El problema: mQAP
+## Features
 
-Hay `n` instalaciones (*facilities*) que deben asignarse a `n` ubicaciones (*locations*). Una solución es
-una permutación `p`, donde `p[i]` es la ubicación de la instalación `i`. Cada objetivo `k` tiene su propia
-matriz de flujos `Fk`, y todos comparten la matriz de distancias `D`. Se minimizan simultáneamente los `m` costes:
+**Algorithm**
+- Complete NSGA-II: fast non-dominated sorting, crowding distance and elitist (μ + λ) selection.
+- Binary tournament selection, exchange mutation and transposition mutation (reversal of a segment).
+- Greedy 2-opt adapted to several objectives: in each generation the improvement criterion is chosen at
+  random, either the sum of all objectives or a single objective.
+- Instances with 2 or 3 objectives (flow matrices) and up to 64 facilities.
+
+**GPU performance**
+- **O(n²)** fitness per chromosome (one *warp* per chromosome, with the matrices in *shared memory*),
+  instead of three O(n³) dense matrix products.
+- Complete NSGA-II **inside a single block per run**: the dominance matrix is packed in bits, the fronts
+  are extracted with `__ballot_sync`/`__popc` and the bitonic sorts run in *shared memory*.
+- Greedy 2-opt with **O(n) incremental (delta) evaluation** of each swap; the local search of the whole
+  offspring is a single kernel.
+- Persistent Philox random states, initialized only once.
+- **Independent runs in parallel** (`--runs R`) to use the whole GPU in experiment campaigns.
+
+**Engineering**
+- Strict host/device separation: `main.cpp` contains no CUDA code, and kernels are exposed through launcher functions.
+- Instances read from the `.dat` files at runtime; parameters are passed on the command line.
+- `CUDA_CHECK`/`CUDA_CHECK_KERNEL` error checking and RAII memory management (`DeviceBuffer<T>`).
+- Versioned Visual Studio solution (`cuda_mqap.slnx`) and `CMakeLists.txt` with `ctest`.
+- Test suite that compares every kernel with an independent CPU implementation, plus the `--verify`
+  option, which validates the results of every run.
+- Reproducible results through a seed (`--seed`).
+
+---
+
+## The problem: mQAP
+
+`n` facilities must be assigned to `n` locations. A solution is a permutation `p`, where `p[i]` is the
+location of facility `i`. Each objective `k` has its own flow matrix `Fk`, and all of them share the
+distance matrix `D`. The `m` costs are minimized simultaneously:
 
 ```
-cost_k(p) = Σ_i Σ_j  Fk[i][j] · D[p(i)][p(j)]          k = 1..m   (m = 2 o 3)
+cost_k(p) = Σ_i Σ_j  Fk[i][j] · D[p(i)][p(j)]          k = 1..m   (m = 2 or 3)
 ```
 
-Esta expresión es equivalente a la formulación matricial `Trace(Fk · X · Dᵀ · Xᵀ)` que usaba la versión
-original, donde `X` es la matriz de permutación; las pruebas verifican esa equivalencia. Como los
-objetivos están en conflicto, el resultado no es una única solución sino una aproximación del **frente de
-Pareto**: el conjunto de soluciones no dominadas.
+This expression is equivalent to the matrix formulation `Trace(Fk · X · Dᵀ · Xᵀ)` used by the original
+version, where `X` is the permutation matrix; the tests verify that equivalence. Because the objectives
+conflict, the result is not a single solution but an approximation of the **Pareto front**: the set of
+non-dominated solutions.
 
-### Instancias (`mQAPData/`)
+### Instances (`mQAPData/`)
 
-Las instancias proceden del generador de Knowles y Corne (<http://www.cs.bham.ac.uk/~jdk/mQAP/>),
-en la copia de <https://github.com/fredizzimo/keyboardlayout/tree/master/tests/mQAPData>.
+The instances come from Knowles and Corne's generator (<http://www.cs.bham.ac.uk/~jdk/mQAP/>),
+through the copy at <https://github.com/fredizzimo/keyboardlayout/tree/master/tests/mQAPData>.
 
-| Fichero | Contenido |
+| File | Content |
 |---|---|
-| `KC<n>-<m>fl-<tipo>.dat` | Cabecera (`facilities = 10 objectives = 2 …` o `facilities: 10 objectives: 2 …`), la matriz de distancias `n×n` y `m` matrices de flujo `n×n` |
-| `KC10-2fl-*.PO` | Frente de Pareto óptimo publicado: en cada línea, una permutación en base 1 y sus `m` costes |
+| `KC<n>-<m>fl-<type>.dat` | Header (`facilities = 10 objectives = 2 …` or `facilities: 10 objectives: 2 …`), the `n×n` distance matrix and `m` `n×n` flow matrices |
+| `KC10-2fl-*.PO` | Published Pareto optimal front: each line holds a 1-based permutation and its `m` costs |
 
-`rl` son instancias con distancias y flujos del tipo *real-like*, y `uni` con valores uniformes.
-Hay 23 instancias con n = 10, 20 y 30, y los frentes óptimos de las 8 instancias KC10.
+`rl` instances have *real-like* distances and flows, and `uni` instances have uniform values.
+There are 23 instances with n = 10, 20 and 30, and the optimal fronts of the 8 KC10 instances.
 
 ---
 
-## El algoritmo
+## The algorithm
 
 ```mermaid
 flowchart TD
-    A[Población inicial aleatoria<br/>2P permutaciones · Fisher-Yates] --> B[Fitness de las 2P soluciones]
-    B --> C{{"Supervivencia NSGA-II (Rt = Pt ∪ Qt)<br/>frentes · crowding · mejores P"}}
-    C -->|¿última iteración?| Z[Frente no dominado final]
-    C --> D["Reproducción<br/>Pt+1 = supervivientes<br/>Qt+1 = ganadores del torneo binario + mutaciones"]
-    D --> E["Greedy 2-opt adaptado sobre Qt+1<br/>(deja el fitness actualizado)"]
+    A[Random initial population<br/>2P permutations · Fisher-Yates] --> B[Fitness of the 2P solutions]
+    B --> C{{"NSGA-II survival (Rt = Pt ∪ Qt)<br/>fronts · crowding · best P"}}
+    C -->|last iteration?| Z[Final non-dominated front]
+    C --> D["Reproduction<br/>Pt+1 = survivors<br/>Qt+1 = binary tournament winners + mutations"]
+    D --> E["Adapted Greedy 2-opt on Qt+1<br/>(leaves the fitness updated)"]
     E --> C
 ```
 
-Cada generación hace lo siguiente:
+Each generation does the following:
 
-1. **Supervivencia NSGA-II** sobre las `2P` soluciones de `Rt = Pt ∪ Qt`:
-   - *Ordenación no dominada*: rango 1 para el primer frente de Pareto, rango 2 para el siguiente, etc.
-   - *Crowding distance* de cada frente. Para cada objetivo se ordenan los miembros del frente; los
-     extremos reciben ∞ y los puntos interiores suman `(f[siguiente] − f[anterior]) / (máx − mín)`,
-     con el máximo y el mínimo calculados sobre toda la población.
-   - Se seleccionan las `P` mejores soluciones por (rango ascendente, crowding descendente).
-2. **Reproducción**. Las `P` supervivientes forman `Pt+1`. Para cada una se celebra un **torneo binario**
-   contra otra superviviente elegida al azar: gana el rango menor y, en caso de empate, el mayor crowding.
-   El ganador se copia y se muta:
-   - **Mutación por intercambio**: se intercambian dos genes al azar; se aplica 2 veces.
-   - **Mutación por transposición**: se invierte el segmento comprendido entre dos posiciones aleatorias.
-3. **Greedy 2-opt adaptado** sobre cada descendiente. Se recorren en orden todos los pares de posiciones
-   `(r < s)` y se conserva el intercambio si no empeora el criterio de la generación, elegido al azar para
-   cada ejecución y generación: la suma de todos los objetivos o un único objetivo `k`. La idea de adaptar
-   el criterio proviene de <https://arxiv.org/ftp/arxiv/papers/1109/1109.1276.pdf>.
+1. **NSGA-II survival** over the `2P` solutions of `Rt = Pt ∪ Qt`:
+   - *Non-dominated sorting*: rank 1 for the first Pareto front, rank 2 for the next one, and so on.
+   - *Crowding distance* of each front. For each objective the members of the front are sorted; the
+     extremes get ∞ and the interior points add `(f[next] − f[previous]) / (max − min)`, with the maximum
+     and minimum taken over the whole population.
+   - The best `P` solutions by (rank ascending, crowding descending) are selected.
+2. **Reproduction**. The `P` survivors form `Pt+1`. For each of them a **binary tournament** is held
+   against another survivor chosen at random: the lower rank wins and, on a tie, the larger crowding.
+   The winner is copied and mutated:
+   - **Exchange mutation**: two random genes are swapped; it is applied twice.
+   - **Transposition mutation**: the segment between two random positions is reversed.
+3. **Adapted Greedy 2-opt** on each offspring. All pairs of positions `(r < s)` are visited in order and
+   a swap is kept if it does not worsen the criterion of the generation, chosen at random for each run and
+   generation: the sum of all objectives or a single objective `k`. The idea of adapting the criterion
+   comes from <https://arxiv.org/ftp/arxiv/papers/1109/1109.1276.pdf>.
 
-Parámetros:
+Parameters:
 
-| Parámetro | Dónde | Valor por defecto |
+| Parameter | Where | Default |
 |---|---|---|
-| Tamaño de población `P` | `--population` | 64 (potencia de 2 entre 16 y 256) |
-| Generaciones | `--iterations` | 70 |
-| Ejecuciones independientes | `--runs` | 1 |
-| Semilla | `--seed` | aleatoria (se imprime) |
-| Mutaciones por intercambio por hijo | `include/config.h` (`kExchangeMutations`) | 2 |
-| Probabilidad de intercambio / transposición | `include/config.h` | 1.0 / 1.0 |
+| Population size `P` | `--population` | 64 (power of 2 between 16 and 256) |
+| Generations | `--iterations` | 70 |
+| Independent runs | `--runs` | 1 |
+| Seed | `--seed` | random (printed) |
+| Exchange mutations per child | `include/config.h` (`kExchangeMutations`) | 2 |
+| Exchange / transposition probability | `include/config.h` | 1.0 / 1.0 |
 
 ---
 
-## Arquitectura del proyecto
+## Project architecture
 
 ```
 cuda_mqap/
 ├── include/
-│   ├── config.h            Límites (n, P, objetivos) y parámetros de los operadores
+│   ├── config.h            Limits (n, P, objectives) and operator parameters
 │   ├── cuda_check.cuh      CUDA_CHECK / CUDA_CHECK_KERNEL
-│   ├── device_buffer.cuh   DeviceBuffer<T>: memoria de GPU con RAII
-│   ├── device_common.cuh   Funciones __device__ compartidas (coste por warp, delta 2-opt, bitonic sort)
-│   ├── instance.h          Struct Instance, loadInstance(), cost() de referencia en CPU
-│   ├── kernels.cuh         Declaración de los lanzadores de kernels y del layout de memoria
+│   ├── device_buffer.cuh   DeviceBuffer<T>: GPU memory with RAII
+│   ├── device_common.cuh   Shared __device__ functions (per-warp cost, 2-opt delta, bitonic sort)
+│   ├── instance.h          Instance struct, loadInstance(), reference CPU cost()
+│   ├── kernels.cuh         Declaration of the kernel launchers and of the memory layout
 │   └── solver.h            SolverOptions, Solution, RunResult, solve()
 ├── src/
-│   ├── main.cpp            Línea de comandos, fichero de resultados y --verify (solo host)
-│   ├── instance.cpp        Parser de los ficheros .dat y validación (incluido el desbordamiento del fitness)
-│   ├── solver.cu           Orquestación en el host: reservas, bucle de generaciones y recogida de resultados
-│   ├── fitness.cu          Kernel de fitness
-│   ├── nsga2.cu            Kernel de supervivencia NSGA-II
-│   ├── operators.cu        RNG, población inicial, torneo y mutaciones
-│   └── local_search.cu     Kernel Greedy 2-opt
-├── tests/test_kernels.cu   Pruebas de cada kernel contra referencias en CPU
-├── scripts/run_experiments.ps1   Campaña de experimentos con los parámetros de cada instancia
-├── mQAPData/               Instancias (.dat) y frentes óptimos (.PO)
-├── mQAPMetrics/            Scripts Node.js de métricas y gráficos 3D
-├── comparative_results_kcX_datasets.xlsx   Resultados comparativos
+│   ├── main.cpp            Command line, result file and --verify (host only)
+│   ├── instance.cpp        .dat parser and validation (including fitness overflow)
+│   ├── solver.cu           Host orchestration: allocations, generation loop and result collection
+│   ├── fitness.cu          Fitness kernel
+│   ├── nsga2.cu            NSGA-II survival kernel
+│   ├── operators.cu        RNG, initial population, tournament and mutations
+│   └── local_search.cu     Greedy 2-opt kernel
+├── tests/test_kernels.cu   Tests of every kernel against CPU references
+├── scripts/run_experiments.ps1   Experiment campaign with the parameters of each instance
+├── mQAPData/               Instances (.dat) and optimal fronts (.PO)
+├── mQAPMetrics/            Node.js metric and 3D plot scripts
+├── comparative_results_kcX_datasets.xlsx   Comparative results
 ├── cuda_mqap.slnx, cuda_mqap.vcxproj, test_kernels.vcxproj, cuda_mqap.props   Visual Studio
 └── CMakeLists.txt
 ```
 
-**Separación host/device.** El programa se organiza en tres capas:
+**Host/device separation.** The program is organized in three layers:
 
-| Capa | Ficheros | Responsabilidad |
+| Layer | Files | Responsibility |
 |---|---|---|
-| Aplicación (host) | `main.cpp`, `instance.cpp` | Argumentos, lectura de la instancia, escritura de resultados y verificación en CPU |
-| Orquestación (host) | `solver.cu` | Reserva de toda la memoria una sola vez, secuencia de lanzamientos y copia final de resultados |
-| Kernels (device) | `fitness.cu`, `nsga2.cu`, `operators.cu`, `local_search.cu` | Kernels `template<int OBJ>` (instanciados para 2 y 3 objetivos) y sus lanzadores |
+| Application (host) | `main.cpp`, `instance.cpp` | Arguments, instance loading, result output and CPU verification |
+| Orchestration (host) | `solver.cu` | Allocation of all memory once, launch sequence and final copy of the results |
+| Kernels (device) | `fitness.cu`, `nsga2.cu`, `operators.cu`, `local_search.cu` | `template<int OBJ>` kernels (instantiated for 2 and 3 objectives) and their launchers |
 
-Los kernels viven en el espacio de nombres `mqap::detail`. Fuera de su `.cu` solo se ven los lanzadores
-declarados en `kernels.cuh` (`launchFitness`, `launchSurvival`, `launchReproduce`, `launchGreedy2Opt`…),
-y cada uno comprueba el lanzamiento con `CUDA_CHECK_KERNEL()`.
+The kernels live in the `mqap::detail` namespace. Outside their `.cu` file only the launchers declared in
+`kernels.cuh` are visible (`launchFitness`, `launchSurvival`, `launchReproduce`, `launchGreedy2Opt`…),
+and each one checks its launch with `CUDA_CHECK_KERNEL()`.
 
 ---
 
-## Diseño en GPU
+## GPU design
 
-### Layout de memoria
+### Memory layout
 
-Para `R` ejecuciones, población `P`, `n` instalaciones y `OBJ` objetivos:
+For `R` runs, population `P`, `n` facilities and `OBJ` objectives:
 
-| Buffer | Tipo y forma | Descripción |
+| Buffer | Type and shape | Description |
 |---|---|---|
-| `genes` (×2, doble búfer) | `short [R][2P][n]` | Filas `[0, P)`: supervivientes; filas `[P, 2P)`: descendencia |
-| `fitness` (×2) | `unsigned int [R][2P][OBJ]` | Coste de cada objetivo |
-| `survivorIndex / Rank / Crowding` | `[R][P]` | Resultado de la supervivencia, ordenado por (rango, −crowding) |
-| `rng` | `curandStatePhilox4_32_10_t [R][2P]` | Estados aleatorios persistentes |
-| `flow`, `dist` | `int [OBJ][n][n]`, `int [n][n]` | Matrices de la instancia |
+| `genes` (×2, double buffer) | `short [R][2P][n]` | Rows `[0, P)`: survivors; rows `[P, 2P)`: offspring |
+| `fitness` (×2) | `unsigned int [R][2P][OBJ]` | Cost of each objective |
+| `survivorIndex / Rank / Crowding` | `[R][P]` | Survival result, ordered by (rank, −crowding) |
+| `rng` | `curandStatePhilox4_32_10_t [R][2P]` | Persistent random states |
+| `flow`, `dist` | `int [OBJ][n][n]`, `int [n][n]` | Instance matrices |
 
-Toda la memoria se reserva **una vez** con `DeviceBuffer<T>` y se libera automáticamente. Entre
-generaciones solo se intercambian los punteros del doble búfer.
+All memory is allocated **once** with `DeviceBuffer<T>` and released automatically. Between
+generations only the pointers of the double buffer are swapped.
 
 ### Kernels
 
-| Kernel | Grid × bloque | Paralelismo | Técnicas |
+| Kernel | Grid × block | Parallelism | Techniques |
 |---|---|---|---|
-| `fitnessKernel<OBJ>` | `(⌈2P/4⌉, R)` × 128 | 1 warp por cromosoma | `F` y `D` en *shared memory* (carga coalescente); lecturas de `F` consecutivas por carril (sin conflictos de banco); reducción con `__shfl_down_sync` |
-| `survivalKernel<OBJ>` | `R` × `2P` | 1 bloque por ejecución, 1 hilo por individuo | Dominancia en bits (`2P × 2P/32` palabras), frentes con `__ballot_sync` + `__popc`, bitonic sort de claves de 64 bits `(rango, fitness)` y `(rango, −crowding)` en *shared memory* |
-| `reproduceKernel<OBJ>` | `(⌈P/128⌉, R)` × 128 | 1 hilo por descendiente | Estado Philox en registros; torneo, mutaciones y copia en un solo paso |
-| `greedy2OptKernel<OBJ>` | `(⌈P/4⌉, R)` × 128 | 1 warp por descendiente | Matrices en *shared memory*; delta O(n) repartido entre los 32 carriles; criterio uniforme en el warp (sin divergencia) |
-| `initPopulationKernel` | `(⌈2P/128⌉, R)` × 128 | 1 hilo por cromosoma | Fisher-Yates sin sesgo |
-| `rngInitKernel` | `⌈R·2P/128⌉` × 128 | 1 hilo por estado | Una subsecuencia Philox independiente por hilo |
+| `fitnessKernel<OBJ>` | `(⌈2P/4⌉, R)` × 128 | 1 warp per chromosome | `F` and `D` in *shared memory* (coalesced load); consecutive `F` reads per lane (no bank conflicts); reduction with `__shfl_down_sync` |
+| `survivalKernel<OBJ>` | `R` × `2P` | 1 block per run, 1 thread per individual | Bit-packed dominance (`2P × 2P/32` words), fronts with `__ballot_sync` + `__popc`, bitonic sort of 64-bit keys `(rank, fitness)` and `(rank, −crowding)` in *shared memory* |
+| `reproduceKernel<OBJ>` | `(⌈P/128⌉, R)` × 128 | 1 thread per offspring | Philox state in registers; tournament, mutations and copy in a single pass |
+| `greedy2OptKernel<OBJ>` | `(⌈P/4⌉, R)` × 128 | 1 warp per offspring | Matrices in *shared memory*; O(n) delta split across the 32 lanes; warp-uniform criterion (no divergence) |
+| `initPopulationKernel` | `(⌈2P/128⌉, R)` × 128 | 1 thread per chromosome | Unbiased Fisher-Yates |
+| `rngInitKernel` | `⌈R·2P/128⌉` × 128 | 1 thread per state | One independent Philox subsequence per thread |
 
-*Shared memory* por bloque:
-- **Fitness y 2-opt:** `(OBJ + 1)·n²·4 + 4·n·2` bytes, por ejemplo 14,6 KB para n = 30 y 3 objetivos.
-  Si hace falta más de 48 KB se solicita automáticamente el máximo *opt-in* del dispositivo
-  (`cudaFuncAttributeMaxDynamicSharedMemorySize`), lo que permite n = 60 con 3 objetivos en Turing.
-- **Supervivencia:** hasta ~46 KB con P = 256.
+*Shared memory* per block:
+- **Fitness and 2-opt:** `(OBJ + 1)·n²·4 + 4·n·2` bytes, e.g. 14.6 KB for n = 30 and 3 objectives.
+  When more than 48 KB are needed, the device's maximum *opt-in* is requested automatically
+  (`cudaFuncAttributeMaxDynamicSharedMemorySize`), which allows n = 60 with 3 objectives on Turing.
+- **Survival:** up to ~46 KB with P = 256.
 
-### Evaluación incremental del 2-opt
+### Incremental 2-opt evaluation
 
-Intercambiar las posiciones `r` y `s` de `p` solo modifica los términos del coste en los que aparecen `r` o `s`:
+Swapping positions `r` and `s` of `p` only changes the cost terms in which `r` or `s` appear:
 
 ```
 Δ(r,s) = (F_rr − F_ss)(D_{ps ps} − D_{pr pr}) + (F_rs − F_sr)(D_{ps pr} − D_{pr ps})
        + Σ_{k≠r,s} [ (F_kr − F_ks)(D_{pk ps} − D_{pk pr}) + (F_rk − F_sk)(D_{ps pk} − D_{pr pk}) ]
 ```
 
-Cada carril del warp calcula una parte del sumatorio y el resultado se reduce con `__shfl_down_sync`.
-Así, cada una de las `n(n−1)/2` evaluaciones cuesta O(n) en lugar de recalcular el fitness completo.
-Los acumuladores son de 64 bits.
+Each lane of the warp computes part of the sum and the result is reduced with `__shfl_down_sync`.
+Each of the `n(n−1)/2` evaluations therefore costs O(n) instead of recomputing the full fitness.
+The accumulators are 64-bit.
 
-### Sincronización
+### Synchronization
 
-- Todos los kernels se lanzan en el *default stream*, que ya garantiza el orden entre ellos, así que no se
-  usa `cudaDeviceSynchronize` durante la ejecución.
-- El host solo espera al final (`cudaEventSynchronize`), para medir el tiempo y copiar los resultados.
-- Dentro de los kernels, `__syncthreads()` solo separa fases que comparten *shared memory*, y `__syncwarp()`
-  hace visible a todo el warp el intercambio aplicado en el 2-opt.
-- En Debug, `MQAP_SYNC_CHECK` hace que `CUDA_CHECK_KERNEL()` sincronice después de cada kernel, de modo
-  que un error de ejecución se reporta en el lanzamiento que lo causó.
-
----
-
-## Requisitos
-
-- GPU NVIDIA con *compute capability* ≥ 7.5. Los proyectos compilan para `sm_75` (GeForce RTX 20xx);
-  para otras GPUs, añade su arquitectura (ver [Compilación](#compilación)).
-- **CUDA Toolkit 13.4**. El `.vcxproj` importa `CUDA 13.4.props`; con otra versión, cambia esa línea en los dos `.vcxproj`.
-- Windows: Visual Studio 2026 (toolset v145) con la integración de CUDA. Alternativa: CMake ≥ 3.24 + Ninja,
-  que se incluyen con Visual Studio.
+- All kernels are launched on the *default stream*, which already guarantees their order, so
+  `cudaDeviceSynchronize` is not used during the run.
+- The host only waits at the end (`cudaEventSynchronize`), to measure the time and copy the results.
+- Inside the kernels, `__syncthreads()` only separates phases that share *shared memory*, and
+  `__syncwarp()` makes the swap applied by the 2-opt visible to the whole warp.
+- In Debug builds, `MQAP_SYNC_CHECK` makes `CUDA_CHECK_KERNEL()` synchronize after every kernel, so an
+  execution error is reported at the launch that caused it.
 
 ---
 
-## Compilación
+## Requirements
+
+- NVIDIA GPU with *compute capability* ≥ 7.5. The projects build for `sm_75` (GeForce RTX 20xx);
+  for other GPUs, add their architecture (see [Build](#build)).
+- **CUDA Toolkit 13.4**. The `.vcxproj` files import `CUDA 13.4.props`; with another version, change that
+  line in both `.vcxproj` files.
+- Windows: Visual Studio 2026 (toolset v145) with the CUDA integration. Alternative: CMake ≥ 3.24 + Ninja,
+  both included with Visual Studio.
+
+---
+
+## Build
 
 ### Visual Studio
 
-1. Abre `cuda_mqap.slnx`.
-2. Selecciona `Release | x64` y compila la solución.
-3. Los ejecutables se generan en `build\x64\Release\` (`cuda_mqap.exe` y `test_kernels.exe`).
+1. Open `cuda_mqap.slnx`.
+2. Select `Release | x64` and build the solution.
+3. The executables are written to `build\x64\Release\` (`cuda_mqap.exe` and `test_kernels.exe`).
 
-El proyecto `cuda_mqap` ya trae argumentos de depuración (`mQAPData\KC10-2fl-1rl.dat --verify`) y el
-directorio de trabajo apunta a la raíz del repositorio, así que F5 funciona directamente. La
-configuración común está en `cuda_mqap.props`:
-- Arquitectura `compute_75,sm_75`.
-- C++17 y `/W4`.
-- `-lineinfo` en Release.
-- `-G` y `MQAP_SYNC_CHECK` en Debug.
+The `cuda_mqap` project already includes debugging arguments (`mQAPData\KC10-2fl-1rl.dat --verify`) and
+its working directory is the repository root, so F5 works directly. The common configuration is in
+`cuda_mqap.props`:
+- Architecture `compute_75,sm_75`.
+- C++17 and `/W4`.
+- `-lineinfo` in Release.
+- `-G` and `MQAP_SYNC_CHECK` in Debug.
 
 ### CMake
 
@@ -270,12 +273,12 @@ cmake --build build/cmake
 ctest --test-dir build/cmake --output-on-failure
 ```
 
-Para otras arquitecturas: `-DCMAKE_CUDA_ARCHITECTURES="75;86;89"`. En Visual Studio también sirve
-*Archivo → Abrir → Carpeta*.
+For other architectures: `-DCMAKE_CUDA_ARCHITECTURES="75;86;89"`. In Visual Studio you can also use
+*File → Open → Folder*.
 
-### nvcc directo
+### nvcc directly
 
-Desde una consola *x64 Native Tools*:
+From an *x64 Native Tools* console:
 
 ```
 nvcc -O3 -arch=sm_75 -std=c++17 -Iinclude src\main.cpp src\instance.cpp src\solver.cu src\fitness.cu ^
@@ -284,33 +287,33 @@ nvcc -O3 -arch=sm_75 -std=c++17 -Iinclude src\main.cpp src\instance.cpp src\solv
 
 ---
 
-## Uso
+## Usage
 
 ```
-cuda_mqap <instance.dat> [opciones]
-  --population P   tamaño de población, potencia de 2 en [16, 256] (defecto 64)
-  --iterations N   generaciones (defecto 70)
-  --runs R         ejecuciones independientes concurrentes (defecto 1)
-  --seed S         semilla (defecto: aleatoria, se imprime en la salida)
-  --output FILE    fichero de resultados, en modo append (defecto result_<instancia>_nsga2_greedy_2opt.txt)
-  --verify         verifica las poblaciones finales en CPU
-  --quiet          no imprime las soluciones finales
+cuda_mqap <instance.dat> [options]
+  --population P   population size, power of two in [16, 256] (default 64)
+  --iterations N   generations (default 70)
+  --runs R         independent runs executed concurrently (default 1)
+  --seed S         random seed (default: random, printed in the output)
+  --output FILE    result file, appended (default result_<instance>_nsga2_greedy_2opt.txt)
+  --verify         check the final populations on the CPU
+  --quiet          do not print the final solutions
 ```
 
-Ejemplos:
+Examples:
 
 ```
-:: Una ejecución con verificación
+:: One run with verification
 build\x64\Release\cuda_mqap.exe mQAPData\KC10-2fl-1rl.dat --verify
 
-:: 30 ejecuciones independientes en paralelo, reproducibles
+:: 30 independent runs in parallel, reproducible
 build\x64\Release\cuda_mqap.exe mQAPData\KC20-2fl-1rl.dat --iterations 300 --runs 30 --seed 2026 --quiet
 
-:: Instancia de 3 objetivos
+:: 3-objective instance
 build\x64\Release\cuda_mqap.exe mQAPData\KC30-3fl-1rl.dat --population 32 --runs 10
 ```
 
-Salida por consola (resumida):
+Console output (abridged):
 
 ```
 Instance KC10-2fl-1rl: n = 10, objectives = 2 | population = 64, iterations = 70, runs = 1, seed = 42
@@ -326,11 +329,11 @@ Results appended to result_KC10-2fl-1rl_nsga2_greedy_2opt.txt
 Time Spent: 0.148970 s (GPU 13.494 ms)
 ```
 
-### Fichero de resultados
+### Result file
 
-Mantiene el formato original, así que los scripts de `mQAPMetrics` siguen funcionando. Cada ejecución
-añade un bloque con las soluciones no dominadas (rango 1) de la población final: la clave es la
-permutación y el valor, sus costes.
+It keeps the original format, so the `mQAPMetrics` scripts still work. Each run appends a block with
+the non-dominated (rank 1) solutions of the final population: the key is the permutation and the value,
+its costs.
 
 ```
 {
@@ -340,32 +343,32 @@ permutación y el valor, sus costes.
 },
 ```
 
-Al final de la ejecución, la población puede contener soluciones repetidas; en el fichero, las claves
-duplicadas se colapsan al leerlo como diccionario, igual que en la versión original.
+At the end of a run the population may contain repeated solutions; in the file, duplicate keys collapse
+when it is read as a dictionary, just as in the original version.
 
-### Verificación (`--verify`)
+### Verification (`--verify`)
 
-Recalcula en CPU, de forma independiente, cada solución de la población final de cada ejecución:
-- que la permutación sea válida;
-- que el fitness coincida exactamente con `cost()` en CPU;
-- que el rango 1 corresponda exactamente a las soluciones no dominadas (y que toda solución con rango > 1
-  esté dominada por alguna superviviente).
+Independently recomputes on the CPU every solution of the final population of every run, checking:
+- that the permutation is valid;
+- that the fitness matches the CPU `cost()` exactly;
+- that rank 1 corresponds exactly to the non-dominated solutions (and that every solution with rank > 1
+  is dominated by some survivor).
 
-Si algo falla, el código de salida es 1.
+If any check fails, the exit code is 1.
 
 ---
 
-## Experimentos y métricas
+## Experiments and metrics
 
-`scripts/run_experiments.ps1` ejecuta la campaña de `comparative_results_kcX_datasets.xlsx` con la
-población y las iteraciones que usaba cada instancia en la versión original:
+`scripts/run_experiments.ps1` runs the campaign of `comparative_results_kcX_datasets.xlsx` with the
+population and iterations each instance used in the original version:
 
 ```
-.\scripts\run_experiments.ps1 -Runs 30                              # todas las instancias
+.\scripts\run_experiments.ps1 -Runs 30                              # all instances
 .\scripts\run_experiments.ps1 -Runs 10 -Seed 2026 -Instances KC10-2fl-1rl,KC30-3fl-1rl
 ```
 
-| Instancias | P | Generaciones |
+| Instances | P | Generations |
 |---|---|---|
 | KC10-2fl-1rl, 3rl, 4rl, 5rl | 64 | 70 |
 | KC10-2fl-1uni, 2rl, 2uni ¹ | 16 | 70 |
@@ -373,40 +376,40 @@ población y las iteraciones que usaba cada instancia en la versión original:
 | KC20-2fl-1rl, 1uni, 2uni, 3uni | 64 | 300 |
 | KC30-3fl-1rl, 1uni, 2uni | 32 | 70 |
 
-¹ KC10-2fl-2uni usaba P = 4; ahora el mínimo es 16.
+¹ KC10-2fl-2uni used P = 4; the minimum is now 16.
 
-Los resultados se guardan en `results\result_<instancia>_nsga2_greedy_2opt.txt`. En la RTX 2060, la
-campaña completa (15 instancias × 3 ejecuciones) tarda unos 2 segundos.
+The results are saved to `results\result_<instance>_nsga2_greedy_2opt.txt`. On the RTX 2060 the whole
+campaign (15 instances × 3 runs) takes about 2 seconds.
 
-**Métricas (`mQAPMetrics/`)** — scripts de Node.js que contienen los frentes obtenidos, copiados de los ficheros de resultados:
-- `distance_metric_*.js`: distancia generacional, es decir, la media de la distancia euclídea de cada
-  solución obtenida al punto más cercano del frente óptimo `.PO`. Reporta la media y la desviación típica
-  entre ejecuciones, para NSGA-II y para NSGA-II + Greedy 2-opt.
-- `3D_plot-*.js`: gráficos 3D de los frentes de las instancias de 3 objetivos, con LightningChart JS
+**Metrics (`mQAPMetrics/`)** — Node.js scripts that contain the obtained fronts, copied from the result files:
+- `distance_metric_*.js`: generational distance, i.e. the mean Euclidean distance from each obtained
+  solution to the closest point of the optimal `.PO` front. It reports the mean and standard deviation
+  over runs, for NSGA-II and for NSGA-II + Greedy 2-opt.
+- `3D_plot-*.js`: 3D plots of the fronts of the 3-objective instances, with LightningChart JS
   (`@arction/lcjs`).
 
 ---
 
-## Pruebas y validación
+## Tests and validation
 
-`test_kernels` (proyecto `test_kernels` en Visual Studio, o `ctest`) compara cada kernel con una
-implementación independiente en CPU:
+`test_kernels` (the `test_kernels` project in Visual Studio, or `ctest`) compares every kernel with an
+independent CPU implementation:
 
-| Prueba | Qué verifica |
+| Test | What it checks |
 |---|---|
-| Carga de instancias | Los 23 `.dat` se leen (en ambos formatos de cabecera) y `n`/`m` coinciden con el nombre del fichero |
-| Frentes óptimos `.PO` | Las **374 soluciones óptimas publicadas** tienen exactamente su coste publicado, tanto en CPU como en GPU |
-| Fitness | El kernel coincide con la `Trace(F·X·Dᵀ·Xᵀ)` literal de la versión original en KC10, KC20 y KC30, con varias ejecuciones |
-| Supervivencia NSGA-II | Los rangos, el crowding y la selección coinciden con un NSGA-II en CPU para P = 16, 64 y 256, con 2 y 3 objetivos |
-| Greedy 2-opt | La permutación resultante es **idéntica** a la de un greedy en CPU que recalcula el coste completo (n = 10, 30 y 60, este último con más de 48 KB de *shared memory*) |
-| Reproducción | Los supervivientes y su fitness se copian correctamente y los hijos son permutaciones válidas |
-| Población inicial | Todas las permutaciones son válidas y están barajadas |
+| Instance loading | All 23 `.dat` files load (in both header formats) and `n`/`m` match the file name |
+| `.PO` optimal fronts | The **374 published optimal solutions** have exactly their published cost, both on the CPU and on the GPU |
+| Fitness | The kernel matches the original version's literal `Trace(F·X·Dᵀ·Xᵀ)` on KC10, KC20 and KC30, with several runs |
+| NSGA-II survival | Ranks, crowding and selection match a CPU NSGA-II for P = 16, 64 and 256, with 2 and 3 objectives |
+| Greedy 2-opt | The resulting permutation is **identical** to that of a CPU greedy that recomputes the full cost (n = 10, 30 and 60, the latter with more than 48 KB of *shared memory*) |
+| Reproduction | Survivors and their fitness are copied correctly and the children are valid permutations |
+| Initial population | Every permutation is valid and shuffled |
 
 ```
 build\x64\Release\test_kernels.exe mQAPData
 ```
 
-Validación adicional realizada con `compute-sanitizer` sobre el programa y sobre las pruebas:
+Additional validation performed with `compute-sanitizer` on the program and on the tests:
 
 ```
 compute-sanitizer --tool memcheck --leak-check full build\x64\Release\cuda_mqap.exe mQAPData\KC30-3fl-1rl.dat --population 32 --iterations 5 --runs 2 --verify
@@ -415,132 +418,149 @@ compute-sanitizer --tool synccheck  ...
 compute-sanitizer --tool initcheck  ...
 ```
 
-Resultado: 0 errores, 0 fugas y 0 *hazards*.
+Result: 0 errors, 0 leaks and 0 *hazards*.
 
 ---
 
-## Rendimiento
+## Performance
 
-GeForce RTX 2060 (sm_75, 30 SM), builds Release, CUDA 13.4. La columna "Original corregida" es el código
-monolítico anterior (`kernel.cu`, commit `3f3a187`) con sus errores de memoria corregidos.
+GeForce RTX 2060 (sm_75, 30 SMs), Release builds, CUDA 13.4. The "Fixed original" column is the
+previous monolithic code (`kernel.cu`, commit `3f3a187`) with its memory errors fixed.
 
-| Caso | Original corregida | Esta versión | Aceleración (tiempo de pared) |
+| Case | Fixed original | This version | Speedup (wall time) |
 |---|---|---|---|
-| KC10-2fl-1rl, P=64, 70 gen., 1 ejecución | 2,2 s | 0,15 s (15 ms de GPU) | ~15× |
-| KC10-2fl-1rl, P=64, 70 gen., 10 ejecuciones | 23,7 s | 0,12 s (21 ms de GPU) | ~200× |
-| KC20-2fl-1rl, P=64, 300 gen., 1 ejecución | 48,8 s | 0,15 s (55 ms de GPU) | ~325× |
-| KC30-3fl-1rl, P=32, 70 gen., 1 ejecución | 42,4 s | 0,14 s (40 ms de GPU) | ~300× |
-| KC30-3fl-1rl, P=32, 70 gen., 30 ejecuciones | ~21 min (estimado) | 0,23 s (135 ms de GPU) | ~5 500× |
+| KC10-2fl-1rl, P=64, 70 gen., 1 run | 2.2 s | 0.15 s (15 ms GPU) | ~15× |
+| KC10-2fl-1rl, P=64, 70 gen., 10 runs | 23.7 s | 0.12 s (21 ms GPU) | ~200× |
+| KC20-2fl-1rl, P=64, 300 gen., 1 run | 48.8 s | 0.15 s (55 ms GPU) | ~325× |
+| KC30-3fl-1rl, P=32, 70 gen., 1 run | 42.4 s | 0.14 s (40 ms GPU) | ~300× |
+| KC30-3fl-1rl, P=32, 70 gen., 30 runs | ~21 min (estimated) | 0.23 s (135 ms GPU) | ~5,500× |
 
-En esta versión, el tiempo de pared está dominado por la creación del contexto CUDA (~0,1 s), así
-que el tiempo de GPU refleja mejor el coste del algoritmo.
+In this version the wall time is dominated by the creation of the CUDA context (~0.1 s), so the GPU
+time better reflects the cost of the algorithm.
 
-Perfil con Nsight Systems (KC10-2fl-1rl, 70 generaciones, 1 ejecución):
+Nsight Systems profile (KC10-2fl-1rl, 70 generations, 1 run):
 
-| Métrica | Original (`ec882da`) | Esta versión |
+| Metric | Original (`ec882da`) | This version |
 |---|---|---|
-| Tiempo total | 3,64 s | 0,15 s |
-| Lanzamientos de kernel | 87 510 | 214 |
-| `cudaMemcpy` | 80 558 | 6 |
-| `cudaDeviceSynchronize` | 68 335 | 0 |
-| `cudaMalloc` / `cudaFree` | 21 507 / 20 724 (783 fugas) | 11 / 11 |
-| Tiempo total en kernels | ~340 ms | ~6,4 ms |
+| Total time | 3.64 s | 0.15 s |
+| Kernel launches | 87,510 | 214 |
+| `cudaMemcpy` | 80,558 | 6 |
+| `cudaDeviceSynchronize` | 68,335 | 0 |
+| `cudaMalloc` / `cudaFree` | 21,507 / 20,724 (783 leaks) | 11 / 11 |
+| Total kernel time | ~340 ms | ~6.4 ms |
 
-**Calidad de las soluciones.** Se mide como la fracción de puntos del frente óptimo `.PO` encontrados
-exactamente y como IGD normalizado, con los mismos parámetros en ambas versiones:
+**Solution quality.** Measured as the fraction of the optimal `.PO` front points found exactly and as
+normalized IGD, with the same parameters in both versions:
 
-| Instancia | Original corregida | Esta versión |
+| Instance | Fixed original | This version |
 |---|---|---|
-| KC10-2fl-1rl (P=64, 70 gen.) | 68,4 % · IGD 0,0053 | 68,4 % · IGD 0,0054 |
-| KC10-2fl-3uni (P=128, 25 gen.) | 44,2 % · IGD 0,0057 | 45,0 % · IGD 0,0055 |
+| KC10-2fl-1rl (P=64, 70 gen.) | 68.4 % · IGD 0.0053 | 68.4 % · IGD 0.0054 |
+| KC10-2fl-3uni (P=128, 25 gen.) | 44.2 % · IGD 0.0057 | 45.0 % · IGD 0.0055 |
 
-La aceleración no cambia la calidad del frente obtenido.
+The speedup does not change the quality of the obtained front.
 
 ---
 
-## Mejoras respecto a la versión original
+## Improvements over the original version
 
-### Errores corregidos
+### Fixed bugs
 
-| # | Error en la versión original | Corrección |
+| # | Bug in the original version | Fix |
 |---|---|---|
-| B1 | Se reservaba 1 `curandState` pero se inicializaban hasta 8 192, escribiendo fuera de límites en memoria de GPU | Estados Philox dimensionados por hilo (`[R][2P]`) y persistentes |
-| B2 | El torneo binario usaba 2P bloques sobre arrays de tamaño P (accesos fuera de límites) | Un hilo por descendiente, con guarda de límites |
-| B3 | `settings_KC20_2fl_1rl.cu` contenía las matrices de KC20-2fl-2rl | Las instancias se leen directamente de los `.dat` |
-| B4 | La semilla del torneo era `time(NULL)` en cada generación, así que ~19 generaciones seguidas repetían adversarios | RNG persistente con una sola semilla de 64 bits |
-| B5 | El barajado inicial usaba estados curand compartidos entre bloques y estaba sesgado | Fisher-Yates con un estado por cromosoma |
-| B6 | En el crowding, `(unsigned)HUGE_VALF` (comportamiento indefinido), un extremo de frente mal detectado y posible división por cero | Crowding reescrito con ∞ real y comprobación del rango |
-| B7 | 11 reservas de GPU por generación sin liberar | `DeviceBuffer<T>` RAII; todas las reservas se hacen una vez |
-| B8 | El greedy evaluaba cada par dos veces ((i,j) y (j,i)) | Cada par `r < s` se evalúa una sola vez |
-| B9 | ~0,9 MB de arrays de depuración en la pila del host (1 MB en Windows) | Eliminados |
-| B10 | `DEV_MODE \|\| PRINT_*` en lugar de `&&`, y `sizeof` incorrecto | Eliminados junto con el código de depuración |
-| B11 | La última iteración sacaba solo el primer frente mezclado con filas obsoletas | La salida es exactamente el frente no dominado de la población final |
-| B12 | Soluciones fuera del frente podían ganar la ordenación por crowding | Selección por clave compuesta (rango, −crowding) |
+| B1 | 1 `curandState` was allocated but up to 8,192 were initialized, writing out of bounds in GPU memory | Philox states sized per thread (`[R][2P]`) and persistent |
+| B2 | The binary tournament used 2P blocks over arrays of size P (out-of-bounds accesses) | One thread per offspring, with a bounds guard |
+| B3 | `settings_KC20_2fl_1rl.cu` contained the KC20-2fl-2rl matrices | Instances are read directly from the `.dat` files |
+| B4 | The tournament seed was `time(NULL)` in every generation, so ~19 consecutive generations repeated adversaries | Persistent RNG with a single 64-bit seed |
+| B5 | The initial shuffle used curand states shared between blocks and was biased | Fisher-Yates with one state per chromosome |
+| B6 | In the crowding distance, `(unsigned)HUGE_VALF` (undefined behavior), a mis-detected front end and a possible division by zero | Crowding rewritten with a real ∞ and a range check |
+| B7 | 11 GPU allocations per generation never released | RAII `DeviceBuffer<T>`; all allocations are made once |
+| B8 | The greedy evaluated every pair twice ((i,j) and (j,i)) | Each pair `r < s` is evaluated once |
+| B9 | ~0.9 MB of debug arrays on the host stack (1 MB on Windows) | Removed |
+| B10 | `DEV_MODE \|\| PRINT_*` instead of `&&`, and a wrong `sizeof` | Removed together with the debug code |
+| B11 | The last iteration output only the first front mixed with stale rows | The output is exactly the non-dominated front of the final population |
+| B12 | Solutions outside the front could win the crowding sort | Selection by a composite key (rank, −crowding) |
 
-### Optimizaciones
+### Optimizations
 
-| Área | Antes | Ahora |
+| Area | Before | Now |
 |---|---|---|
-| Fitness | 3 productos de matrices densas O(n³), bloques de 32×32 hilos (≈10 % útiles con n = 10), accesos no coalescentes y memoria constante serializada | O(n²), un warp por cromosoma, matrices en *shared memory*, reducción con *shuffles* |
-| NSGA-II | Bucle en el host por frente, con ~10 kernels y copias por frente; bitonic sort con bloques de 2 hilos (28 lanzamientos por ordenación) | Un único kernel por generación, todo en *shared memory* |
-| Greedy 2-opt | ~50 llamadas a la API por par evaluado (fitness completo, `cudaMalloc`/`cudaFree`, copias) | Un lanzamiento por generación, delta O(n) |
-| Configuración de lanzamiento | 13 kernels con 1 hilo por bloque (1/32 de eficiencia SIMT) | 1 hilo o 1 warp por elemento, bloques de 128 hilos |
-| Transferencias | Copias de depuración siempre activas (~1 150 por generación) | Solo 6 copias al final de la ejecución |
-| Sincronización | `cudaDeviceSynchronize` tras cada kernel | Ninguna durante la ejecución |
-| Escalabilidad | Ejecuciones en serie (bucle `TIMES`) | `--runs R` concurrentes (`blockIdx.y = run`) |
+| Fitness | 3 dense O(n³) matrix products, 32×32-thread blocks (≈10 % useful with n = 10), uncoalesced accesses and serialized constant memory | O(n²), one warp per chromosome, matrices in *shared memory*, *shuffle* reduction |
+| NSGA-II | Host loop per front, with ~10 kernels and copies per front; bitonic sort with 2-thread blocks (28 launches per sort) | A single kernel per generation, everything in *shared memory* |
+| Greedy 2-opt | ~50 API calls per evaluated pair (full fitness, `cudaMalloc`/`cudaFree`, copies) | One launch per generation, O(n) delta |
+| Launch configuration | 13 kernels with 1 thread per block (1/32 SIMT efficiency) | 1 thread or 1 warp per element, 128-thread blocks |
+| Transfers | Always-on debug copies (~1,150 per generation) | Only 6 copies at the end of the run |
+| Synchronization | `cudaDeviceSynchronize` after every kernel | None during the run |
+| Scalability | Serial runs (`TIMES` loop) | Concurrent `--runs R` (`blockIdx.y = run`) |
 
-### Ingeniería
+### Engineering
 
-- `kernel.cu` monolítico (2 081 líneas) → módulos con separación host/device.
-- 15 `settings_*.cu` recompilados por instancia → instancia y parámetros en tiempo de ejecución.
-- Errores ignorados → `CUDA_CHECK` / `CUDA_CHECK_KERNEL` que abortan con fichero y línea.
-- Proyecto de Visual Studio no versionado (excluido por `.gitignore`) → `cuda_mqap.slnx` + `CMakeLists.txt` versionados.
-- Sin pruebas → `test_kernels` + `--verify` + `compute-sanitizer`.
+- Monolithic `kernel.cu` (2,081 lines) → modules with host/device separation.
+- 15 `settings_*.cu` files recompiled per instance → instance and parameters at runtime.
+- Ignored errors → `CUDA_CHECK` / `CUDA_CHECK_KERNEL` that abort with file and line.
+- Unversioned Visual Studio project (excluded by `.gitignore`) → versioned `cuda_mqap.slnx` + `CMakeLists.txt`.
+- No tests → `test_kernels` + `--verify` + `compute-sanitizer`.
 
-### Diferencias de comportamiento
+### Behavior differences
 
-- El greedy 2-opt evalúa cada par una sola vez. Con el criterio "todos los objetivos" compara la suma
-  exacta de las variaciones, en lugar de medias truncadas a entero.
-- El fichero de resultados contiene solo las soluciones no dominadas de la población final.
-- La población mínima es 16 (antes KC10-2fl-2uni usaba 4) y debe ser potencia de 2.
-- El adversario del torneo se elige de forma uniforme entre las P supervivientes.
+- The greedy 2-opt evaluates each pair once. With the "all objectives" criterion it compares the exact
+  sum of the changes instead of averages truncated to integers.
+- The result file contains only the non-dominated solutions of the final population.
+- The minimum population is 16 (KC10-2fl-2uni used 4) and it must be a power of 2.
+- The tournament adversary is chosen uniformly among the P survivors.
 
 ---
 
-## Limitaciones y trabajo futuro
+## Limitations and future work
 
-**Límites actuales:**
-- n ≤ 64. La *shared memory* disponible también influye: con 3 objetivos, n ≤ 63 en GPUs con 64 KB *opt-in*.
-- P es una potencia de 2 entre 16 y 256, porque la supervivencia usa un bloque de 2P hilos y bitonic sort.
-- Solo se admiten 2 o 3 objetivos (los kernels están instanciados para esos valores).
-- Los costes se almacenan como enteros de 32 bits; el cargador rechaza las instancias que podrían desbordarlos.
+**Current limits:**
+- n ≤ 64. The available *shared memory* also matters: with 3 objectives, n ≤ 63 on GPUs with 64 KB *opt-in*.
+- P is a power of 2 between 16 and 256, because survival uses a block of 2P threads and bitonic sort.
+- Only 2 or 3 objectives are supported (the kernels are instantiated for those values).
+- Costs are stored as 32-bit integers; the loader rejects instances that could overflow them.
 
-**Posibles mejoras:**
-- Modelo de islas con migración entre las ejecuciones concurrentes.
-- CUDA Graphs para capturar la generación; con 3 kernels por generación, el beneficio esperado es pequeño.
-- Análisis con Nsight Compute del `survivalKernel`, que al ser un solo bloque está limitado por la latencia.
-- Más operadores de cruce y variantes del criterio del 2-opt.
+**Possible improvements:**
+- Island model with migration between the concurrent runs.
+- CUDA Graphs to capture a generation; with 3 kernels per generation, the expected benefit is small.
+- Nsight Compute analysis of the `survivalKernel`, which is latency bound because it is a single block.
+- More crossover operators and variants of the 2-opt criterion.
 
 ---
 
-## Solución de problemas
+## Troubleshooting
 
-| Síntoma | Causa y solución |
+| Symptom | Cause and solution |
 |---|---|
-| Visual Studio no encuentra `CUDA 13.4.props` | Hay instalada otra versión del toolkit: cambia `CUDA 13.4` en los `.vcxproj` por la tuya |
-| `no kernel image is available for execution on the device` | La GPU no es `sm_75`: añade su arquitectura en `cuda_mqap.props` (`CodeGeneration`) o en `CMAKE_CUDA_ARCHITECTURES` |
-| `population must be a power of two in [16, 256]` | Usa 16, 32, 64, 128 o 256 |
-| `instance too large: … shared memory` | La instancia no cabe en la *shared memory* del bloque (ver límites) |
-| `costs may overflow 32-bit fitness values` | La instancia podría desbordar el fitness de 32 bits |
-| Ejecución muy lenta en Debug | Es lo esperado: Debug compila el device con `-G` y sincroniza tras cada kernel. Usa Release para medir |
-| `[CUDA] … at <fichero>:<línea>` | Error de CUDA con su ubicación exacta; para más detalle, ejecuta bajo `compute-sanitizer` |
+| Visual Studio cannot find `CUDA 13.4.props` | Another toolkit version is installed: change `CUDA 13.4` in the `.vcxproj` files to yours |
+| `no kernel image is available for execution on the device` | The GPU is not `sm_75`: add its architecture in `cuda_mqap.props` (`CodeGeneration`) or in `CMAKE_CUDA_ARCHITECTURES` |
+| `population must be a power of two in [16, 256]` | Use 16, 32, 64, 128 or 256 |
+| `instance too large: … shared memory` | The instance does not fit in the block's *shared memory* (see limits) |
+| `costs may overflow 32-bit fitness values` | The instance could overflow the 32-bit fitness |
+| Very slow execution in Debug | Expected: Debug compiles device code with `-G` and synchronizes after every kernel. Use Release to measure |
+| `[CUDA] … at <file>:<line>` | CUDA error with its exact location; for more detail, run under `compute-sanitizer` |
 
 ---
 
-## Créditos y licencia
+## Credits and license
 
-- **Autor:** Andrés Pupiales Arévalo — <apupiales@gmail.com> — <https://github.com/apupiales>. Proyecto iniciado en mayo de 2019.
-- **Instancias mQAP:** J. Knowles y D. Corne (<http://www.cs.bham.ac.uk/~jdk/mQAP/>).
-- **Refactorización y optimización de la versión actual:** realizadas con la asistencia de Claude (Anthropic).
+### Credits
 
-Distribuido bajo la **GNU General Public License v3**; consulta [`LICENSE`](LICENSE).
+- **Author:** Andrés Pupiales Arévalo — <apupiales@gmail.com> — <https://github.com/apupiales>. Project started in May 2019.
+- **mQAP instances:** J. Knowles and D. Corne (<http://www.cs.bham.ac.uk/~jdk/mQAP/>).
+- **Refactoring and optimization of the current version:** done with the assistance of Claude (Anthropic).
+
+### License
+
+Copyright (C) 2019-2026 Andrés Pupiales Arévalo.
+
+This program is free software: you can redistribute it and/or modify it under the terms of the
+**GNU General Public License** as published by the Free Software Foundation, either **version 3** of the
+License, or (at your option) any later version (`SPDX-License-Identifier: GPL-3.0-or-later`). It is
+distributed in the hope that it will be useful, but **without any warranty**. See the full text in
+[`LICENSE`](LICENSE).
+
+Every source file carries the corresponding header.
+
+**About CUDA.** NVIDIA's CUDA Toolkit (the `nvcc` compiler, the `cudart` runtime and the cuRAND headers)
+**is not part of this repository**: it is proprietary NVIDIA software, distributed under its own license
+(CUDA EULA), and it is required to build and run the program. The GPL v3 license covers only the code
+of this project.
