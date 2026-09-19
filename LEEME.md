@@ -389,6 +389,67 @@ campaña completa (15 instancias × 3 ejecuciones) tarda unos 2 segundos.
 - `3D_plot-*.js`: gráficos 3D de los frentes de las instancias de 3 objetivos, con LightningChart JS
   (`@arction/lcjs`).
 
+### Resultados en el libro de Excel
+
+El 2026-09-19 se añadieron a `comparative_results_kcX_datasets.xlsx` los resultados de esta versión:
+
+- **Pestañas de instancia (KC10-\*, KC20-\*):** cada pestaña tiene un bloque nuevo a la derecha de los
+  existentes, con 20 o 10 genes y 2 objetivos por fila, y una serie **verde** en su gráfico:
+  *"CUDA NSGA-II Paralelo + Greedy 2opt, N iteraciones (optimizado con claude)"*. Se usaron la población y
+  las iteraciones de cada pestaña, con `--verify`.
+  - En las KC10 se muestra la primera de 100 ejecuciones concurrentes; en las KC20, una única ejecución.
+  - Debajo de cada bloque hay una nota con el comando, la semilla y el tiempo.
+  - KC10-2fl-2uni se ejecutó con P = 16 (las series originales usaron P = 2).
+- **Distance Metric:** columnas F–G (media y desviación típica) y columna H de la segunda tabla, con la
+  distancia gama de esta versión sobre 100 ejecuciones por instancia KC10. Se calcula igual que
+  `mQAPMetrics/distance_metric_*.js` y se trunca a 2 decimales, como los valores existentes.
+
+**Calidad frente al Greedy 2-opt original.** Los resultados son mixtos:
+
+| Instancia | Métrica | Original | Esta versión |
+|---|---|---|---|
+| KC10-2fl-1rl | distancia gama (menor es mejor), 100 ejecuciones | 1.484,66 | **850,56** |
+| KC10-2fl-3rl | ídem | 22.541,34 | **20.531,69** |
+| KC10-2fl-4rl | ídem | 12.399,20 | **7.515,98** |
+| KC10-2fl-5rl | ídem | 32.418,89 | **26.891,28** |
+| KC10-2fl-3uni | ídem | 381,15 | 376,23 |
+| KC10-2fl-1uni | ídem | **79,32** | 192,02 |
+| KC10-2fl-2rl | ídem | **4.451,70** | 10.941,55 |
+| KC10-2fl-2uni | ídem (P distinto, no comparable) | 1.346,43 | 532,56 |
+| KC20-2fl-1uni | hipervolumen, 1 ejecución (mayor es mejor) | 3,5249·10¹⁰ | 3,5253·10¹⁰ |
+| KC20-2fl-1rl | ídem | **6,3518·10¹³** | 6,3061·10¹³ (−0,7 %) |
+| KC20-2fl-2uni | ídem | **8,4911·10⁹** | 7,8799·10⁹ (−7,2 %) |
+| KC20-2fl-3uni | ídem | **7,6649·10¹⁰** | 7,4938·10¹⁰ (−2,2 %) |
+
+Las cifras de las KC20 salen de una sola ejecución por versión, así que no permiten conclusiones estadísticas.
+
+**Correcciones del libro (2026-09-19)**
+- **KC20-2fl-3uni:** las series NSGA-II, Greedy 2opt y la serie oculta del óptimo de Pareto del gráfico
+  apuntaban a la pestaña KC20-2fl-1uni, y la celda A1 decía "KC20-2fl-1uni Pareto Optimal". Ahora usan los
+  datos de su propia pestaña.
+- **KC20-2fl-1rl:** las series originales contenían resultados de la instancia **KC20-2fl-2rl**, porque el
+  antiguo `settings_KC20_2fl_1rl.cu` tenía esas matrices (bug B3). Se volvieron a ejecutar con la instancia
+  correcta, P = 64 y 300 iteraciones, usando el código original (`kernel.cu` de `ec882da`) con **solo** los
+  arreglos de memoria B1 y B2:
+  - NSGA-II: la llamada a `greedy2Opt` comentada (2,8 s);
+  - NSGA-II + Greedy 2opt: 104,5 s;
+  - población inicial: la de la ejecución con Greedy.
+
+  Las 320 filas de la pestaña tienen un fitness igual a su coste en KC20-2fl-1rl. Las notas están en X67 y
+  CS67, y los datos antiguos siguen en el historial de git.
+- **Datos de 2019:** en las 12 pestañas, cada fila de los bloques NSGA-II, Greedy y población inicial
+  tiene exactamente el coste de su permutación, así que los resultados originales son internamente
+  coherentes.
+- **Pendiente:** en la segunda columna de Distance Metric, el valor de NSGA-II para KC10-2fl-2uni
+  (27.629,49) no coincide con los datos actuales de `mQAPMetrics/distance_metric_KC10_2fl_2uni.js`
+  (15.195,66).
+
+> **Aviso sobre el código original.** Con CUDA 13.4, el `kernel.cu` de `ec882da` ejecutado sin el Greedy
+> 2-opt produce fitness imposibles (negativos o de miles de millones). La causa son las escrituras fuera
+> de límites de `curand_setup` (bug B1), que corrompen los buffers de NSGA-II. Si necesitas reproducir la
+> versión original, usa el commit `3f3a187` o aplica al menos los arreglos B1 y B2, y compruébalo con
+> `compute-sanitizer --tool memcheck`.
+
 ---
 
 ## Pruebas y validación
@@ -458,7 +519,8 @@ exactamente y como IGD normalizado, con los mismos parámetros en ambas versione
 | KC10-2fl-1rl (P=64, 70 gen.) | 68,4 % · IGD 0,0053 | 68,4 % · IGD 0,0054 |
 | KC10-2fl-3uni (P=128, 25 gen.) | 44,2 % · IGD 0,0057 | 45,0 % · IGD 0,0055 |
 
-La aceleración no cambia la calidad del frente obtenido.
+En estas dos instancias la calidad es equivalente. En la campaña completa del libro de Excel los resultados
+son mixtos: ver [Resultados en el libro de Excel](#resultados-en-el-libro-de-excel).
 
 ---
 
@@ -468,7 +530,7 @@ La aceleración no cambia la calidad del frente obtenido.
 
 | # | Error en la versión original | Corrección |
 |---|---|---|
-| B1 | Se reservaba 1 `curandState` pero se inicializaban hasta 8 192, escribiendo fuera de límites en memoria de GPU | Estados Philox dimensionados por hilo (`[R][2P]`) y persistentes |
+| B1 | Se reservaba 1 `curandState` pero se inicializaban hasta 8 192, escribiendo fuera de límites en memoria de GPU (con CUDA 13.4 corrompe los resultados de la variante sin Greedy) | Estados Philox dimensionados por hilo (`[R][2P]`) y persistentes |
 | B2 | El torneo binario usaba 2P bloques sobre arrays de tamaño P (accesos fuera de límites) | Un hilo por descendiente, con guarda de límites |
 | B3 | `settings_KC20_2fl_1rl.cu` contenía las matrices de KC20-2fl-2rl | Las instancias se leen directamente de los `.dat` |
 | B4 | La semilla del torneo era `time(NULL)` en cada generación, así que ~19 generaciones seguidas repetían adversarios | RNG persistente con una sola semilla de 64 bits |
