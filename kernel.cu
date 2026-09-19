@@ -83,20 +83,15 @@ __global__ void generateBasePopulation(short population[][FACILITIES_LOCATIONS])
 __global__ void shufflePopulationGenes(curandState* my_curandstate,
 	short population[][FACILITIES_LOCATIONS]) {
 
-	#pragma unroll
-	for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
-		int idx = j + blockDim.x * blockIdx.x;
-
-		float myrandf = curand_uniform(my_curandstate + idx);
-		myrandf *= (FACILITIES_LOCATIONS - 1 + 0.999999);
-		int myrand = (int)truncf(myrandf);
-
-		if (myrand != population[blockIdx.x][j]) {
-			short current_value = population[blockIdx.x][j];
-			population[blockIdx.x][j] = population[blockIdx.x][myrand];
-			population[blockIdx.x][myrand] = current_value;
-		}
+	// One thread per chromosome, each one with its own curand state (Fisher-Yates shuffle).
+	curandState localState = my_curandstate[blockIdx.x];
+	for (int j = FACILITIES_LOCATIONS - 1; j > 0; j--) {
+		int myrand = curand(&localState) % (j + 1);
+		short current_value = population[blockIdx.x][j];
+		population[blockIdx.x][j] = population[blockIdx.x][myrand];
+		population[blockIdx.x][myrand] = current_value;
 	}
+	my_curandstate[blockIdx.x] = localState;
 }
 
 /**
@@ -233,19 +228,19 @@ void parallelPopulationFitnessCalculation(
 	 */
 
 	// Variable for population binary 2d representation in host memory (X).
-	short h_2d_population[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
+	static short h_2d_population[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
 
 	// Variable for population binary 2d representation transposed in host memory (XT).
-	short h_2d_transposed_population[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
+	static short h_2d_transposed_population[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
 
 	// Variable to keep Fn*X result in host memory (Fn: Flow matrix n).
-	int h_temporal_1[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
+	static int h_temporal_1[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
 
 	// Variable to keep Fn*X*DT result in host memory (DT: Transposed Distances matrix).
-	int h_temporal_2[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
+	static int h_temporal_2[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
 
 	// Variable to keep Fn*X*DT*XT result in host memory.
-	int h_temporal_3[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
+	static int h_temporal_3[NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS][FACILITIES_LOCATIONS];
 
 	/********************************************************************************************/
 
@@ -676,25 +671,33 @@ __global__ void crowdingCalcualtion(
 	unsigned int d_population_fitness[][OBJECTIVES + 1], unsigned int d_sorted_population_fitness[][OBJECTIVES + 1],
 	short objective) {
 
-	
-	if (blockIdx.x == 0 || 
-		((blockIdx.x + 1) < NSGA2_POPULATION_SIZE && (blockIdx.x - 1) >= 0 &&
-		 d_temporal_population_crowding[blockIdx.x + 1][0] != current_pareto_front &&
-		 d_temporal_population_crowding[blockIdx.x][0] == current_pareto_front)
-		) {
-		 
-		d_temporal_population_crowding[blockIdx.x][2] = (unsigned int)HUGE_VALF;
+	const unsigned int b = blockIdx.x;
+	const bool in_front = d_temporal_population_crowding[b][0] == current_pareto_front;
+	const bool last_of_front = in_front &&
+		((b + 1) == NSGA2_POPULATION_SIZE || d_temporal_population_crowding[b + 1][0] != current_pareto_front);
+
+	if (b == 0 || last_of_front) {
+		d_temporal_population_crowding[b][2] = HUGE_VALF;
 	}
-	else if ((blockIdx.x + 1) < NSGA2_POPULATION_SIZE && d_temporal_population_crowding[blockIdx.x + 1][0] == current_pareto_front) {
-		d_temporal_population_crowding[blockIdx.x][2] = 
-			(float)d_temporal_population_crowding[blockIdx.x][2] + 
-			(
-				(float)(d_population_fitness[(int)d_temporal_population_crowding[blockIdx.x + 1][1]][objective] - 
-				 d_population_fitness[(int)d_temporal_population_crowding[blockIdx.x - 1][1]][objective]) /
-				(float)(d_sorted_population_fitness[NSGA2_POPULATION_SIZE - 1][objective] - d_sorted_population_fitness[0][objective])
-			);
+	else if (in_front) {
+		const float range = (float)(d_sorted_population_fitness[NSGA2_POPULATION_SIZE - 1][objective] - d_sorted_population_fitness[0][objective]);
+		if (range > 0) {
+			d_temporal_population_crowding[b][2] +=
+				(float)(d_population_fitness[(int)d_temporal_population_crowding[b + 1][1]][objective] -
+				 d_population_fitness[(int)d_temporal_population_crowding[b - 1][1]][objective]) / range;
+		}
 	}
 	d_population_crowding[(int)d_temporal_population_crowding[blockIdx.x][1]] = d_temporal_population_crowding[blockIdx.x][2];
+}
+
+/*
+ * Entries that are not in the current Pareto front get a negative crowding so the
+ * descending sort always keeps the front members first (even with crowding 0).
+ */
+__global__ void excludeNonFrontFromCrowdingSort(short current_pareto_front, float d_temporal_population_crowding[][3]) {
+	if (d_temporal_population_crowding[blockIdx.x][0] != current_pareto_front) {
+		d_temporal_population_crowding[blockIdx.x][2] = -1.0f;
+	}
 }
 
 /*
@@ -863,6 +866,7 @@ short crowding(
 		}
 	}
 
+	excludeNonFrontFromCrowdingSort <<<NSGA2_POPULATION_SIZE, 1 >>> (current_pareto_front, d_temporal_population_crowding);
 	sortParetoFrontByCrowding(d_temporal_population_crowding);
 
 	return top_total;
@@ -1098,7 +1102,7 @@ void parallelNSGA2(
 		}
 
 		// End the loop if the offspring is complete.
-		if (offspring_count >= POPULATION_SIZE || iteration == ITERATIONS) {
+		if (offspring_count >= POPULATION_SIZE) {
 
 			setNewBasePopulation << <POPULATION_SIZE, FACILITIES_LOCATIONS >> > (d_offspring, d_population);
 
@@ -1122,6 +1126,9 @@ void parallelNSGA2(
 		}
 
 	}
+
+	cudaFree(d_population_dominance_matrix);
+	cudaFree(d_temporal_population_crowding);
 }
 
 __global__ void setup_kernel(curandState* state, unsigned long seed)
@@ -1185,7 +1192,7 @@ void BinaryTournamentSelection(
 	cudaMalloc(&devStates, POPULATION_SIZE * sizeof(curandState));
 
 	// setup seeds
-	setup_kernel <<< 1, tpb >>> (devStates, time(NULL));
+	setup_kernel <<< 1, tpb >>> (devStates, rand());
 
 	int* d_result, * h_result;
 
@@ -1237,13 +1244,13 @@ void BinaryTournamentSelection(
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "BinaryTournamentSelection - A binaryTournament Sync CudaError!\n");
 	}
-	binaryTournament <<<NSGA2_POPULATION_SIZE, 1 >>> (d_offspring, d_offspring_rank, d_offspring_crowding, d_result);
+	binaryTournament <<<POPULATION_SIZE, 1 >>> (d_offspring, d_offspring_rank, d_offspring_crowding, d_result);
 	cudaStatus = cudaDeviceSynchronize();
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "BinaryTournamentSelection - B binaryTournament Sync CudaError!\n");
 	}
 
-	cudaMemcpy(h_result, d_result, POPULATION_SIZE * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_result, d_result, POPULATION_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
 
 	if (DEV_MODE && PRINT_TOURNAMENT_DETAILS) {
 		printf("\n OFFSPRING TOURNAMENT WINNERS\n");
@@ -1257,6 +1264,14 @@ void BinaryTournamentSelection(
 	// NOTE: solutions whit index higher than POPULATION_SIZE will be object of mutations.
 	addWinnersToPopulation <<<NSGA2_POPULATION_SIZE, FACILITIES_LOCATIONS >>> (d_offspring, d_population, d_result);
 	addWinersPopulationFitness <<<NSGA2_POPULATION_SIZE, OBJECTIVES >>> (d_result, d_offspring_fitness, d_population_fitness);
+
+	cudaFree(devStates);
+	cudaFree(d_result);
+	cudaFree(d_max);
+	cudaFree(d_min);
+	free(h_result);
+	free(h_max);
+	free(h_min);
 }
 
 /**
@@ -1265,7 +1280,6 @@ void BinaryTournamentSelection(
 __global__ void exchangeMutation(curandState* my_curandstate,
 	short population[][FACILITIES_LOCATIONS]) {
 	int position = blockIdx.x + POPULATION_SIZE;
-	short second_gen_position = 0;
 
 		int idx = 1 + blockDim.x * blockIdx.x;
 
@@ -1288,8 +1302,6 @@ __global__ void exchangeMutation(curandState* my_curandstate,
  * This function gets the positions to perform the transposition mutation.
  */
 __global__ void getPositionsForTranspositionMutation(curandState* my_curandstate, short positions_for_trasposition[][2]) {
-	int position = blockIdx.x + POPULATION_SIZE;
-
 	int idx = threadIdx.x + blockDim.x * blockIdx.x;
 
 	float myrandf = curand_uniform(my_curandstate + idx);
@@ -1339,7 +1351,7 @@ void transpositionMutation(short h_population[][FACILITIES_LOCATIONS], short d_p
 	cudaError_t cudaStatus;
 
 	curandState* d_state;
-	cudaMalloc(&d_state, sizeof(curandState));
+	cudaMalloc(&d_state, POPULATION_SIZE * sizeof(curandState));
 
 	// Variable for a offspring in device memory.
 	short(*d_offspring_copy)[FACILITIES_LOCATIONS];
@@ -1368,7 +1380,7 @@ void transpositionMutation(short h_population[][FACILITIES_LOCATIONS], short d_p
 		POPULATION_SIZE * 2 * sizeof(short),
 		cudaMemcpyDeviceToHost);
 
-	if (DEV_MODE || PRINT_POSITIONS_FOR_TRNASPOSITION) {
+	if (DEV_MODE && PRINT_POSITIONS_FOR_TRNASPOSITION) {
 		printf("\nPossitions for transposition mutation\n");
 		for (int i = 0; i < POPULATION_SIZE; i++) {
 			for (int j = 0; j < 2; j++) {
@@ -1388,7 +1400,7 @@ void transpositionMutation(short h_population[][FACILITIES_LOCATIONS], short d_p
 		POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
 		cudaMemcpyDeviceToHost);
 
-	if (DEV_MODE || PRINT_OFFSPRING_COPY) {
+	if (DEV_MODE && PRINT_OFFSPRING_COPY) {
 		printf("\nOffspring Copy\n");
 		for (int i = 0; i < POPULATION_SIZE; i++) {
 			for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
@@ -1402,7 +1414,7 @@ void transpositionMutation(short h_population[][FACILITIES_LOCATIONS], short d_p
 		NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
 		cudaMemcpyDeviceToHost);
 
-	if (DEV_MODE || PRINT_TRANSPOSITION_MUTATION) {
+	if (DEV_MODE && PRINT_TRANSPOSITION_MUTATION) {
 		printf("\nOriginal Population\n");
 		for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
 			for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
@@ -1425,7 +1437,7 @@ void transpositionMutation(short h_population[][FACILITIES_LOCATIONS], short d_p
 		NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
 		cudaMemcpyDeviceToHost);
 
-	if (DEV_MODE || PRINT_TRANSPOSITION_MUTATION) {
+	if (DEV_MODE && PRINT_TRANSPOSITION_MUTATION) {
 		printf("\nWith transposition Mutation \n");
 		for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
 			for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
@@ -1438,6 +1450,9 @@ void transpositionMutation(short h_population[][FACILITIES_LOCATIONS], short d_p
 		}
 	}
 
+	cudaFree(d_state);
+	cudaFree(d_offspring_copy);
+	cudaFree(d_positions_for_trasposition);
 }
 
 /**
@@ -1554,7 +1569,7 @@ void greedy2Opt(short h_population[][FACILITIES_LOCATIONS], short d_population[]
 	int type = rand() % (OBJECTIVES + 1);
 
 	if (PRINT_MODIFIED_OFFSPRING && false) {
-		printf("\Original Offspring\n");
+		printf("\nOriginal Offspring\n");
 		for (int i = 0; i < POPULATION_SIZE; i++) {
 			printf("Chromosome %d\n", i);
 			for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
@@ -1565,11 +1580,7 @@ void greedy2Opt(short h_population[][FACILITIES_LOCATIONS], short d_population[]
 	}
 
 	for (int i = 0; i < (FACILITIES_LOCATIONS - 1); i++) {
-		for (int j = 1; j < FACILITIES_LOCATIONS; j++) {
-
-			if (i == j) {
-	           continue;
-			}
+		for (int j = i + 1; j < FACILITIES_LOCATIONS; j++) {
 
 			setMutableOffspring << <POPULATION_SIZE, FACILITIES_LOCATIONS >> > (d_offspring);
 			cudaStatus = cudaDeviceSynchronize();
@@ -1594,7 +1605,7 @@ void greedy2Opt(short h_population[][FACILITIES_LOCATIONS], short d_population[]
 				cudaMemcpyDeviceToHost);
 
 			if (DEV_MODE && PRINT_MUTATED_OFFSPRING_WITH_FITNESS) {
-				printf("\MUTATED OFFSRING WITH FINTESS CALCULATED\n");
+				printf("\nMUTATED OFFSRING WITH FINTESS CALCULATED\n");
 				for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
 					//printf("Chromosome %d\n", i);
 					// Print solution.
@@ -1638,6 +1649,8 @@ void greedy2Opt(short h_population[][FACILITIES_LOCATIONS], short d_population[]
 		fprintf(stderr, "setFinalOffspringInPopulation in greedy2opt Sync CudaError!");
 	}
 
+	cudaFree(d_offspring);
+	cudaFree(d_offspring_fitness);
 }
 
 int main()
@@ -1737,10 +1750,10 @@ int main()
 
 		/* Initialize variables for random values generation with curand */
 		curandState* d_state;
-		cudaMalloc(&d_state, sizeof(curandState));
+		cudaMalloc(&d_state, NSGA2_POPULATION_SIZE * sizeof(curandState));
 
-		// 64 threads are defined here because we are going to tackle instances upto 60 FACILITIES/LOCATIONS.
-		curand_setup << <NSGA2_POPULATION_SIZE, 64 >> > (d_state, seed);
+		// One curand state per chromosome.
+		curand_setup << <NSGA2_POPULATION_SIZE, 1 >> > (d_state, seed);
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess) {
 			fprintf(stderr, "curand_setup Sync CudaError!");
@@ -1819,7 +1832,7 @@ int main()
 		 */
 
 
-		if (DEV_MODE || PRINT_INITIAL_POPULATION) {
+		if (DEV_MODE && PRINT_INITIAL_POPULATION) {
 			printf("\nInitial Population\n");
 			for (int i = 0; i < NSGA2_POPULATION_SIZE; i++) {
 				printf("Chromosome %d\n", i);
@@ -1935,7 +1948,7 @@ int main()
 
 			/* Exchange mutation */
 			seed = rand() % 10000;
-			curand_setup << <POPULATION_SIZE, 128 >> > (d_state, seed);
+			curand_setup << <NSGA2_POPULATION_SIZE, 1 >> > (d_state, seed);
 			cudaStatus = cudaDeviceSynchronize();
 			if (cudaStatus != cudaSuccess) {
 				fprintf(stderr, "curand_setup Sync CudaError!");
@@ -1949,7 +1962,7 @@ int main()
 
 			/* Exchange mutation */
 			seed = rand() % 10000;
-			curand_setup << <POPULATION_SIZE, 128 >> > (d_state, seed);
+			curand_setup << <NSGA2_POPULATION_SIZE, 1 >> > (d_state, seed);
 			cudaStatus = cudaDeviceSynchronize();
 			if (cudaStatus != cudaSuccess) {
 				fprintf(stderr, "curand_setup Sync CudaError!");
@@ -1965,7 +1978,7 @@ int main()
 				NSGA2_POPULATION_SIZE * FACILITIES_LOCATIONS * sizeof(short),
 				cudaMemcpyDeviceToHost);
 
-			if (DEV_MODE || PRINT_WINNERS_MUTATED) {
+			if (DEV_MODE && PRINT_WINNERS_MUTATED) {
 				printf("\nWINNERS MUTATED\n");
 				for (int i = POPULATION_SIZE; i < NSGA2_POPULATION_SIZE; i++) {
 					printf("Chromosome %d\n", i);
@@ -2001,10 +2014,15 @@ int main()
 		FILE* f = fopen("result_KCX_Yfl_Z_nsga2_greedy_2opt.txt", "a");
 		if (f == NULL) {
 			printf("Error opening file!\n");
+			return 1;
 		}
 		fprintf(f, "{\n");
 		printf("\nFINAL SOLUTION\n");
 		for (int i = 0; i < POPULATION_SIZE; i++) {
+			// Only the first Pareto front is part of the final solution.
+			if (h_offspring_rank[i] != 1) {
+				continue;
+			}
 			// Print solution.
 			fprintf(f, "'");
 			for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
@@ -2063,6 +2081,18 @@ int main()
 		fprintf(f2, "},\n");
 		fclose(f2);
 		*/
+		cudaFree(d_population);
+		cudaFree(d_population_fitness);
+		cudaFree(d_sorted_population_fitness);
+		cudaFree(d_population_total_dominance);
+		cudaFree(d_population_rank);
+		cudaFree(d_population_crowding);
+		cudaFree(d_offspring);
+		cudaFree(d_offspring_rank);
+		cudaFree(d_offspring_crowding);
+		cudaFree(d_offspring_fitness);
+		cudaFree(d_state);
+
 		cudaStatus = cudaDeviceReset();
 		if (cudaStatus != cudaSuccess) {
 			fprintf(stderr, "cudaDeviceReset failed!");
