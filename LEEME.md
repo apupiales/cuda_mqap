@@ -27,9 +27,10 @@ independientes de forma concurrente** en una sola llamada al programa.
 10. [Pruebas y validación](#pruebas-y-validación)
 11. [Rendimiento](#rendimiento)
 12. [Mejoras respecto a la versión original](#mejoras-respecto-a-la-versión-original)
-13. [Limitaciones y trabajo futuro](#limitaciones-y-trabajo-futuro)
-14. [Solución de problemas](#solución-de-problemas)
-15. [Créditos y licencia](#créditos-y-licencia)
+13. [Límites del tamaño de población y recursos de la GPU](#límites-del-tamaño-de-población-y-recursos-de-la-gpu)
+14. [Limitaciones y trabajo futuro](#limitaciones-y-trabajo-futuro)
+15. [Solución de problemas](#solución-de-problemas)
+16. [Créditos y licencia](#créditos-y-licencia)
 
 ---
 
@@ -595,11 +596,92 @@ son mixtos: ver [Resultados en el libro de Excel](#resultados-en-el-libro-de-exc
 
 ---
 
+## Límites del tamaño de población y recursos de la GPU
+
+**En la RTX 2060, la población máxima es P = 256 en las 15 instancias.** El límite no es la memoria de
+vídeo (VRAM): son la memoria compartida y el número de hilos de **un solo bloque**, porque toda la
+supervivencia NSGA-II de una ejecución la hace un único bloque de 2P hilos. Una GPU con más VRAM no
+permite, por sí sola, poblaciones más grandes.
+
+### Medido en la RTX 2060
+
+- **P = 256 funciona en las 15 instancias**, con las iteraciones de cada pestaña del libro y `--verify`.
+  Con 30 ejecuciones concurrentes tarda unos 0,1 s de GPU en KC10, 1,5 s en KC20 (300 iteraciones) y
+  1,0 s en KC30.
+- **P = 512 no se puede usar.** El programa lo rechaza y, con el tope subido en una copia de prueba, el
+  kernel de supervivencia falla al lanzarse (`cudaErrorInvalidValue` en `nsga2.cu`).
+
+El bloque de supervivencia guarda la matriz de dominancia en memoria compartida, y esta crece con el
+cuadrado de P:
+
+| P | Hilos por bloque | Memoria compartida (2 objetivos) | Memoria compartida (3 objetivos) |
+|---|---|---|---|
+| 128 | 256 | 14 KB | 15 KB |
+| **256** | 512 | 45 KB | **47 KB** (el límite es 48 KB) |
+| 512 | 1024 | 156 KB | 160 KB |
+| 1024 | 2048 (no permitido) | 574 KB | 582 KB |
+
+Esa memoria depende de P y del número de objetivos, no del tamaño de la instancia; las KC30, con 3
+objetivos, son las más justas (47 KB de 48 KB). La VRAM apenas se usa: cada ejecución con P = 256 ocupa
+62 KB en KC10, 82 KB en KC20 y 106 KB en KC30.
+
+### Cómo calcular el límite en otra GPU
+
+P debe ser potencia de 2 y al menos 16. El mayor P posible es el más grande que cumpla:
+
+1. **Hilos:** 2P ≤ máximo de hilos por bloque (1024 en todas las GPU actuales), así que P ≤ 512.
+2. **Memoria compartida del kernel de supervivencia** (OBJ = número de objetivos):
+   `S(P) = (2P)²/8 + 2P·(16 + 4·OBJ) + (2P/32)·4 + 12 bytes`
+   S(P) no puede superar 48 KB con el código actual; si el kernel pidiera la memoria compartida extra
+   (*opt-in*), el límite sería el máximo de la GPU.
+3. **Tope del código:** P ≤ 256 (`kMaxPopulation` en `include/config.h`).
+
+La VRAM solo determina cuántas ejecuciones concurrentes caben:
+
+```
+ejecuciones máximas      = min(65 535, VRAM libre / memoria por ejecución)
+memoria por ejecución    = 2P·(4n + 8·OBJ + 64) + 8P bytes        (n = número de instalaciones)
+```
+
+Con 5 GB libres en la RTX 2060 y P = 256 caben unas 49 000 ejecuciones concurrentes de KC30, y hasta el
+máximo del programa (65 535) en KC10 (calculado, no ejecutado).
+
+| GPU | VRAM | Memoria compartida máx. por bloque | P máx. hoy | P máx. subiendo el tope y con opt-in |
+|---|---|---|---|---|
+| RTX 2060 (medida) | 6 GB | 64 KB | **256** | 256 |
+| RTX 3070 Laptop | 8 GB | 99 KB | **256** | 256 (512 necesita 156 KB) |
+| RTX 3080 | 10–12 GB | 99 KB | **256** | 256 |
+| RTX 4080 / 4090 | 16 / 24 GB | 99 KB | **256** | 256 |
+| RTX 5080 / 5090 | 16 / 32 GB | 99 KB | **256** | 256 |
+| A100 / H100 (centro de datos) | 40–80 GB | 163 / 227 KB | 256 | **512** |
+
+Solo la fila de la RTX 2060 está medida; las demás salen de la tabla de capacidades de cómputo de la
+documentación de CUDA. En las GPU de consumo P se queda en 256 aunque tengan mucha más VRAM; lo que ganan
+es capacidad para más ejecuciones concurrentes (con P = 256 todas llegan al máximo de 65 535). Para
+comprobar una GPU concreta, consulta `cudaDevAttrMaxSharedMemoryPerBlockOptin`, `maxThreadsPerBlock` y
+`cudaMemGetInfo`.
+
+### Cómo explorar más soluciones
+
+1. **Sin tocar el código:** usa `--runs`. Las ejecuciones corren a la vez en la GPU y apenas añaden
+   tiempo: 30 ejecuciones de KC30 con P = 256 tardan alrededor de 1 s.
+2. **Cambio moderado, P = 512 en cualquier GPU:** calcular la dominancia sobre la marcha en lugar de
+   guardar la matriz. La memoria compartida baja a unos 20 KB con P = 512, a cambio de más cálculo. 512 es
+   el tope absoluto de un diseño de un solo bloque (1024 hilos).
+3. **Rediseño, P de miles:** repartir la supervivencia NSGA-II entre varios bloques y guardar la
+   dominancia en VRAM (por ejemplo, 8 MB por ejecución con P = 4096). Solo entonces la VRAM empezaría a
+   limitar P, y el tiempo crecería con el cuadrado de P.
+
+Una población mayor da más diversidad, pero no garantiza mejores frentes para el mismo tiempo de cálculo.
+
+---
+
 ## Limitaciones y trabajo futuro
 
 **Límites actuales:**
 - n ≤ 64. La *shared memory* disponible también influye: con 3 objetivos, n ≤ 63 en GPUs con 64 KB *opt-in*.
-- P es una potencia de 2 entre 16 y 256, porque la supervivencia usa un bloque de 2P hilos y bitonic sort.
+- P es una potencia de 2 entre 16 y 256, porque la supervivencia usa un bloque de 2P hilos y bitonic sort
+  (ver [Límites del tamaño de población y recursos de la GPU](#límites-del-tamaño-de-población-y-recursos-de-la-gpu)).
 - Solo se admiten 2 o 3 objetivos (los kernels están instanciados para esos valores).
 - Los costes se almacenan como enteros de 32 bits; el cargador rechaza las instancias que podrían desbordarlos.
 

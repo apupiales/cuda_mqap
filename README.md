@@ -27,9 +27,10 @@ the program.
 10. [Tests and validation](#tests-and-validation)
 11. [Performance](#performance)
 12. [Improvements over the original version](#improvements-over-the-original-version)
-13. [Limitations and future work](#limitations-and-future-work)
-14. [Troubleshooting](#troubleshooting)
-15. [Credits and license](#credits-and-license)
+13. [Population size limits and GPU resources](#population-size-limits-and-gpu-resources)
+14. [Limitations and future work](#limitations-and-future-work)
+15. [Troubleshooting](#troubleshooting)
+16. [Credits and license](#credits-and-license)
 
 ---
 
@@ -592,11 +593,91 @@ are mixed: see [Results in the Excel workbook](#results-in-the-excel-workbook).
 
 ---
 
+## Population size limits and GPU resources
+
+**On the RTX 2060 the maximum population is P = 256 for all 15 instances.** The limit is not the GPU
+memory (VRAM): it is the shared memory and the number of threads of **one block**, because the whole
+NSGA-II survival of a run is done by a single block of 2P threads. A GPU with more VRAM does not, by
+itself, allow larger populations.
+
+### Measured on the RTX 2060
+
+- **P = 256 works on all 15 instances**, with the iterations of each tab of the workbook and `--verify`.
+  With 30 concurrent runs it takes ~0.1 s of GPU time on KC10, ~1.5 s on KC20 (300 iterations) and ~1.0 s
+  on KC30.
+- **P = 512 cannot be used.** The program rejects it and, with the cap raised in a test copy, the survival
+  kernel fails to launch (`cudaErrorInvalidValue` in `nsga2.cu`).
+
+The survival block keeps the dominance matrix in shared memory, and it grows with the square of P:
+
+| P | Threads per block | Shared memory (2 objectives) | Shared memory (3 objectives) |
+|---|---|---|---|
+| 128 | 256 | 14 KB | 15 KB |
+| **256** | 512 | 45 KB | **47 KB** (limit: 48 KB) |
+| 512 | 1024 | 156 KB | 160 KB |
+| 1024 | 2048 (not allowed) | 574 KB | 582 KB |
+
+That memory depends on P and on the number of objectives, not on the size of the instance; the
+3-objective KC30 instances are the tightest (47 KB of 48 KB). The VRAM is barely used: each run with
+P = 256 takes 62 KB on KC10, 82 KB on KC20 and 106 KB on KC30.
+
+### How to compute the limit for another GPU
+
+P must be a power of 2 and at least 16. The maximum P is the largest one that meets:
+
+1. **Threads:** 2P ≤ maximum threads per block (1024 on all current GPUs), so P ≤ 512.
+2. **Shared memory of the survival kernel** (OBJ = number of objectives):
+   `S(P) = (2P)²/8 + 2P·(16 + 4·OBJ) + (2P/32)·4 + 12 bytes`
+   S(P) must not exceed 48 KB with the current code; if the kernel requested the extra (*opt-in*) shared
+   memory, the limit would be the GPU maximum.
+3. **Code cap:** P ≤ 256 (`kMaxPopulation` in `include/config.h`).
+
+The VRAM only determines how many concurrent runs fit:
+
+```
+max runs      = min(65 535, free VRAM / memory per run)
+memory per run = 2P·(4n + 8·OBJ + 64) + 8P bytes        (n = number of facilities)
+```
+
+With 5 GB free on the RTX 2060 and P = 256, about 49,000 concurrent runs of KC30 fit, and up to the
+program maximum of 65,535 on KC10 (calculated, not executed).
+
+| GPU | VRAM | Max. shared memory per block | Max. P today | Max. P with cap raised and opt-in |
+|---|---|---|---|---|
+| RTX 2060 (measured) | 6 GB | 64 KB | **256** | 256 |
+| RTX 3070 Laptop | 8 GB | 99 KB | **256** | 256 (512 needs 156 KB) |
+| RTX 3080 | 10–12 GB | 99 KB | **256** | 256 |
+| RTX 4080 / 4090 | 16 / 24 GB | 99 KB | **256** | 256 |
+| RTX 5080 / 5090 | 16 / 32 GB | 99 KB | **256** | 256 |
+| A100 / H100 (data center) | 40–80 GB | 163 / 227 KB | 256 | **512** |
+
+Only the RTX 2060 row was measured; the others come from the compute capability table of the CUDA
+documentation. On consumer GPUs P stays at 256 even with much more VRAM; what they gain is room for more
+concurrent runs (all of them reach the 65,535 maximum with P = 256). To check a specific GPU, query
+`cudaDevAttrMaxSharedMemoryPerBlockOptin`, `maxThreadsPerBlock` and `cudaMemGetInfo`.
+
+### How to explore more solutions
+
+1. **Without code changes:** use `--runs`. The runs execute at the same time on the GPU and add little
+   time: 30 runs of KC30 with P = 256 take about 1 s.
+2. **Moderate change, P = 512 on any GPU:** compute the dominance on the fly instead of storing the matrix.
+   The shared memory drops to about 20 KB with P = 512, at the cost of more computation. 512 is the
+   absolute limit of a single-block design (1024 threads).
+3. **Redesign, P in the thousands:** split the NSGA-II survival across several blocks and keep the
+   dominance in VRAM (e.g. 8 MB per run with P = 4096). Only then would the VRAM start to limit P, and the
+   time would grow with the square of P.
+
+A larger population gives more diversity, but it does not guarantee better fronts for the same
+computing time.
+
+---
+
 ## Limitations and future work
 
 **Current limits:**
 - n ≤ 64. The available *shared memory* also matters: with 3 objectives, n ≤ 63 on GPUs with 64 KB *opt-in*.
-- P is a power of 2 between 16 and 256, because survival uses a block of 2P threads and bitonic sort.
+- P is a power of 2 between 16 and 256, because survival uses a block of 2P threads and bitonic sort
+  (see [Population size limits and GPU resources](#population-size-limits-and-gpu-resources)).
 - Only 2 or 3 objectives are supported (the kernels are instantiated for those values).
 - Costs are stored as 32-bit integers; the loader rejects instances that could overflow them.
 
