@@ -32,7 +32,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(CudaBuildCustomizationProps)" Condition="Exists('$(CudaBuildCustomizationProps)')" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA $(CudaVersion).props" Condition="Exists('$(VCTargetsPath)\BuildCustomizations\CUDA $(CudaVersion).props')" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -54,6 +54,6 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(CudaBuildCustomizationTargets)" Condition="Exists('$(CudaBuildCustomizationTargets)')" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA $(CudaVersion).targets" Condition="Exists('$(VCTargetsPath)\BuildCustomizations\CUDA $(CudaVersion).targets')" />
   </ImportGroup>
 </Project>
