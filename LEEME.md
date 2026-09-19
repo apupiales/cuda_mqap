@@ -56,7 +56,8 @@ independientes de forma concurrente** en una sola llamada al programa.
 - Separación estricta host/device: `main.cpp` no contiene código CUDA, y los kernels se exponen mediante funciones lanzadoras.
 - Instancias leídas de los ficheros `.dat` en tiempo de ejecución; los parámetros se pasan por línea de comandos.
 - Control de errores `CUDA_CHECK`/`CUDA_CHECK_KERNEL` y gestión de memoria RAII (`DeviceBuffer<T>`).
-- Solución de Visual Studio versionada (`cuda_mqap.slnx`) y `CMakeLists.txt` con `ctest`.
+- **Plug and play en Visual Studio 2026**: clonar, abrir `cuda_mqap.slnx` y pulsar F5. La versión de CUDA,
+  el toolset de C++ y las arquitecturas de GPU se adaptan a la máquina. También `CMakeLists.txt` con `ctest`.
 - Batería de pruebas que compara cada kernel con una implementación independiente en CPU, y la opción
   `--verify`, que valida los resultados de cada ejecución.
 - Resultados reproducibles mediante semilla (`--seed`).
@@ -163,7 +164,9 @@ cuda_mqap/
 ├── mQAPData/               Instancias (.dat) y frentes óptimos (.PO)
 ├── mQAPMetrics/            Scripts Node.js de métricas y gráficos 3D
 ├── comparative_results_kcX_datasets.xlsx   Resultados comparativos
-├── cuda_mqap.slnx, cuda_mqap.vcxproj, test_kernels.vcxproj, cuda_mqap.props   Visual Studio
+├── cuda_mqap.slnx, cuda_mqap.vcxproj, test_kernels.vcxproj   Solución y proyectos de Visual Studio
+├── cuda_mqap.props, cuda_toolkit.props   Configuración común y detección de la versión de CUDA
+├── .vsconfig, .gitattributes             Componentes de Visual Studio y finales de línea
 └── CMakeLists.txt
 ```
 
@@ -242,29 +245,48 @@ Los acumuladores son de 64 bits.
 
 ## Requisitos
 
-- GPU NVIDIA con *compute capability* ≥ 7.5. Los proyectos compilan para `sm_75` (GeForce RTX 20xx);
-  para otras GPUs, añade su arquitectura (ver [Compilación](#compilación)).
-- **CUDA Toolkit 13.4**. El `.vcxproj` importa `CUDA 13.4.props`; con otra versión, cambia esa línea en los dos `.vcxproj`.
-- Windows: Visual Studio 2026 (toolset v145) con la integración de CUDA. Alternativa: CMake ≥ 3.24 + Ninja,
-  que se incluyen con Visual Studio.
+- GPU NVIDIA con *compute capability* ≥ 7.5 (GeForce RTX 20xx o posterior) y un driver actualizado.
+- **Visual Studio 2026** con la carga de trabajo *Desarrollo para el escritorio con C++*. Al abrir la
+  solución, Visual Studio lee `.vsconfig` y ofrece instalar los componentes que falten.
+- **CUDA Toolkit 12.x o 13.x** (≥ 11.8), instalado **después** de Visual Studio para que se añada su
+  *Visual Studio Integration*. El proyecto detecta automáticamente la versión instalada; se desarrolló
+  con CUDA 13.4.
+- Alternativa sin el IDE: CMake ≥ 3.24 + Ninja (incluidos con Visual Studio).
 
 ---
 
 ## Compilación
 
-### Visual Studio
+### Abrir en Visual Studio 2026 (plug and play)
 
-1. Abre `cuda_mqap.slnx`.
-2. Selecciona `Release | x64` y compila la solución.
-3. Los ejecutables se generan en `build\x64\Release\` (`cuda_mqap.exe` y `test_kernels.exe`).
+```
+git clone https://github.com/apupiales/cuda_mqap.git
+cd cuda_mqap
+git checkout develop_with_claude_opus_5
+start cuda_mqap.slnx
+```
 
-El proyecto `cuda_mqap` ya trae argumentos de depuración (`mQAPData\KC10-2fl-1rl.dat --verify`) y el
-directorio de trabajo apunta a la raíz del repositorio, así que F5 funciona directamente. La
-configuración común está en `cuda_mqap.props`:
-- Arquitectura `compute_75,sm_75`.
-- C++17 y `/W4`.
-- `-lineinfo` en Release.
-- `-G` y `MQAP_SYNC_CHECK` en Debug.
+1. Visual Studio abre la solución con sus dos proyectos: `cuda_mqap` (el programa, proyecto de inicio) y
+   `test_kernels` (las pruebas).
+2. Selecciona `Release | x64` y pulsa **F5** (o Ctrl+F5). El programa se ejecuta con
+   `mQAPData\KC10-2fl-1rl.dat --verify`, usando la raíz del repositorio como directorio de trabajo. Los
+   argumentos se cambian en *Proyecto → Propiedades → Depuración*.
+3. Para ejecutar las pruebas: clic derecho en `test_kernels` → *Establecer como proyecto de inicio* → Ctrl+F5.
+4. Los ejecutables se generan en `build\x64\<Configuración>\`.
+
+Nada depende de la máquina donde se creó el proyecto:
+
+| Qué | Cómo se adapta |
+|---|---|
+| Versión de CUDA | `cuda_toolkit.props` la toma de `CUDA_PATH` (p. ej. `...\CUDA\v12.6` → `CUDA 12.6.props`). Para usar otra versión instalada: `set CudaVersion=12.6` antes de abrir VS, o `msbuild /p:CudaVersion=12.6` |
+| Falta la integración de CUDA | La compilación se detiene con un mensaje que explica cómo arreglarlo (en lugar de "tipo de elemento CudaCompile desconocido") |
+| Toolset de C++ | `$(DefaultPlatformToolset)` del Visual Studio que lo abre (v145 en VS 2026); SDK de Windows `10.0` (el más reciente instalado) |
+| GPU | Código nativo para `sm_75`, `sm_80`, `sm_86` y `sm_89`, más el PTX que el driver compila para GPUs más nuevas (RTX 50xx) |
+| Rutas | Todas relativas al repositorio (`$(MSBuildThisFileDirectory)`); salidas en `build\` (ignorado por git) |
+| Finales de línea | `.gitattributes` mantiene CRLF en los ficheros de Visual Studio |
+
+La configuración común está en `cuda_mqap.props`: C++17, `/W4`, `-lineinfo` en Release, y `-G` más
+`MQAP_SYNC_CHECK` en Debug.
 
 ### CMake
 
@@ -274,8 +296,8 @@ cmake --build build/cmake
 ctest --test-dir build/cmake --output-on-failure
 ```
 
-Para otras arquitecturas: `-DCMAKE_CUDA_ARCHITECTURES="75;86;89"`. En Visual Studio también sirve
-*Archivo → Abrir → Carpeta*.
+Por defecto compila `sm_75`, `sm_80`, `sm_86` y `sm_89` más PTX; para compilar solo para tu GPU usa
+`-DCMAKE_CUDA_ARCHITECTURES=native`. En Visual Studio también sirve *Archivo → Abrir → Carpeta*.
 
 ### nvcc directo
 
@@ -593,8 +615,9 @@ son mixtos: ver [Resultados en el libro de Excel](#resultados-en-el-libro-de-exc
 
 | Síntoma | Causa y solución |
 |---|---|
-| Visual Studio no encuentra `CUDA 13.4.props` | Hay instalada otra versión del toolkit: cambia `CUDA 13.4` en los `.vcxproj` por la tuya |
-| `no kernel image is available for execution on the device` | La GPU no es `sm_75`: añade su arquitectura en `cuda_mqap.props` (`CodeGeneration`) o en `CMAKE_CUDA_ARCHITECTURES` |
+| `CUDA Toolkit X.Y Visual Studio integration not found` | El CUDA Toolkit se instaló antes que Visual Studio, o sin su *Visual Studio Integration*: vuelve a ejecutar el instalador de CUDA (instalación personalizada → Visual Studio Integration). Si tienes varios toolkits instalados, elige uno con `CudaVersion` (ver [Abrir en Visual Studio 2026](#abrir-en-visual-studio-2026-plug-and-play)) |
+| `no kernel image is available for execution on the device` | La GPU es anterior a `sm_75`, o el driver es demasiado antiguo para compilar el PTX: actualiza el driver o añade la arquitectura en `cuda_mqap.props` (`CodeGeneration`) |
+| Visual Studio pide instalar componentes al abrir la solución | Viene de `.vsconfig`: acepta para instalar la carga de trabajo de C++ y el SDK de Windows |
 | `population must be a power of two in [16, 256]` | Usa 16, 32, 64, 128 o 256 |
 | `instance too large: … shared memory` | La instancia no cabe en la *shared memory* del bloque (ver límites) |
 | `costs may overflow 32-bit fitness values` | La instancia podría desbordar el fitness de 32 bits |

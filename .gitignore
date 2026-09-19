@@ -71,3 +71,6 @@ results/
 
 # Documento de análisis local (no se versiona)
 ANALISIS_CLAUDE_OPUS5.md
+
+# Excel lock files (workbook open)
+~$*

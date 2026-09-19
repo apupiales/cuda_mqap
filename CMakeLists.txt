@@ -23,9 +23,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-# Default: GeForce RTX 20xx (Turing). Override with -DCMAKE_CUDA_ARCHITECTURES="75;86;89".
+# Default: native code for sm_75/80/86/89 plus sm_89 PTX (JIT-compiled for newer GPUs).
+# Override with e.g. -DCMAKE_CUDA_ARCHITECTURES=native
 if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-    set(CMAKE_CUDA_ARCHITECTURES 75)
+    set(CMAKE_CUDA_ARCHITECTURES 75-real 80-real 86-real 89)
 endif()
 
 add_library(mqap_core STATIC

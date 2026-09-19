@@ -16,8 +16,9 @@
     </ClCompile>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
-      <!-- GeForce RTX 20xx (Turing). Add e.g. ;compute_86,sm_86 for other GPUs. -->
-      <CodeGeneration>compute_75,sm_75</CodeGeneration>
+      <!-- Native code for RTX 20xx (sm_75), A100 (sm_80), RTX 30xx (sm_86) and RTX 40xx (sm_89), plus
+           the PTX of each one (the driver JIT-compiles it for newer GPUs, e.g. RTX 50xx). Needs CUDA >= 11.8. -->
+      <CodeGeneration>compute_75,sm_75;compute_80,sm_80;compute_86,sm_86;compute_89,sm_89</CodeGeneration>
       <Include>$(MSBuildThisFileDirectory)include;%(Include)</Include>
       <AdditionalOptions>-std=c++17 %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>

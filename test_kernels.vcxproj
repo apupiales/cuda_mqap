@@ -14,11 +14,15 @@
     <ProjectGuid>{6B0F2C51-3E0A-4E0B-9C4B-2D8A1F5E7C02}</ProjectGuid>
     <RootNamespace>test_kernels</RootNamespace>
   </PropertyGroup>
+  <!-- Picks the installed CUDA Toolkit version (see cuda_toolkit.props). -->
+  <Import Project="cuda_toolkit.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v145</PlatformToolset>
+    <!-- Toolset of the Visual Studio that opens the project (v145 in Visual Studio 2026). -->
+    <PlatformToolset>$(DefaultPlatformToolset)</PlatformToolset>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -28,7 +32,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 13.4.props" />
+    <Import Project="$(CudaBuildCustomizationProps)" Condition="Exists('$(CudaBuildCustomizationProps)')" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -50,6 +54,6 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 13.4.targets" />
+    <Import Project="$(CudaBuildCustomizationTargets)" Condition="Exists('$(CudaBuildCustomizationTargets)')" />
   </ImportGroup>
 </Project>
