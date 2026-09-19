@@ -287,6 +287,8 @@ void testGreedy(int n, int population, int runs) {
 
     DeviceBuffer<short> dGenes(genes.size());
     DeviceBuffer<unsigned int> dFitness(static_cast<size_t>(rows) * runs * OBJ);
+    // The kernel only writes the offspring rows; zero the rest so the whole buffer can be copied back.
+    CUDA_CHECK(cudaMemset(dFitness.get(), 0, dFitness.size() * sizeof(unsigned int)));
     DeviceBuffer<int> dFlow(instance.flow.size());
     DeviceBuffer<int> dDist(instance.dist.size());
     DeviceBuffer<int> dTypes(runs);
@@ -338,6 +340,8 @@ void testReproduce(int n, int population, int runs) {
     }
     DeviceBuffer<short> dGenes(genes.size()), dNext(genes.size());
     DeviceBuffer<unsigned int> dFitness(fitness.size()), dNextFitness(fitness.size());
+    // Offspring fitness is computed later by the greedy kernel; zero it so the buffer can be copied back.
+    CUDA_CHECK(cudaMemset(dNextFitness.get(), 0, dNextFitness.size() * sizeof(unsigned int)));
     DeviceBuffer<short> dIndex(index.size()), dRank(rank.size());
     DeviceBuffer<float> dCrowding(crowding.size());
     DeviceBuffer<int> dTypes(runs);

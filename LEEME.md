@@ -665,12 +665,13 @@ comprobar una GPU concreta, consulta `cudaDevAttrMaxSharedMemoryPerBlockOptin`, 
 
 1. **Sin tocar el código:** usa `--runs`. Las ejecuciones corren a la vez en la GPU y apenas añaden
    tiempo: 30 ejecuciones de KC30 con P = 256 tardan alrededor de 1 s.
-2. **Cambio moderado, P = 512 en cualquier GPU:** calcular la dominancia sobre la marcha en lugar de
-   guardar la matriz. La memoria compartida baja a unos 20 KB con P = 512, a cambio de más cálculo. 512 es
-   el tope absoluto de un diseño de un solo bloque (1024 hilos).
+2. **Cambio moderado, P = 512 en cualquier GPU:** contar los dominadores y listar cada frente en lugar de
+   guardar la matriz. La memoria compartida baja a 26–30 KB con P = 512. 512 es el tope absoluto de un
+   diseño de un solo bloque (1024 hilos). Implementado en la rama `develop_p512_single_block`.
 3. **Rediseño, P de miles:** repartir la supervivencia NSGA-II entre varios bloques y guardar la
    dominancia en VRAM (por ejemplo, 8 MB por ejecución con P = 4096). Solo entonces la VRAM empezaría a
-   limitar P, y el tiempo crecería con el cuadrado de P.
+   limitar P, y el tiempo crecería con el cuadrado de P. Implementado en la rama
+   `develop_large_population_multiblock`.
 
 Una población mayor da más diversidad, pero no garantiza mejores frentes para el mismo tiempo de cálculo.
 

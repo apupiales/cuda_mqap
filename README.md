@@ -660,12 +660,12 @@ concurrent runs (all of them reach the 65,535 maximum with P = 256). To check a 
 
 1. **Without code changes:** use `--runs`. The runs execute at the same time on the GPU and add little
    time: 30 runs of KC30 with P = 256 take about 1 s.
-2. **Moderate change, P = 512 on any GPU:** compute the dominance on the fly instead of storing the matrix.
-   The shared memory drops to about 20 KB with P = 512, at the cost of more computation. 512 is the
-   absolute limit of a single-block design (1024 threads).
+2. **Moderate change, P = 512 on any GPU:** count dominators and list each front instead of storing the
+   matrix. The shared memory drops to 26–30 KB with P = 512. 512 is the absolute limit of a single-block
+   design (1024 threads). Implemented in the branch `develop_p512_single_block`.
 3. **Redesign, P in the thousands:** split the NSGA-II survival across several blocks and keep the
    dominance in VRAM (e.g. 8 MB per run with P = 4096). Only then would the VRAM start to limit P, and the
-   time would grow with the square of P.
+   time would grow with the square of P. Implemented in the branch `develop_large_population_multiblock`.
 
 A larger population gives more diversity, but it does not guarantee better fronts for the same
 computing time.
