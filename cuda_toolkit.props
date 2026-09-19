@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Selects the CUDA Toolkit Visual Studio integration to use, so the projects build with whichever
+  CUDA version is installed (no hard-coded "CUDA 13.4.props").
+
+  Order of precedence:
+    1. /p:CudaVersion=12.6 on the command line, or a CudaVersion environment variable.
+    2. The version in CUDA_PATH (set by the CUDA installer, e.g. ...\CUDA\v13.4 -> 13.4).
+    3. 13.4 (the version the project was developed with).
+
+  Copyright (C) 2019-2026 Andres Pupiales Arevalo <apupiales@gmail.com>
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <CudaVersion Condition="'$(CudaVersion)' == '' and '$(CUDA_PATH)' != ''">$([System.IO.Path]::GetFileName($(CUDA_PATH)).Replace('v', ''))</CudaVersion>
+    <CudaVersion Condition="'$(CudaVersion)' == ''">13.4</CudaVersion>
+    <CudaBuildCustomizationProps>$(VCTargetsPath)\BuildCustomizations\CUDA $(CudaVersion).props</CudaBuildCustomizationProps>
+    <CudaBuildCustomizationTargets>$(VCTargetsPath)\BuildCustomizations\CUDA $(CudaVersion).targets</CudaBuildCustomizationTargets>
+  </PropertyGroup>
+
+  <!-- Clear message instead of "CudaCompile is not a known item type" when the integration is missing. -->
+  <Target Name="CheckCudaIntegration" BeforeTargets="PrepareForBuild" Condition="!Exists('$(CudaBuildCustomizationProps)')">
+    <Error Text="CUDA Toolkit $(CudaVersion) Visual Studio integration not found: '$(CudaBuildCustomizationProps)'. Install the CUDA Toolkit (12.x or 13.x) AFTER Visual Studio, or re-run the CUDA installer and select 'Visual Studio Integration'. To use another installed version, build with /p:CudaVersion=X.Y. See README.md, section 'Open in Visual Studio 2026 (plug and play)' (LEEME.md in Spanish)." />
+  </Target>
+</Project>

@@ -56,8 +56,17 @@ dkms.conf
 .project
 Debug/
 
-#Visual studio
+#Visual studio (the .slnx/.vcxproj files are versioned)
 .vs/
-*.sln
-*.vcxproj
 *.vcxproj.user
+x64/
+
+# Build output
+build/
+
+# Result file written by the program (working directory = repository root)
+result_KCX_Yfl_Z_nsga2_greedy_2opt.txt
+test_nsga2_g2opt.txt
+
+# Excel lock files (workbook open)
+~$*
