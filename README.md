@@ -46,8 +46,8 @@ the program.
 **GPU performance**
 - **O(n²)** fitness per chromosome (one *warp* per chromosome, with the matrices in *shared memory*),
   instead of three O(n³) dense matrix products.
-- Complete NSGA-II **inside a single block per run**: the dominance matrix is packed in bits, the fronts
-  are extracted with `__ballot_sync`/`__popc` and the bitonic sorts run in *shared memory*.
+- Complete NSGA-II **inside a single block per run**: fast non-dominated sorting with dominator counters
+  and front lists (no dominance matrix, so P up to 512 on any GPU) and bitonic sorts in *shared memory*.
 - Greedy 2-opt with **O(n) incremental (delta) evaluation** of each swap; the local search of the whole
   offspring is a single kernel.
 - Persistent Philox random states, initialized only once.
@@ -131,7 +131,7 @@ Parameters:
 
 | Parameter | Where | Default |
 |---|---|---|
-| Population size `P` | `--population` | 64 (power of 2 between 16 and 256) |
+| Population size `P` | `--population` | 64 (power of 2 between 16 and 512) |
 | Generations | `--iterations` | 70 |
 | Independent runs | `--runs` | 1 |
 | Seed | `--seed` | random (printed) |
@@ -207,7 +207,7 @@ generations only the pointers of the double buffer are swapped.
 | Kernel | Grid × block | Parallelism | Techniques |
 |---|---|---|---|
 | `fitnessKernel<OBJ>` | `(⌈2P/4⌉, R)` × 128 | 1 warp per chromosome | `F` and `D` in *shared memory* (coalesced load); consecutive `F` reads per lane (no bank conflicts); reduction with `__shfl_down_sync` |
-| `survivalKernel<OBJ>` | `R` × `2P` | 1 block per run, 1 thread per individual | Bit-packed dominance (`2P × 2P/32` words), fronts with `__ballot_sync` + `__popc`, bitonic sort of 64-bit keys `(rank, fitness)` and `(rank, −crowding)` in *shared memory* |
+| `survivalKernel<OBJ>` | `R` × `2P` | 1 block per run, 1 thread per individual | Fast non-dominated sorting: dominator counts and a shared list of each front (O(N²) work, O(N) memory), bitonic sort of 64-bit keys `(rank, fitness)` and `(rank, −crowding)` in *shared memory* |
 | `reproduceKernel<OBJ>` | `(⌈P/128⌉, R)` × 128 | 1 thread per offspring | Philox state in registers; tournament, mutations and copy in a single pass |
 | `greedy2OptKernel<OBJ>` | `(⌈P/4⌉, R)` × 128 | 1 warp per offspring | Matrices in *shared memory*; O(n) delta split across the 32 lanes; warp-uniform criterion (no divergence) |
 | `initPopulationKernel` | `(⌈2P/128⌉, R)` × 128 | 1 thread per chromosome | Unbiased Fisher-Yates |
@@ -217,7 +217,7 @@ generations only the pointers of the double buffer are swapped.
 - **Fitness and 2-opt:** `(OBJ + 1)·n²·4 + 4·n·2` bytes, e.g. 14.6 KB for n = 30 and 3 objectives.
   When more than 48 KB are needed, the device's maximum *opt-in* is requested automatically
   (`cudaFuncAttributeMaxDynamicSharedMemorySize`), which allows n = 60 with 3 objectives on Turing.
-- **Survival:** up to ~46 KB with P = 256.
+- **Survival:** grows linearly with P, ~30 KB with P = 512.
 
 ### Incremental 2-opt evaluation
 
@@ -315,7 +315,7 @@ nvcc -O3 -arch=sm_75 -std=c++17 -Iinclude src\main.cpp src\instance.cpp src\solv
 
 ```
 cuda_mqap <instance.dat> [options]
-  --population P   population size, power of two in [16, 256] (default 64)
+  --population P   population size, power of two in [16, 512] (default 64)
   --iterations N   generations (default 70)
   --runs R         independent runs executed concurrently (default 1)
   --seed S         random seed (default: random, printed in the output)
@@ -482,7 +482,7 @@ independent CPU implementation:
 | Instance loading | All 23 `.dat` files load (in both header formats) and `n`/`m` match the file name |
 | `.PO` optimal fronts | The **374 published optimal solutions** have exactly their published cost, both on the CPU and on the GPU |
 | Fitness | The kernel matches the original version's literal `Trace(F·X·Dᵀ·Xᵀ)` on KC10, KC20 and KC30, with several runs |
-| NSGA-II survival | Ranks, crowding and selection match a CPU NSGA-II for P = 16, 64 and 256, with 2 and 3 objectives |
+| NSGA-II survival | Ranks, crowding and selection match a CPU NSGA-II for P = 16, 64, 256 and 512, with 2 and 3 objectives |
 | Greedy 2-opt | The resulting permutation is **identical** to that of a CPU greedy that recomputes the full cost (n = 10, 30 and 60, the latter with more than 48 KB of *shared memory*) |
 | Reproduction | Survivors and their fitness are copied correctly and the children are valid permutations |
 | Initial population | Every permutation is valid and shuffled |
@@ -595,80 +595,89 @@ are mixed: see [Results in the Excel workbook](#results-in-the-excel-workbook).
 
 ## Population size limits and GPU resources
 
-**On the RTX 2060 the maximum population is P = 256 for all 15 instances.** The limit is not the GPU
-memory (VRAM): it is the shared memory and the number of threads of **one block**, because the whole
-NSGA-II survival of a run is done by a single block of 2P threads. A GPU with more VRAM does not, by
-itself, allow larger populations.
+**In this branch the maximum population is P = 512 on any GPU, for all 15 instances.** The NSGA-II
+survival of each run is still done by a single block of 2P threads, but it no longer keeps a dominance
+matrix in shared memory. It uses the fast non-dominated sorting scheme of NSGA-II instead:
+- every thread counts its dominators once;
+- for each front, the members are listed in shared memory and the remaining threads subtract the members
+  that dominated them.
+
+The work is still O(N²) (N = 2P), but the shared memory grows linearly with P: about 30 KB with P = 512,
+which fits in the default 48 KB of every GPU. The limit is now the number of threads of a block (1024), so
+P ≤ 512. Larger populations need the multi-block design of the branch `develop_large_population_multiblock`.
 
 ### Measured on the RTX 2060
 
-- **P = 256 works on all 15 instances**, with the iterations of each tab of the workbook and `--verify`.
-  With 30 concurrent runs it takes ~0.1 s of GPU time on KC10, ~1.5 s on KC20 (300 iterations) and ~1.0 s
-  on KC30.
-- **P = 512 cannot be used.** The program rejects it and, with the cap raised in a test copy, the survival
-  kernel fails to launch (`cudaErrorInvalidValue` in `nsga2.cu`).
+- **P = 512 works on all 15 instances**, with the iterations of each tab of the workbook and `--verify`.
+- **For P ≤ 256 the results are identical to `develop_with_claude_opus_5`**: with the same seed, the result
+  files are byte for byte the same (KC10, KC20 and KC30, 1 and 30 runs), and the GPU time is lower.
 
-The survival block keeps the dominance matrix in shared memory, and it grows with the square of P:
-
-| P | Threads per block | Shared memory (2 objectives) | Shared memory (3 objectives) |
+| Instance (iterations) | develop, P = 256 | this branch, P = 256 | this branch, P = 512 |
 |---|---|---|---|
-| 128 | 256 | 14 KB | 15 KB |
-| **256** | 512 | 45 KB | **47 KB** (limit: 48 KB) |
-| 512 | 1024 | 156 KB | 160 KB |
-| 1024 | 2048 (not allowed) | 574 KB | 582 KB |
+| KC10-2fl-1rl (70), 1 run | 30 ms | 19 ms | 26 ms |
+| KC10-2fl-1rl (70), 30 runs | 128 ms | 86 ms | 153 ms |
+| KC20-2fl-1rl (300), 1 run | 157 ms | 95 ms | 177 ms |
+| KC20-2fl-1rl (300), 30 runs | 1,531 ms | 1,407 ms | 2,809 ms |
+| KC30-3fl-1rl (70), 1 run | 64 ms | 61 ms | 113 ms |
+| KC30-3fl-1rl (70), 30 runs | 1,013 ms | 1,001 ms | 2,001 ms |
 
-That memory depends on P and on the number of objectives, not on the size of the instance; the
-3-objective KC30 instances are the tightest (47 KB of 48 KB). The VRAM is barely used: each run with
-P = 256 takes 62 KB on KC10, 82 KB on KC20 and 106 KB on KC30.
+Shared memory of the survival kernel, `S(P) = 2P·(18 + 4·OBJ) + 16` bytes:
+
+| P | Threads per block | 2 objectives | 3 objectives | Before (dominance matrix, 3 objectives) |
+|---|---|---|---|---|
+| 128 | 256 | 6.5 KB | 7.5 KB | 15 KB |
+| 256 | 512 | 13 KB | 15 KB | 47 KB |
+| **512** | 1024 | 26 KB | **30 KB** | 160 KB (did not fit) |
+| 1024 | 2048 (not allowed) | — | — | — |
+
+### Effect of the population size on quality
+
+KC10 instances, 70 iterations, 100 runs per case. The first figure is the gamma distance to the
+published Pareto optimal front, mean ± standard deviation (lower is better; computed like
+`mQAPMetrics/distance_metric_*.js`). The percentage is the average share of the optimal front found per run.
+
+| Instance | P = 64 | P = 256 | P = 512 |
+|---|---|---|---|
+| KC10-2fl-1rl | 965.91 ± 679.81 · 68 % | 782.85 ± 452.71 · 75 % | 814.86 ± 509.29 · 77 % |
+| KC10-2fl-2rl | 4,182.16 ± 5,728.91 · 93 % | 234.13 ± 1,096.94 · 99 % | 54.88 ± 546.02 · 100 % |
+| KC10-2fl-3rl | 21,228.30 ± 3,031.55 · 53 % | 17,904.42 ± 1,742.56 · 62 % | 17,375.47 ± 1,862.39 · 65 % |
+| KC10-2fl-4rl | 7,320.49 ± 2,151.26 · 53 % | 5,028.91 ± 1,180.20 · 61 % | 4,332.74 ± 541.21 · 64 % |
+| KC10-2fl-5rl | 29,054.12 ± 12,426.16 · 50 % | 16,866.45 ± 6,464.29 · 62 % | 14,516.44 ± 6,799.74 · 65 % |
+| KC10-2fl-1uni | 17.88 ± 46.44 · 85 % | 27.71 ± 56.61 · 90 % | 16.26 ± 44.87 · 91 % |
+| KC10-2fl-3uni | 347.64 ± 58.36 · 31 % | 160.14 ± 38.27 · 68 % | 112.40 ± 31.24 · 72 % |
+
+A larger population explores more of the front: the share of the optimal front found grows with P on
+every instance. Each doubling of P roughly doubles the time, so compare it with running more
+generations or more runs (`--runs`) for the same time budget.
 
 ### How to compute the limit for another GPU
 
 P must be a power of 2 and at least 16. The maximum P is the largest one that meets:
 
 1. **Threads:** 2P ≤ maximum threads per block (1024 on all current GPUs), so P ≤ 512.
-2. **Shared memory of the survival kernel** (OBJ = number of objectives):
-   `S(P) = (2P)²/8 + 2P·(16 + 4·OBJ) + (2P/32)·4 + 12 bytes`
-   S(P) must not exceed 48 KB with the current code; if the kernel requested the extra (*opt-in*) shared
-   memory, the limit would be the GPU maximum.
-3. **Code cap:** P ≤ 256 (`kMaxPopulation` in `include/config.h`).
+2. **Shared memory of the survival kernel:** `S(P) = 2P·(18 + 4·OBJ) + 16` bytes ≤ 48 KB. It holds for
+   every P ≤ 512 (30 KB at most), so it no longer depends on the GPU.
+3. **Code cap:** P ≤ 512 (`kMaxPopulation` in `include/config.h`).
 
 The VRAM only determines how many concurrent runs fit:
 
 ```
-max runs      = min(65 535, free VRAM / memory per run)
+max runs       = min(65 535, free VRAM / memory per run)
 memory per run = 2P·(4n + 8·OBJ + 64) + 8P bytes        (n = number of facilities)
 ```
 
-With 5 GB free on the RTX 2060 and P = 256, about 49,000 concurrent runs of KC30 fit, and up to the
-program maximum of 65,535 on KC10 (calculated, not executed).
+With P = 512 a run takes 124 KB on KC10, 164 KB on KC20 and 212 KB on KC30. On the RTX 2060 (5 GB free)
+about 24,700 concurrent runs of KC30 fit (calculated, not executed).
 
-| GPU | VRAM | Max. shared memory per block | Max. P today | Max. P with cap raised and opt-in |
-|---|---|---|---|---|
-| RTX 2060 (measured) | 6 GB | 64 KB | **256** | 256 |
-| RTX 3070 Laptop | 8 GB | 99 KB | **256** | 256 (512 needs 156 KB) |
-| RTX 3080 | 10–12 GB | 99 KB | **256** | 256 |
-| RTX 4080 / 4090 | 16 / 24 GB | 99 KB | **256** | 256 |
-| RTX 5080 / 5090 | 16 / 32 GB | 99 KB | **256** | 256 |
-| A100 / H100 (data center) | 40–80 GB | 163 / 227 KB | 256 | **512** |
+| GPU | VRAM | Max. P (this branch) | Concurrent KC30 runs with P = 512 (calculated) |
+|---|---|---|---|
+| RTX 2060 (measured) | 6 GB | **512** | ~24,700 |
+| RTX 3070 Laptop | 8 GB | **512** | ~33,600 |
+| RTX 3080 | 10–12 GB | **512** | ~42,000–50,000 |
+| RTX 4080 / 4090 | 16 / 24 GB | **512** | 65,535 (program maximum) |
+| RTX 5080 / 5090 | 16 / 32 GB | **512** | 65,535 |
 
-Only the RTX 2060 row was measured; the others come from the compute capability table of the CUDA
-documentation. On consumer GPUs P stays at 256 even with much more VRAM; what they gain is room for more
-concurrent runs (all of them reach the 65,535 maximum with P = 256). To check a specific GPU, query
-`cudaDevAttrMaxSharedMemoryPerBlockOptin`, `maxThreadsPerBlock` and `cudaMemGetInfo`.
-
-### How to explore more solutions
-
-1. **Without code changes:** use `--runs`. The runs execute at the same time on the GPU and add little
-   time: 30 runs of KC30 with P = 256 take about 1 s.
-2. **Moderate change, P = 512 on any GPU:** compute the dominance on the fly instead of storing the matrix.
-   The shared memory drops to about 20 KB with P = 512, at the cost of more computation. 512 is the
-   absolute limit of a single-block design (1024 threads).
-3. **Redesign, P in the thousands:** split the NSGA-II survival across several blocks and keep the
-   dominance in VRAM (e.g. 8 MB per run with P = 4096). Only then would the VRAM start to limit P, and the
-   time would grow with the square of P.
-
-A larger population gives more diversity, but it does not guarantee better fronts for the same
-computing time.
+The run counts use 85 % of the VRAM of each GPU (except the RTX 2060, whose free memory was measured).
 
 ---
 
@@ -676,7 +685,7 @@ computing time.
 
 **Current limits:**
 - n ≤ 64. The available *shared memory* also matters: with 3 objectives, n ≤ 63 on GPUs with 64 KB *opt-in*.
-- P is a power of 2 between 16 and 256, because survival uses a block of 2P threads and bitonic sort
+- P is a power of 2 between 16 and 512, because survival uses a block of 2P threads (at most 1024) and bitonic sort
   (see [Population size limits and GPU resources](#population-size-limits-and-gpu-resources)).
 - Only 2 or 3 objectives are supported (the kernels are instantiated for those values).
 - Costs are stored as 32-bit integers; the loader rejects instances that could overflow them.
@@ -696,7 +705,7 @@ computing time.
 | `CUDA Toolkit X.Y Visual Studio integration not found` | The CUDA Toolkit was installed before Visual Studio, or without its *Visual Studio Integration*: re-run the CUDA installer (custom install → Visual Studio Integration). With several toolkits installed, choose one with `CudaVersion` (see [Open in Visual Studio 2026](#open-in-visual-studio-2026-plug-and-play)) |
 | `no kernel image is available for execution on the device` | The GPU is older than `sm_75`, or the driver is too old to JIT-compile the PTX: update the driver or add the architecture in `cuda_mqap.props` (`CodeGeneration`) |
 | Visual Studio asks to install components when opening the solution | It comes from `.vsconfig`: accept to install the C++ workload and the Windows SDK |
-| `population must be a power of two in [16, 256]` | Use 16, 32, 64, 128 or 256 |
+| `population must be a power of two in [16, 512]` | Use 16, 32, 64, 128, 256 or 512 |
 | `instance too large: … shared memory` | The instance does not fit in the block's *shared memory* (see limits) |
 | `costs may overflow 32-bit fitness values` | The instance could overflow the 32-bit fitness |
 | Very slow execution in Debug | Expected: Debug compiles device code with `-G` and synchronizes after every kernel. Use Release to measure |

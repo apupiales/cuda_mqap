@@ -1,9 +1,11 @@
 /*
  * nsga2.cu
  *
- * NSGA-II survival (Rt = Pt U Qt  ->  Pt+1) of each run in a single block of 2P threads:
- *   1. Dominance matrix packed in bits (shared memory) and fast non-dominated sorting with
- *      __popc / __ballot_sync: rank 1 is the first Pareto front.
+ * NSGA-II survival (Rt = Pt U Qt  ->  Pt+1) of each run in a single block of 2P threads (P <= 512):
+ *   1. Fast non-dominated sorting without a dominance matrix: every thread counts its dominators
+ *      once; for each front, the members are listed in shared memory and the remaining threads
+ *      subtract the members that dominated them. O(N^2) work, O(N) shared memory (N = 2P), so
+ *      P = 512 (1024 threads) fits in the default 48 KB of every GPU. Rank 1 is the first front.
  *   2. Crowding distance of every front: one bitonic sort per objective by (rank, fitness),
  *      which leaves each front contiguous. Boundaries get infinity, interior points add
  *      (f[next] - f[prev]) / (max - min) with max/min taken over the whole population.
@@ -40,39 +42,46 @@ namespace mqap {
 namespace detail {
 
 size_t survivalSharedMemory(int total, int objectives) {
-    const int words = total / 32;
     return static_cast<size_t>(total) * sizeof(unsigned long long)       // sKey
          + static_cast<size_t>(total) * objectives * sizeof(unsigned int) // sFit
-         + static_cast<size_t>(total) * words * sizeof(unsigned int)      // sDominatedBy
          + static_cast<size_t>(total) * sizeof(float)                     // sCrowding
-         + static_cast<size_t>(words) * sizeof(unsigned int)              // sFrontMask
-         + static_cast<size_t>(total) * sizeof(short) * 2;                // sRank, sIndex
+         + static_cast<size_t>(total) * sizeof(short) * 3;                // sRank, sIndex, sFront
 }
 
-// blockIdx.x = run, blockDim.x = 2P (power of two, multiple of 32).
+// True when individual a dominates individual b (all objectives <=, at least one <).
 template <int OBJ>
-__global__ void survivalKernel(const unsigned int* __restrict__ fitness, int population,
+__device__ inline bool dominates(const unsigned int* sFit, int a, int b) {
+    bool lessOrEqual = true;
+    bool less = false;
+#pragma unroll
+    for (int o = 0; o < OBJ; o++) {
+        lessOrEqual &= sFit[a * OBJ + o] <= sFit[b * OBJ + o];
+        less |= sFit[a * OBJ + o] < sFit[b * OBJ + o];
+    }
+    return lessOrEqual && less;
+}
+
+// blockIdx.x = run, blockDim.x = 2P (power of two, multiple of 32, at most 1024).
+template <int OBJ>
+__global__ void __launch_bounds__(1024) survivalKernel(const unsigned int* __restrict__ fitness, int population,
                                short* __restrict__ survivorIndex, short* __restrict__ survivorRank,
                                float* __restrict__ survivorCrowding) {
     const int total = blockDim.x;
-    const int words = total / 32;
 
     extern __shared__ unsigned long long smem64[];
-    unsigned long long* sKey = smem64;                                                // total
-    unsigned int* sFit = reinterpret_cast<unsigned int*>(sKey + total);               // total * OBJ
-    unsigned int* sDominatedBy = sFit + total * OBJ;                                  // total * words
-    float* sCrowding = reinterpret_cast<float*>(sDominatedBy + total * words);        // total
-    unsigned int* sFrontMask = reinterpret_cast<unsigned int*>(sCrowding + total);    // words
-    short* sRank = reinterpret_cast<short*>(sFrontMask + words);                      // total
-    short* sIndex = sRank + total;                                                    // total
+    unsigned long long* sKey = smem64;                                          // total
+    unsigned int* sFit = reinterpret_cast<unsigned int*>(sKey + total);         // total * OBJ
+    float* sCrowding = reinterpret_cast<float*>(sFit + total * OBJ);            // total
+    short* sRank = reinterpret_cast<short*>(sCrowding + total);                 // total
+    short* sIndex = sRank + total;                                              // total
+    short* sFront = sIndex + total;                                             // total
     __shared__ int sRemaining;
+    __shared__ int sFrontSize;
     __shared__ unsigned int sMin;
     __shared__ unsigned int sMax;
 
     const int run = blockIdx.x;
     const int i = threadIdx.x;
-    const int lane = i & 31;
-    const int warp = i >> 5;
 
     const unsigned int* runFitness = fitness + static_cast<size_t>(run) * total * OBJ;
 #pragma unroll
@@ -86,42 +95,32 @@ __global__ void survivalKernel(const unsigned int* __restrict__ fitness, int pop
     }
     __syncthreads();
 
-    // 1. Row i of the dominance matrix: bit j is set when j dominates i.
-    for (int w = 0; w < words; w++) {
-        unsigned int bits = 0;
-        for (int b = 0; b < 32; b++) {
-            const int j = w * 32 + b;
-            bool lessOrEqual = true;
-            bool less = false;
-#pragma unroll
-            for (int o = 0; o < OBJ; o++) {
-                lessOrEqual &= sFit[j * OBJ + o] <= sFit[i * OBJ + o];
-                less |= sFit[j * OBJ + o] < sFit[i * OBJ + o];
-            }
-            bits |= static_cast<unsigned int>(lessOrEqual && less) << b;
-        }
-        sDominatedBy[i * words + w] = bits;
+    // 1. Number of individuals that dominate i.
+    int dominators = 0;
+    for (int j = 0; j < total; j++) {
+        dominators += dominates<OBJ>(sFit, j, i);
     }
-    __syncthreads();
 
-    // Peel the fronts: individuals without remaining dominators form the next front.
+    // Peel the fronts: individuals without remaining dominators form the next front; the others
+    // subtract the members of that front that dominated them.
     for (short front = 1; sRemaining > 0; front++) {
-        int dominators = 0;
-        for (int w = 0; w < words; w++) {
-            dominators += __popc(sDominatedBy[i * words + w]);
-        }
-        const bool inFront = (sRank[i] == 0) && (dominators == 0);
-        const unsigned int mask = __ballot_sync(kFullWarpMask, inFront);
-        if (lane == 0) {
-            sFrontMask[warp] = mask;
+        if (i == 0) {
+            sFrontSize = 0;
         }
         __syncthreads();
-        if (inFront) {
+        if (sRank[i] == 0 && dominators == 0) {
             sRank[i] = front;
-            atomicSub(&sRemaining, 1);
+            sFront[atomicAdd(&sFrontSize, 1)] = static_cast<short>(i);
         }
-        for (int w = 0; w < words; w++) {
-            sDominatedBy[i * words + w] &= ~sFrontMask[w];
+        __syncthreads();
+        const int frontSize = sFrontSize;
+        if (sRank[i] == 0) {
+            for (int k = 0; k < frontSize; k++) {
+                dominators -= dominates<OBJ>(sFit, sFront[k], i);
+            }
+        }
+        if (i == 0) {
+            sRemaining -= frontSize;
         }
         __syncthreads();
     }

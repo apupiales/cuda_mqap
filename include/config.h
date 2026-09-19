@@ -30,9 +30,11 @@ namespace mqap {
 constexpr int kMaxFacilities = 64;
 
 // Population size (P) limits. P must be a power of two: the NSGA-II survival kernel runs in a
-// single block of 2P threads and uses bitonic sorts in shared memory.
+// single block of 2P threads (at most 1024 threads per block, so P <= 512) and uses bitonic sorts
+// in shared memory. Without a dominance matrix its shared memory grows linearly with P
+// (about 30 KB with P = 512), so it fits in the default 48 KB of every GPU.
 constexpr int kMinPopulation = 16;
-constexpr int kMaxPopulation = 256;
+constexpr int kMaxPopulation = 512;
 
 // Number of objectives supported by the kernels (they are instantiated for these values).
 constexpr int kMinObjectives = 2;

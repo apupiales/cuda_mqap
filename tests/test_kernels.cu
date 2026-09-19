@@ -287,6 +287,8 @@ void testGreedy(int n, int population, int runs) {
 
     DeviceBuffer<short> dGenes(genes.size());
     DeviceBuffer<unsigned int> dFitness(static_cast<size_t>(rows) * runs * OBJ);
+    // The kernel only writes the offspring rows; zero the rest so the whole buffer can be copied back.
+    CUDA_CHECK(cudaMemset(dFitness.get(), 0, dFitness.size() * sizeof(unsigned int)));
     DeviceBuffer<int> dFlow(instance.flow.size());
     DeviceBuffer<int> dDist(instance.dist.size());
     DeviceBuffer<int> dTypes(runs);
@@ -338,6 +340,8 @@ void testReproduce(int n, int population, int runs) {
     }
     DeviceBuffer<short> dGenes(genes.size()), dNext(genes.size());
     DeviceBuffer<unsigned int> dFitness(fitness.size()), dNextFitness(fitness.size());
+    // Offspring fitness is computed later by the greedy kernel; zero it so the buffer can be copied back.
+    CUDA_CHECK(cudaMemset(dNextFitness.get(), 0, dNextFitness.size() * sizeof(unsigned int)));
     DeviceBuffer<short> dIndex(index.size()), dRank(rank.size());
     DeviceBuffer<float> dCrowding(crowding.size());
     DeviceBuffer<int> dTypes(runs);
@@ -485,6 +489,8 @@ int main(int argc, char** argv) {
     run("survival == CPU NSGA-II      P=64  OBJ=2", [] { testSurvival<2>(64, 3); });
     run("survival == CPU NSGA-II      P=64  OBJ=3", [] { testSurvival<3>(64, 3); });
     run("survival == CPU NSGA-II      P=256 OBJ=3", [] { testSurvival<3>(256, 2); });
+    run("survival == CPU NSGA-II      P=512 OBJ=2", [] { testSurvival<2>(512, 2); });
+    run("survival == CPU NSGA-II      P=512 OBJ=3", [] { testSurvival<3>(512, 2); });
     run("greedy 2-opt == CPU greedy   n=10 OBJ=2", [] { testGreedy<2>(10, 64, 3); });
     run("greedy 2-opt == CPU greedy   n=30 OBJ=3", [] { testGreedy<3>(30, 32, 4); });
     run("greedy 2-opt == CPU greedy   n=60 OBJ=3 (>48 KB shared)", [] { testGreedy<3>(60, 16, 1); });

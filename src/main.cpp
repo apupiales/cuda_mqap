@@ -47,7 +47,7 @@ struct Arguments {
 void printUsage(const char* program) {
     std::printf(
         "Usage: %s <instance.dat> [options]\n"
-        "  --population P   population size, power of two in [16, 256] (default 64)\n"
+        "  --population P   population size, power of two in [16, 512] (default 64)\n"
         "  --iterations N   generations (default 70)\n"
         "  --runs R         independent runs executed concurrently (default 1)\n"
         "  --seed S         random seed (default: random, printed in the output)\n"
