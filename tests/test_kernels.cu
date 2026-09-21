@@ -28,6 +28,7 @@
 #include <fstream>
 #include <numeric>
 #include <random>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -35,6 +36,7 @@
 #include "device_buffer.cuh"
 #include "instance.h"
 #include "kernels.cuh"
+#include "solver.h"
 
 using namespace mqap;
 
@@ -248,6 +250,36 @@ void testSurvival(int population, int runs) {
             EXPECT(same, "survival P=%d OBJ=%d run %d pos %d: crowding %f != %f",
                    population, OBJ, r, q, crowding[k], expected[q].crowding);
         }
+    }
+}
+
+// The front is what the program prints and writes: it must hold every distinct non-dominated
+// solution of the final population, and each of them only once.
+void testUniqueFront(const Instance& instance, int population, int iterations, int runs) {
+    SolverOptions options;
+    options.population = population;
+    options.iterations = iterations;
+    options.runs = runs;
+    options.seed = 4242;
+    const std::vector<RunResult> results = solve(instance, options);
+    EXPECT(static_cast<int>(results.size()) == runs, "solve returned %zu runs", results.size());
+    for (const RunResult& result : results) {
+        EXPECT(static_cast<int>(result.population.size()) == population,
+               "the final population has %zu solutions instead of %d", result.population.size(), population);
+        std::set<std::vector<short>> distinct;
+        for (const Solution& solution : result.population) {
+            if (solution.rank == 1) {
+                distinct.insert(solution.permutation);
+            }
+        }
+        std::set<std::vector<short>> seen;
+        for (const Solution& solution : result.paretoFront) {
+            EXPECT(solution.rank == 1, "the front holds a solution of rank %d", solution.rank);
+            EXPECT(seen.insert(solution.permutation).second, "the front repeats a solution");
+            EXPECT(distinct.count(solution.permutation) == 1, "the front holds a solution that is not in the population");
+        }
+        EXPECT(seen.size() == distinct.size(), "the front has %zu solutions and the population %zu distinct ones",
+               seen.size(), distinct.size());
     }
 }
 
@@ -494,6 +526,7 @@ int main(int argc, char** argv) {
     run("greedy 2-opt == CPU greedy   n=60 OBJ=3 (>48 KB shared)", [] { testGreedy<3>(60, 16, 1); });
     run("reproduce: survivors copied, valid children", [] { testReproduce<3>(30, 64, 3); });
     run("initial population: valid shuffled permutations", [] { testInitPopulation(30, 128, 4); });
+    run("final front: every distinct solution, only once", [&] { testUniqueFront(kc10, 256, 30, 2); });
 
     std::printf("\n%s (%d failure%s)\n", failures == 0 ? "ALL TESTS PASSED" : "TESTS FAILED", failures,
                 failures == 1 ? "" : "s");

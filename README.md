@@ -367,8 +367,10 @@ its costs.
 },
 ```
 
-At the end of a run the population may contain repeated solutions; in the file, duplicate keys collapse
-when it is read as a dictionary, just as in the original version.
+The final population usually holds the same solution many times, because it converges and the survivors
+are copies of each other. **The front is written without repetitions:** every distinct non-dominated
+solution appears once, in the order NSGA-II gives it. The whole population, repetitions included, is what
+`--verify` checks and what the final population of the run is.
 
 ### Verification (`--verify`)
 

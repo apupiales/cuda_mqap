@@ -367,8 +367,10 @@ permutación y el valor, sus costes.
 },
 ```
 
-Al final de la ejecución, la población puede contener soluciones repetidas; en el fichero, las claves
-duplicadas se colapsan al leerlo como diccionario, igual que en la versión original.
+La población final suele contener la misma solución muchas veces, porque converge y los supervivientes
+son copias unos de otros. **El frente se escribe sin repeticiones:** cada solución no dominada distinta
+aparece una vez, en el orden que le da NSGA-II. La población completa, con sus repeticiones, es la que
+comprueba `--verify` y la que constituye la población final de la ejecución.
 
 ### Verificación (`--verify`)
 

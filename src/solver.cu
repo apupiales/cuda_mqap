@@ -24,6 +24,7 @@
  */
 #include "solver.h"
 
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -129,13 +130,16 @@ std::vector<RunResult> solveImpl(const Instance& instance, const SolverOptions& 
 
     std::vector<RunResult> results(runs);
     for (int run = 0; run < runs; run++) {
+        // The front is what the program prints and writes, so a solution appears in it only once.
+        // Repetitions are common: the population converges and many survivors are copies of each other.
+        std::set<std::vector<short>> seen;
         for (int i = 0; i < population; i++) {
             const size_t source = static_cast<size_t>(run) * rows + hostIndex[static_cast<size_t>(run) * population + i];
             Solution solution;
             solution.permutation.assign(hostGenes.begin() + source * n, hostGenes.begin() + (source + 1) * n);
             solution.fitness.assign(hostFitness.begin() + source * OBJ, hostFitness.begin() + (source + 1) * OBJ);
             solution.rank = hostRank[static_cast<size_t>(run) * population + i];
-            if (solution.rank == 1) {
+            if (solution.rank == 1 && seen.insert(solution.permutation).second) {
                 results[run].paretoFront.push_back(solution);
             }
             results[run].population.push_back(std::move(solution));
