@@ -475,7 +475,7 @@ hours.
 What the campaign says:
 
 - **The 70 generations inherited from the original version fit the KC10 instances** (they stagnate between
-  1 and 52), are **short for KC20** (46 to 373) and **clearly short for KC30** (550 to 1886, and two of
+  1 and 52), are **short for KC20** (46 to 373) and **clearly short for KC30** (550 to 1984, and two of
   them do not stagnate even in 2000).
 - **`t_stall` does not depend on the cap**: multiplying it by four (500 → 2000) left the KC10 and KC20
   values untouched, so they are the real answer and not an artifact of the budget.
@@ -507,7 +507,7 @@ share of the value it reaches at generation 5000, and the size of the front:
 The useful gain arrives very early — 97 % of the result of 5000 generations by generation 200 on
 KC30-3fl-1rl — and what follows is slow refinement with a front that keeps growing. So for these two the
 number of generations is a decision about the budget, not a measurement. With P = 1024 the same instances
-do stagnate, at 1476 and 1886, because their plateau is lower.
+do stagnate, at 1476 and 1984, because their plateau is lower.
 
 Caveats of the measurement: with 3 objectives and a large population nearly the whole population is
 non-dominated, so those traces were recorded with `--trace-every 10` or `25`, and computing the

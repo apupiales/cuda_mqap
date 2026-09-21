@@ -477,7 +477,7 @@ por ejecución, de modo que ir mucho más lejos es cuestión de horas.
 Lo que dice la campaña:
 
 - **Las 70 generaciones heredadas de la versión original encajan en las instancias KC10** (estancan entre 1
-  y 52), se quedan **cortas en KC20** (46 a 373) y **claramente cortas en KC30** (550 a 1886, y dos de
+  y 52), se quedan **cortas en KC20** (46 a 373) y **claramente cortas en KC30** (550 a 1984, y dos de
   ellas no estancan ni en 2000).
 - **`t_stall` no depende del tope**: multiplicarlo por cuatro (500 → 2000) no movió los valores de KC10 ni
   de KC20, así que son la respuesta real y no un artefacto del presupuesto.
@@ -510,7 +510,7 @@ parada. Hipervolumen como fracción del valor que alcanza en la generación 5000
 La ganancia útil llega muy pronto —el 97 % del resultado de 5000 generaciones en la generación 200 de
 KC30-3fl-1rl— y lo que sigue es refinamiento lento con un frente que no deja de crecer. Para esas dos, el
 número de generaciones es una decisión de presupuesto, no una medición. Con P = 1024 las mismas instancias
-sí estancan, en 1476 y 1886, porque su meseta es más baja.
+sí estancan, en 1476 y 1984, porque su meseta es más baja.
 
 Salvedades de la medición: con 3 objetivos y población grande casi toda la población es no dominada, así
 que esas trazas se grabaron con `--trace-every 10` o `25`, y calcular el hipervolumen de frentes de varios
