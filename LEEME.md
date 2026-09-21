@@ -251,6 +251,18 @@ genes con espacios. Al final se imprime el tiempo de ejecución (`Time Spent`).
 - **`mQAPMetrics/3D_plot-*.js`**: gráficos 3D de los frentes de 3 objetivos con LightningChart JS
   (`npm install @arction/lcjs @arction/xydata`).
 
+**El libro en las ramas reescritas.** La copia de esta rama contiene las cuatro series de 2019 por pestaña
+(NSGA-II, NSGA-II + Greedy 2-opt, población inicial y, en KC10, el frente óptimo publicado). Las ramas que
+reescriben el programa llevan su propia copia, con sus resultados añadidos junto a los originales:
+
+- [`develop_with_claude_opus_5`](https://github.com/apupiales/cuda_mqap/tree/develop_with_claude_opus_5), y las dos ramas de población que salen
+  de ella: una serie **verde** por pestaña, ejecutada con la población y las iteraciones de cada experimento.
+- [`develop_large_population_multiblock`](https://github.com/apupiales/cuda_mqap/tree/develop_large_population_multiblock): además de la verde,
+  una serie **roja** con las mismas iteraciones y la población máxima de esa rama, P = 65536. Alcanza más
+  puntos del frente óptimo publicado en todas las instancias KC10 — 114 de los 130 óptimos de
+  KC10-2fl-3uni frente a 66 de la serie verde, 39 de 49 frente a 26 en KC10-2fl-5rl, y 46 de 58 frente a
+  38 en KC10-2fl-1rl — y su README documenta las ejecuciones y las distancias.
+
 ---
 
 ## Paralelización medida (uso de GPU y CPU)

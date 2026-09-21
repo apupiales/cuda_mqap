@@ -248,6 +248,18 @@ separates the genes with spaces. The execution time is printed at the end (`Time
 - **`mQAPMetrics/3D_plot-*.js`**: 3D plots of the 3-objective fronts with LightningChart JS
   (`npm install @arction/lcjs @arction/xydata`).
 
+**The workbook in the rewritten branches.** The copy in this branch holds the four series of 2019 per tab
+(NSGA-II, NSGA-II + Greedy 2-opt, initial population and, for KC10, the published optimal front). The
+branches that rewrite the program carry their own copy, with their results added next to the originals:
+
+- [`develop_with_claude_opus_5`](https://github.com/apupiales/cuda_mqap/tree/develop_with_claude_opus_5), and the two population branches after
+  it: a **green** series per tab, run with the population and the iterations of each experiment.
+- [`develop_large_population_multiblock`](https://github.com/apupiales/cuda_mqap/tree/develop_large_population_multiblock): besides the green
+  one, a **red** series with the same iterations and the maximum population of that branch, P = 65536. It
+  reaches more of the published optimal front on every KC10 instance — 114 of the 130 optimal points of
+  KC10-2fl-3uni against 66 of the green series, 39 of 49 against 26 on KC10-2fl-5rl, 46 of 58 against 38
+  on KC10-2fl-1rl — and its README documents the runs and the distances.
+
 ---
 
 ## Measured parallelization (GPU and CPU use)
