@@ -43,7 +43,7 @@ struct Solution {
 
 struct RunResult {
     std::vector<Solution> population;  // Final population Pt (P solutions).
-    std::vector<Solution> paretoFront; // Rank 1 solutions of the final population.
+    std::vector<Solution> paretoFront; // Rank 1 solutions of the final population, each one once.
 };
 
 struct SolveStats {
