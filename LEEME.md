@@ -237,6 +237,11 @@ La clave es la permutación, con los genes escritos sin separador, y el valor so
 10 instalaciones la clave es ambigua, porque hay genes de dos dígitos; la salida por consola separa los
 genes con espacios. Al final se imprime el tiempo de ejecución (`Time Spent`).
 
+La población converge, así que normalmente contiene la misma solución varias veces: en una ejecución de
+KC10-2fl-1rl, 64 individuos pero 38 soluciones distintas. **Cada solución distinta se reporta una sola
+vez**, en el fichero y en la consola, conservando su primera posición en la población; ni el algoritmo ni
+la población en sí se modifican.
+
 ---
 
 ## Análisis de resultados

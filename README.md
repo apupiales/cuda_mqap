@@ -234,6 +234,11 @@ The key is the permutation (genes written without separators) and the value, its
 more than 10 facilities the key is ambiguous, because some genes have two digits; the console output
 separates the genes with spaces. The execution time is printed at the end (`Time Spent`).
 
+The population converges, so it normally holds the same solution several times — in a run of
+KC10-2fl-1rl, 64 individuals but 38 distinct solutions. **Each distinct solution is reported once**, in
+the file and on the console, keeping its first position in the population; the algorithm and the
+population itself are untouched.
+
 ---
 
 ## Result analysis

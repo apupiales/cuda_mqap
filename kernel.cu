@@ -2,7 +2,7 @@
  * kernel.cu
  *
  *  Started on: May 19, 2019
- *      Author: Andrés Pupiales Arévalo
+ *      Author: Andrï¿½s Pupiales Arï¿½valo
  *      apupiales@gmail.com
  *      https://github.com/apupiales
  *
@@ -2005,6 +2005,21 @@ int main()
 		fprintf(f, "{\n");
 		printf("\nFINAL SOLUTION\n");
 		for (int i = 0; i < POPULATION_SIZE; i++) {
+			/* The final population converges and usually holds the same solution several times.
+			 * Each distinct solution is reported only once, keeping its first position. */
+			int repeated = 0;
+			for (int k = 0; k < i && !repeated; k++) {
+				repeated = 1;
+				for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
+					if (h_population[i][j] != h_population[k][j]) {
+						repeated = 0;
+						break;
+					}
+				}
+			}
+			if (repeated) {
+				continue;
+			}
 			// Print solution.
 			fprintf(f, "'");
 			for (int j = 0; j < FACILITIES_LOCATIONS; j++) {
