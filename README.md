@@ -443,28 +443,32 @@ time of a generation is known for each P (see [Performance](#performance)), so
 
 #### Results of the campaign (RTX 2060, 2026-09-21)
 
-Two populations, with the cap of `--iterations` raised until the stagnation was observable: P = 1024 with
-30 runs and a cap of 2000 generations, and P = 16384 with 10 runs and a cap of 300 (1500 and 5 runs for
-the 3-objective instances). `t_stall` is the median over the runs, and the coverage is the share of the
-published optimal front found at the end.
+Three populations, with the cap of `--iterations` raised until the stagnation was observable: P = 1024
+with 30 runs and a cap of 2000 generations, P = 16384 with 10 runs and a cap of 300 (1500 and 5 runs for
+the 3-objective instances), and P = 65536 — the maximum of this branch — with 5 runs, a cap of 300 and
+`--trace-every 5`, so its values have a resolution of 5 generations. `t_stall` is the median over the
+runs, and the coverage is the share of the published optimal front found at the end with P = 1024.
 
-| Instance | `t_stall` P = 1024 | `t_stall` P = 16384 | Front stops changing (P = 1024) | Optimal front | Coverage |
-|---|---|---|---|---|---|
-| KC10-2fl-2uni | **1** | **1** | 1 | 30/30 runs at generation 1 | 100 % |
-| KC10-2fl-2rl | **6** | **4.5** | 9 | 30/30 runs at generation 9 | 100 % |
-| KC10-2fl-1uni | **6.5** | **5.5** | 6.5 | never | 92.3 % |
-| KC10-2fl-3rl | **13** | **6.5** | 845 | never | 72.7 % |
-| KC10-2fl-1rl | **14** | **5.5** | 53 | never | 79.3 % |
-| KC10-2fl-4rl | **16.5** | **6** | 320 | never | 73.6 % |
-| KC10-2fl-5rl | **29** | **20** | 1054 | never | 78.6 % |
-| KC10-2fl-3uni | **52** | **22.5** | 1182 | never | 86.3 % |
-| KC20-2fl-2uni | **46.5** | **28.5** | 65 | — | — |
-| KC20-2fl-1rl | **98** | **55.5** | 1817 | — | — |
-| KC20-2fl-1uni | **185** | **100** | 1892 | — | — |
-| KC20-2fl-3uni | **373** | **144** | 1987 | — | — |
-| KC30-3fl-2uni | **550** | **360** | ~cap | — | — |
-| KC30-3fl-1rl | **1476** | > 5000 | ~cap | — | — |
-| KC30-3fl-1uni | **1886** | > 5000 | ~cap | — | — |
+| Instance | `t_stall` P = 1024 | P = 16384 | P = 65536 | Front stops changing (P = 1024) | Optimal front | Coverage |
+|---|---|---|---|---|---|---|
+| KC10-2fl-2uni | **1** | **1** | ≤ 5 | 1 | 30/30 runs at generation 1 | 100 % |
+| KC10-2fl-2rl | **6** | **4.5** | **5** | 9 | 30/30 runs at generation 9 | 100 % |
+| KC10-2fl-1uni | **6.5** | **5.5** | **10** | 6.5 | never | 92.3 % |
+| KC10-2fl-3rl | **13** | **6.5** | **10** | 845 | never | 72.7 % |
+| KC10-2fl-1rl | **14** | **5.5** | **10** | 53 | never | 79.3 % |
+| KC10-2fl-4rl | **16.5** | **6** | **10** | 320 | never | 73.6 % |
+| KC10-2fl-5rl | **29** | **20** | **10** | 1054 | never | 78.6 % |
+| KC10-2fl-3uni | **52** | **22.5** | **10** | 1182 | never | 86.3 % |
+| KC20-2fl-2uni | **46.5** | **28.5** | **40** | 65 | — | — |
+| KC20-2fl-1rl | **98** | **55.5** | **45** | 1817 | — | — |
+| KC20-2fl-1uni | **185** | **100** | **80** | 1892 | — | — |
+| KC20-2fl-3uni | **373** | **144** | **170** | 1987 | — | — |
+| KC30-3fl-2uni | **550** | **360** | not measured | ~cap | — | — |
+| KC30-3fl-1rl | **1476** | > 5000 | not measured | ~cap | — | — |
+| KC30-3fl-1uni | **1886** | > 5000 | not measured | ~cap | — | — |
+
+The 3-objective instances were not run with P = 65536: at that size a generation of KC30 costs about
+280 ms, and they need thousands of them, so the campaign would take hours per instance.
 
 What the campaign says:
 
@@ -478,14 +482,16 @@ What the campaign says:
   `t_stall`.
 - **More generations buy almost nothing.** Going from 500 to 2000 generations moved the coverage by 0.0 to
   3.8 points.
-- **More population halves the generations, but does not pay for itself in time.** Sixteen times the
-  population cuts `t_stall` by 1.5× to 2.5×, while a generation costs about 31 times more (0.25 ms against
-  7.8 ms per run and generation on KC10), so P = 1024 reaches its plateau about twelve times cheaper.
+- **More population cuts the generations, but does not pay for itself in time.** The KC10 instances
+  stagnate at 10 generations or fewer with P = 65536, against 1 to 52 with P = 1024, but a generation
+  costs 86 ms instead of 0.25 ms per run. Reaching the plateau of KC10-2fl-1rl takes 3.5 ms per run with
+  P = 1024 and 860 ms with P = 65536: about 245 times more for the same 79.3 % of the optimal front.
 - **There is a coverage ceiling that neither the population nor the generations break**: KC10-2fl-1rl
-  stays at 79.3 % with P = 1024, with P = 16384 and, as the workbook shows, also with P = 65536 (46 of its
-  58 optimal points). The population does decide in the low range — from P = 64 (38 of 58) to P = 1024 —
-  and flattens after that. What is left is the algorithm: this combination of NSGA-II and greedy 2-opt
-  converges to a subset of the optimal front.
+  stays at 79.3 % with P = 1024, with P = 16384 and with P = 65536 (46 of its 58 optimal points). Sixty-four
+  times the population moves the other instances by less than three points (KC10-2fl-5rl 78.6 % → 81.2 %,
+  KC10-2fl-3uni 86.3 % → 87.4 %, KC10-2fl-4rl 73.6 % → 74.3 %). The population does decide in the low
+  range — from P = 64 (38 of 58) to P = 1024 — and flattens after that. What is left is the algorithm:
+  this combination of NSGA-II and greedy 2-opt converges to a subset of the optimal front.
 
 **The two 3-objective instances marked `> 5000` never stagnate at P = 16384.** A run with that cap
 (5 runs, `--trace-every 25`, 16 minutes each) shows an asymptote instead of a stop. Hypervolume as a
