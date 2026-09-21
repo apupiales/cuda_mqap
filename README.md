@@ -462,8 +462,30 @@ The KC20 instances have no published front; their red series have 86, 68, 8 and 
 the fitness written by the program, and each front is non-dominated.
 
 Times on the RTX 2060: 6.6–6.8 s per KC10 tab of 70 generations and 38–39 s per KC20 tab of 300, 201 s for
-the twelve. The *Distance Metric* tab is **not** changed: its figures average 100 runs of the green series,
-while the red one is a single run per instance.
+the twelve.
+
+**Distance Metric.** Columns H and I of the first table (mean and standard deviation) and column I of the
+second one hold the gamma distance of this population, measured with the same protocol as the green
+columns: **100 runs per KC10 instance** with the iterations of its tab, `--seed 20260921`, and the distance
+computed exactly like `mQAPMetrics/distance_metric_*.js` (per run, the average over its unique permutations
+of the distance to the closest point of the `.PO` front; then mean and standard deviation over the runs).
+The note in A11 records the command. Mean / standard deviation, green against red:
+
+| Instance | Green (population of the tab) | Red (P = 65536) |
+|---|---|---|
+| KC10-2fl-1rl | 850.56 / 656.20 | 557.92 / 56.58 |
+| KC10-2fl-1uni | 192.02 / 342.12 | 0.00 / 0.00 |
+| KC10-2fl-2rl | 10,941.55 / 7,430.27 | 0.00 / 0.00 |
+| KC10-2fl-2uni | 532.56 / 1,806.81 | 0.00 / 0.00 |
+| KC10-2fl-3rl | 20,531.69 / 2,896.06 | 16,132.53 / 2,893.64 |
+| KC10-2fl-3uni | 376.23 / 77.04 | 12.51 / 5.86 |
+| KC10-2fl-4rl | 7,515.98 / 2,082.63 | 3,001.91 / 1,277.88 |
+| KC10-2fl-5rl | 26,891.28 / 10,070.77 | 3,409.13 / 921.20 |
+
+A gamma of 0.00 means that **every solution found in every one of the 100 runs sits exactly on the
+published optimal front** — not that the whole front was found: the red series of KC10-2fl-1uni holds 12 of
+its 13 points. The run drawn in the charts is a separate single run, with seed 20260920; this table
+compares the 100-run batches.
 
 **Quality versus the original Greedy 2-opt.** The results are mixed:
 

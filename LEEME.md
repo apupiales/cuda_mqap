@@ -463,8 +463,30 @@ Las instancias KC20 no tienen frente publicado; sus series rojas tienen 86, 68, 
 con el fitness que escribió el programa, y cada frente es no dominado.
 
 Tiempos en la RTX 2060: 6,6–6,8 s por pestaña KC10 de 70 generaciones y 38–39 s por pestaña KC20 de 300;
-201 s las doce. La pestaña *Distance Metric* **no** se modifica: sus cifras promedian 100 ejecuciones de la
-serie verde, mientras que la roja es una única ejecución por instancia.
+201 s las doce.
+
+**Distance Metric.** Las columnas H e I de la primera tabla (media y desviación típica) y la columna I de
+la segunda contienen la distancia gama de esta población, medida con el mismo protocolo que las columnas
+verdes: **100 ejecuciones por instancia KC10** con las iteraciones de su pestaña, `--seed 20260921`, y la
+distancia calculada igual que `mQAPMetrics/distance_metric_*.js` (por ejecución, la media sobre sus
+permutaciones únicas de la distancia al punto más cercano del frente `.PO`; después, media y desviación
+típica entre ejecuciones). La nota de A11 recoge el comando. Media / desviación típica, verde frente a roja:
+
+| Instancia | Verde (población de la pestaña) | Roja (P = 65536) |
+|---|---|---|
+| KC10-2fl-1rl | 850,56 / 656,20 | 557,92 / 56,58 |
+| KC10-2fl-1uni | 192,02 / 342,12 | 0,00 / 0,00 |
+| KC10-2fl-2rl | 10.941,55 / 7.430,27 | 0,00 / 0,00 |
+| KC10-2fl-2uni | 532,56 / 1.806,81 | 0,00 / 0,00 |
+| KC10-2fl-3rl | 20.531,69 / 2.896,06 | 16.132,53 / 2.893,64 |
+| KC10-2fl-3uni | 376,23 / 77,04 | 12,51 / 5,86 |
+| KC10-2fl-4rl | 7.515,98 / 2.082,63 | 3.001,91 / 1.277,88 |
+| KC10-2fl-5rl | 26.891,28 / 10.070,77 | 3.409,13 / 921,20 |
+
+Una gama de 0,00 significa que **todas las soluciones encontradas en cada una de las 100 ejecuciones están
+exactamente sobre el frente óptimo publicado**, no que se haya encontrado el frente entero: la serie roja
+de KC10-2fl-1uni tiene 12 de sus 13 puntos. La ejecución que se dibuja en los gráficos es una ejecución
+única aparte, con semilla 20260920; esta tabla compara los lotes de 100 ejecuciones.
 
 **Calidad frente al Greedy 2-opt original.** Los resultados son mixtos:
 
