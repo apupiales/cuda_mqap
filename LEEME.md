@@ -432,6 +432,40 @@ El 2026-09-19 se añadieron a `comparative_results_kcX_datasets.xlsx` los result
   distancia gama de esta versión sobre 100 ejecuciones por instancia KC10. Se calcula igual que
   `mQAPMetrics/distance_metric_*.js` y se trunca a 2 decimales, como los valores existentes.
 
+**Población máxima de la rama (2026-09-21).** Los mismos 12 experimentos se repitieron con
+`--population 65536`, el tope de esta rama, manteniendo las iteraciones de cada pestaña (70, 30 o 25 en
+KC10; 300 en KC20), una ejecución, semilla 20260920 y `--verify` OK. Cada pestaña tiene un segundo bloque
+nuevo y una serie **roja** en su gráfico: *"CUDA NSGA-II Paralelo + Greedy 2opt, N iteraciones (optimizado
+con claude, poblacion 65536)"*.
+
+Con esa población toda la población final es no dominada, así que el frente que escribe el programa tiene
+65 536 filas, de las cuales solo entre 1 y 212 son soluciones distintas; el bloque y la serie guardan las
+distintas, porque las repeticiones dibujarían los mismos puntos. La nota bajo cada bloque recoge el
+comando, la semilla, el número de puntos distintos y el tiempo de la ejecución.
+
+Calidad frente al frente óptimo publicado (`.PO`), junto a la serie verde de la misma rama. *Encontrados*
+cuenta cuántos puntos del óptimo reproduce exactamente la ejecución; la gama es la distancia calculada
+igual que `mQAPMetrics/distance_metric_*.js` (menor es mejor):
+
+| Instancia | Puntos `.PO` | Verde: encontrados | Verde: gama | Roja: encontrados | Roja: gama |
+|---|---|---|---|---|---|
+| KC10-2fl-1rl | 58 | 38 | 685,46 | **46** | **568,78** |
+| KC10-2fl-1uni | 13 | 7 | 241,93 | **12** | **0,00** |
+| KC10-2fl-2rl | 15 | 12 | 0,00 | **15** | 0,00 |
+| KC10-2fl-2uni | 1 | 1 | 0,00 | 1 | 0,00 |
+| KC10-2fl-3rl | 55 | 28 | 24 466,49 | **40** | **17 757,94** |
+| KC10-2fl-3uni | 130 | 66 | 420,75 | **114** | **11,47** |
+| KC10-2fl-4rl | 53 | 29 | 7992,15 | **40** | **3793,44** |
+| KC10-2fl-5rl | 49 | 26 | 24 552,85 | **39** | **2629,05** |
+
+Las instancias KC20 no tienen frente publicado; sus series rojas tienen 86, 68, 8 y 212 puntos distintos
+(1rl, 1uni, 2uni y 3uni). Cada permutación graficada se comprobó en el host: su coste recalculado coincide
+con el fitness que escribió el programa, y cada frente es no dominado.
+
+Tiempos en la RTX 2060: 6,6–6,8 s por pestaña KC10 de 70 generaciones y 38–39 s por pestaña KC20 de 300;
+201 s las doce. La pestaña *Distance Metric* **no** se modifica: sus cifras promedian 100 ejecuciones de la
+serie verde, mientras que la roja es una única ejecución por instancia.
+
 **Calidad frente al Greedy 2-opt original.** Los resultados son mixtos:
 
 | Instancia | Métrica | Original | Esta versión |
@@ -667,6 +701,10 @@ porcentaje es la fracción media del frente óptimo encontrada por ejecución.
 La fracción del frente óptimo encontrada crece con P en todas las instancias, y la distancia gama baja. El
 tiempo de GPU del lote completo (100 ejecuciones) crece aproximadamente de forma lineal con P: 0,6 s con
 P = 512 y 6,1 s con P = 4096 en KC10-2fl-1rl.
+
+La serie roja de `comparative_results_kcX_datasets.xlsx` muestra el mismo efecto con el tope de la rama,
+P = 65536, en las doce instancias del libro: ver
+[Resultados en el libro de Excel](#resultados-en-el-libro-de-excel).
 
 ### Cómo calcular el límite en otra GPU
 

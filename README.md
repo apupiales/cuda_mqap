@@ -431,6 +431,40 @@ On 2026-09-19 the results of this version were added to `comparative_results_kcX
   gamma distance of this version over 100 runs per KC10 instance. It is computed exactly like
   `mQAPMetrics/distance_metric_*.js` and truncated to 2 decimals, like the existing values.
 
+**Maximum population of the branch (2026-09-21).** The same 12 experiments were run again with
+`--population 65536`, the cap of this branch, keeping the iterations of each tab (70, 30 or 25 on KC10;
+300 on KC20), one run, seed 20260920 and `--verify` OK. Every tab has a second new block and a **red**
+series in its chart: *"CUDA NSGA-II Paralelo + Greedy 2opt, N iteraciones (optimizado con claude,
+poblacion 65536)"*.
+
+With that population the whole final population is non-dominated, so the front the program writes has
+65,536 rows, of which only 1 to 212 are distinct solutions; the block and the series keep the distinct
+ones, since the repetitions would draw the same points. The note under each block records the command, the
+seed, the number of distinct points and the time of the run.
+
+Quality against the published optimal front (`.PO`), next to the green series of the same branch. *Found*
+counts how many of the optimal points the run reproduces exactly; gamma is the distance computed like
+`mQAPMetrics/distance_metric_*.js` (lower is better):
+
+| Instance | `.PO` points | Green: found | Green: gamma | Red: found | Red: gamma |
+|---|---|---|---|---|---|
+| KC10-2fl-1rl | 58 | 38 | 685.46 | **46** | **568.78** |
+| KC10-2fl-1uni | 13 | 7 | 241.93 | **12** | **0.00** |
+| KC10-2fl-2rl | 15 | 12 | 0.00 | **15** | 0.00 |
+| KC10-2fl-2uni | 1 | 1 | 0.00 | 1 | 0.00 |
+| KC10-2fl-3rl | 55 | 28 | 24,466.49 | **40** | **17,757.94** |
+| KC10-2fl-3uni | 130 | 66 | 420.75 | **114** | **11.47** |
+| KC10-2fl-4rl | 53 | 29 | 7,992.15 | **40** | **3,793.44** |
+| KC10-2fl-5rl | 49 | 26 | 24,552.85 | **39** | **2,629.05** |
+
+The KC20 instances have no published front; their red series have 86, 68, 8 and 212 distinct points
+(1rl, 1uni, 2uni and 3uni). Every plotted permutation was checked on the host: its recomputed cost matches
+the fitness written by the program, and each front is non-dominated.
+
+Times on the RTX 2060: 6.6–6.8 s per KC10 tab of 70 generations and 38–39 s per KC20 tab of 300, 201 s for
+the twelve. The *Distance Metric* tab is **not** changed: its figures average 100 runs of the green series,
+while the red one is a single run per instance.
+
 **Quality versus the original Greedy 2-opt.** The results are mixed:
 
 | Instance | Metric | Original | This version |
@@ -661,6 +695,10 @@ the average share of the optimal front found per run.
 The share of the optimal front found grows with P on every instance, and the gamma distance drops. The GPU
 time of the whole batch (100 runs) grows roughly linearly with P: 0.6 s with P = 512 and 6.1 s with
 P = 4096 on KC10-2fl-1rl.
+
+The red series of `comparative_results_kcX_datasets.xlsx` shows the same effect at the cap of the branch,
+P = 65536, on the twelve instances of the workbook: see
+[Results in the Excel workbook](#results-in-the-excel-workbook).
 
 ### How to compute the limit for another GPU
 
