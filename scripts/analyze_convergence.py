@@ -91,7 +91,9 @@ def hypervolume_3d(points, reference):
     for i, point in enumerate(ordered):
         front = insert_2d(front, (point[0], point[1]))
         low = point[2]
-        high = ordered[i + 1][2] if i + 1 < len(ordered) else reference[2]
+        # The slab must stop at the reference: a point worse than it in the third objective would
+        # otherwise stretch the previous slab and inflate the volume.
+        high = min(ordered[i + 1][2] if i + 1 < len(ordered) else reference[2], reference[2])
         if high <= low or low >= reference[2]:
             continue
         total += hypervolume_2d(front, (reference[0], reference[1])) * (high - low)
@@ -116,6 +118,12 @@ def self_test():
     assert hypervolume([(1, 1, 1)], (2, 2, 2)) == 1.0
     assert hypervolume([(0, 1, 1), (1, 0, 1)], (2, 2, 2)) == 3.0
     assert hypervolume([(0, 0, 0), (1, 1, 1)], (2, 2, 2)) == 8.0
+    # A point outside the reference in one objective must not add anything, and must not stretch the
+    # slab of the point before it.
+    assert hypervolume([(0, 0, 0), (1, 1, 5)], (2, 2, 2)) == 8.0
+    assert hypervolume([(1, 1, 5)], (2, 2, 2)) == 0.0
+    # Covering a set can never lower the volume, which is what makes the curve usable.
+    assert hypervolume([(0, 1, 1), (1, 0, 1)], (2, 2, 2)) <= hypervolume([(0, 0, 1), (1, 0, 1)], (2, 2, 2))
 
 
 # --------------------------------------------------------------------------- data
