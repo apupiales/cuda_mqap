@@ -27,9 +27,10 @@ las instancias en tiempo de ejecución, incluyen pruebas, corrigen los
 8. [Configuración](#configuración)
 9. [Salida](#salida)
 10. [Análisis de resultados](#análisis-de-resultados)
-11. [Problemas conocidos del código original](#problemas-conocidos-del-código-original)
-12. [Créditos y citas](#créditos-y-citas)
-13. [Licencia](#licencia)
+11. [Paralelización medida (uso de GPU y CPU)](#paralelización-medida-uso-de-gpu-y-cpu)
+12. [Problemas conocidos del código original](#problemas-conocidos-del-código-original)
+13. [Créditos y citas](#créditos-y-citas)
+14. [Licencia](#licencia)
 
 ---
 
@@ -130,6 +131,7 @@ F0 = 228322 y F1 = 193446 para una permutación fija de KC10).
 | `settings_KC*_*fl_*.cu` | Un fichero por instancia: tamaños, población, iteraciones, probabilidades de mutación y las matrices de la instancia en memoria `__constant__` |
 | `mQAPData/` | Instancias (`.dat`), frentes de Pareto óptimos (`.PO`) y su procedencia (`README.txt`) |
 | `mQAPMetrics/` | Scripts de Node.js: métrica de distancia y gráficos 3D |
+| `benchmarks/` | Medición del uso de GPU y CPU de las cuatro versiones (ver [Paralelización medida](#paralelización-medida-uso-de-gpu-y-cpu)) |
 | `comparative_results_kcX_datasets.xlsx` | Resultados comparativos de las instancias |
 | `cuda_mqap.slnx`, `cuda_mqap.vcxproj` | Solución y proyecto de Visual Studio |
 | `cuda_mqap.props`, `cuda_toolkit.props` | Configuración del proyecto y detección de la versión de CUDA instalada |
@@ -248,6 +250,122 @@ genes con espacios. Al final se imprime el tiempo de ejecución (`Time Spent`).
   NSGA-II + Greedy 2-opt. Se ejecutan con `node distance_metric_<instancia>.js`.
 - **`mQAPMetrics/3D_plot-*.js`**: gráficos 3D de los frentes de 3 objetivos con LightningChart JS
   (`npm install @arction/lcjs @arction/xydata`).
+
+---
+
+## Paralelización medida (uso de GPU y CPU)
+
+Uno de los objetivos del proyecto es aprovechar al máximo la GPU. Esta sección mide cuánto la usa
+realmente cada versión, con la misma carga de trabajo: la implementación original de esta rama y las tres
+ramas que la reescriben (ver [Ramas del repositorio](#ramas-del-repositorio)). Todas las cifras las produce
+`benchmarks/run_comparison.ps1`, así que la medición se puede repetir.
+
+### Metodología
+
+- **La misma carga para las cuatro versiones**: la instancia, la población y el número de generaciones que
+  `kernel.cu` trae compilados — KC10-2fl-1rl, P = 64, 70 generaciones, una ejecución. El script los lee del
+  `settings_*.cu` activo, de modo que cambiar allí la instancia cambia toda la comparación.
+- **Dos ejecuciones por versión**: una limpia, que da el tiempo de pared y la CPU consumida por el proceso
+  (`System.Diagnostics.Process`), y otra bajo Nsight Systems (`nsys profile --trace=cuda`), que da la traza
+  CUDA de la que sale todo lo demás.
+- **Ventana activa**: desde el inicio del primer kernel hasta el final del último. Los porcentajes se
+  calculan sobre esta ventana, para que el coste fijo de arrancar el proceso y crear el contexto CUDA
+  (unos 100 ms, igual en todas las versiones) no distorsione la comparación.
+- **GPU calculando**: fracción de la ventana en la que hay algún kernel ejecutándose. Es la parte paralela
+  del algoritmo en el sentido de la ley de Amdahl; el resto de la ventana es la GPU esperando al host.
+- **Ocupación**: media temporal de las ranuras de hilo en uso, `Σ min(hilos, ranuras) × duración` dividido
+  entre `ventana × ranuras`, con `ranuras = SM × hilos por SM` (30 × 1024 = 30 720 en la RTX 2060 usada).
+  No es la ocupación por SM que informa Nsight Compute; responde a una pregunta más simple: cómo de llena
+  estuvo la GPU en promedio.
+- **Hilos útiles**: fracción de los hilos lanzados que pasan la guarda de su kernel. Importa en el
+  original, que lanza bloques de `dim3(32, 32)` = 1024 hilos para multiplicar matrices de
+  n × n = 10 × 10, así que solo 100 de cada 1024 hilos hacen trabajo.
+- Medido en una RTX 2060 (6 GB, 30 SM, sm_75), CUDA 13.4, Windows 11; las cuatro versiones compiladas con
+  `-O3 -arch=sm_75 -std=c++17`.
+
+### Misma carga: KC10-2fl-1rl, P = 64, 70 generaciones
+
+| Métrica | Original (esta rama) | Optimizada | p512 | multibloque |
+|---|---|---|---|---|
+| Tiempo de pared (sin profiler) | 3,706 s | 0,171 s | 0,138 s | 0,143 s |
+| CPU consumida por el proceso | 3,688 s (100 % de un núcleo) | 0,156 s | 0,109 s | 0,109 s |
+| Ventana activa del algoritmo | 4807 ms | 9,8 ms | 9,9 ms | 10,9 ms |
+| **GPU calculando (kernels / ventana)** | **6,5 %** | **57,8 %** | **64,3 %** | **60,0 %** |
+| Transferencias host ↔ dispositivo | 4,71 % | 0,08 % | 0,08 % | 0,07 % |
+| GPU ociosa, esperando al host | 88,8 % | 42,2 % | 35,6 % | 39,9 % |
+| Lanzamientos de kernel | 87 417 (1249/gen.) | 214 (3/gen.) | 214 | 214 |
+| `cudaMemcpy` | 80 539 (1151/gen.) | 6 | 6 | 6 |
+| `cudaDeviceSynchronize` | 68 334 (976/gen.) | 2 | 2 | 2 |
+| Ocupación media de las ranuras de hilo | 4,6 % (2,0 % útil) | 2,4 % | 2,8 % | 2,7 % |
+| Hilos útiles / hilos lanzados | 10,0 % | 100 % | 100 % | 100 % |
+| Trabajo ejecutado (hilo·segundo) | 28 283 | 7,4 | 8,6 | 9,2 |
+
+### Hasta dónde llena la GPU cada versión
+
+| Versión y población | GPU calculando | Ocupación media de la GPU | Ventana |
+|---|---|---|---|
+| Original, P = 64 | 6,5 % | 4,6 % (2,0 % útil) | 4807 ms |
+| Optimizada, P = 64 | 57,8 % | 2,4 % | 9,8 ms |
+| Optimizada, P = 256 (su tope) | 85,2 % | 6,1 % | 28,4 ms |
+| p512, P = 512 (su tope) | 86,6 % | 17,5 % | 32,7 ms |
+| multibloque, P = 4096 | 93,1 % | 37,7 % | 162 ms |
+| multibloque, P = 65536 (su tope) | 99,9 % | 94,2 % | 6779 ms |
+
+### Lectura de los resultados
+
+**«Qué porcentaje del algoritmo está paralelizado» no es lo que separa a las versiones.** El original ya
+tiene casi todas las fases en kernels: el fitness, la matriz de dominancia, el rango, el crowding, el
+torneo binario, las mutaciones y la aceptación del 2-opt son funciones `__global__`. Lo que queda en el
+host es la *orquestación*: los bucles del greedy 2-opt y el pelado de los frentes de Pareto se ejecutan en
+la CPU lanzando un kernel por paso. Por eso los ejes útiles son los otros dos.
+
+**Paralelización efectiva (ley de Amdahl, medida): 6,5 % → 99,9 %.** En el original la GPU está parada
+alrededor del 88 % del tiempo, porque hay 976 sincronizaciones y 1151 copias por generación: cada paso del
+2-opt recalcula el fitness de toda la población con tres productos de matrices densas, copia el resultado
+al host y sincroniza. La reescritura deja 3 lanzamientos y 0 sincronizaciones por generación, con todo el
+NSGA-II dentro de la GPU.
+
+**Aprovechamiento de la GPU: 2,0 % → 94,2 %.** El 4,6 % del original es aparente: solo el 10 % de los hilos
+que lanza pasa la guarda, así que la ocupación útil es del 2,0 %, y ejecuta 28 283 hilo·segundo frente a
+7,4 de la versión reescrita, unas 3800 veces más trabajo para el mismo resultado.
+
+**Con P = 64 el límite ya no es la GPU, sino el tamaño del problema.** Incluso en las versiones reescritas
+la GPU queda casi vacía (2,4 %): 64 individuos no llenan 30 720 ranuras de hilo. Para eso están las ramas
+de población grande: `p512` llega al 17,5 % con P = 512, y `multibloque` al 37,7 % con P = 4096 y al 94,2 %
+con P = 65536, donde el programa pasa por fin a estar limitado por cómputo (99,9 % de la ventana con la GPU
+calculando, y la CPU baja al 35 % del tiempo de pared, esperando dentro de `cudaDeviceSynchronize`).
+
+### Cómo repetir la medición
+
+Hace falta Visual Studio, el CUDA Toolkit (que incluye `nsys`) y Python. Desde un clon del repositorio:
+
+```
+git worktree add ../cuda_mqap_opt        develop_with_claude_opus_5
+git worktree add ../cuda_mqap_p512       develop_p512_single_block
+git worktree add ../cuda_mqap_multiblock develop_large_population_multiblock
+
+powershell -ExecutionPolicy Bypass -File benchmarks\run_comparison.ps1
+```
+
+Compila las cuatro versiones, ejecuta los ocho casos dos veces cada uno e imprime las tablas anteriores.
+Usa `-Optimized`, `-P512` y `-Multiblock` si los otros árboles de código están en otro sitio, `-Arch` para
+una GPU que no sea Turing y `-SkipBuild` para reutilizar los binarios. Los binarios, las trazas
+`.nsys-rep` y los informes CSV quedan en `benchmarks/results/` (ignorado por git). `benchmarks/analyze.py`
+se puede volver a ejecutar por separado sobre un directorio de resultados ya existente; `SMS` y
+`THREADS_PER_SM`, al principio de ese fichero, describen la GPU y deben coincidir con la usada.
+
+### Salvedades
+
+- Las tres ramas reescritas comparten los mismos kernels hasta P = 256, por eso sus cifras con P = 64 son
+  iguales; solo se diferencian por encima de ese tamaño.
+- Los porcentajes salen de la ejecución perfilada. Nsight Systems añade coste por lanzamiento, lo que
+  penaliza a los 87 417 lanzamientos del original: medida sobre su tiempo de pared limpio, su fracción de
+  GPU calculando es del 8,4 % en lugar del 6,5 %.
+- Una ejecución por caso. Repetir la medición completa mueve unos puntos los casos cortos (las dos
+  ejecuciones realizadas difieren hasta en 4 puntos con P = 64), así que las cifras pequeñas son órdenes
+  de magnitud, no valores exactos.
+- La ocupación de arriba es una aproximación calculada a partir de la geometría de los lanzamientos, no la
+  ocupación alcanzada por SM que mide Nsight Compute.
 
 ---
 

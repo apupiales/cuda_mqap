@@ -64,9 +64,12 @@ x64/
 # Build output
 build/
 
-# Result file written by the program (working directory = repository root)
-result_KCX_Yfl_Z_nsga2_greedy_2opt.txt
+# Result files written by the program (working directory = repository root)
+result_*_nsga2_greedy_2opt.txt
 test_nsga2_g2opt.txt
 
 # Excel lock files (workbook open)
 ~$*
+
+# Benchmark output (binaries, nsys traces and CSV reports)
+benchmarks/results/
