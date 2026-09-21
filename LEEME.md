@@ -465,12 +465,14 @@ final con P = 1024.
 | KC20-2fl-1rl | **98** | **55,5** | **45** | 1817 | — | — |
 | KC20-2fl-1uni | **185** | **100** | **80** | 1892 | — | — |
 | KC20-2fl-3uni | **373** | **144** | **170** | 1987 | — | — |
-| KC30-3fl-2uni | **550** | **360** | sin medir | ~tope | — | — |
-| KC30-3fl-1rl | **1476** | > 5000 | sin medir | ~tope | — | — |
-| KC30-3fl-1uni | **1886** | > 5000 | sin medir | ~tope | — | — |
+| KC30-3fl-2uni | **550** | **360** | > 1000 | ~tope | — | — |
+| KC30-3fl-1rl | **1476** | > 5000 | > 1000 | ~tope | — | — |
+| KC30-3fl-1uni | **1984** | > 5000 | > 1000 | ~tope | — | — |
 
-Las instancias de 3 objetivos no se ejecutaron con P = 65536: a ese tamaño una generación de KC30 cuesta
-unos 280 ms y necesitan miles, así que la campaña serían horas por instancia.
+Las instancias de 3 objetivos también se ejecutaron con P = 65536 (5 ejecuciones, tope 1000,
+`--trace-every 20`, 19 minutos cada una): ninguna de las tres se estanca dentro de ese presupuesto, así
+que su columna solo indica el tope que se les dio. A ese tamaño una generación de KC30 cuesta unos 280 ms
+por ejecución, de modo que ir mucho más lejos es cuestión de horas.
 
 Lo que dice la campaña:
 
@@ -503,7 +505,7 @@ parada. Hipervolumen como fracción del valor que alcanza en la generación 5000
 | Generación | 200 | 400 | 800 | 1600 | 2400 | 4000 | 5000 |
 |---|---|---|---|---|---|---|---|
 | KC30-3fl-1rl | 97,0 % · 2252 puntos | 97,7 % · 3156 | 98,6 % · 4243 | 99,2 % · 5567 | 99,5 % · 6323 | 99,9 % · 7444 | 100 % · 7855 |
-| KC30-3fl-1uni | sin muestra | 95,6 % · 931 puntos | 97,2 % · 1332 | 98,5 % · 1716 | 99,2 % · 1956 | 99,8 % · 2187 | 100 % · 2306 |
+| KC30-3fl-1uni | 90,3 % · 538 puntos | 96,0 % · 931 | 97,6 % · 1291 | 98,8 % · 1705 | 99,4 % · 1842 | 99,8 % · 2121 | 100 % · 2189 |
 
 La ganancia útil llega muy pronto —el 97 % del resultado de 5000 generaciones en la generación 200 de
 KC30-3fl-1rl— y lo que sigue es refinamiento lento con un frente que no deja de crecer. Para esas dos, el

@@ -463,12 +463,14 @@ runs, and the coverage is the share of the published optimal front found at the 
 | KC20-2fl-1rl | **98** | **55.5** | **45** | 1817 | — | — |
 | KC20-2fl-1uni | **185** | **100** | **80** | 1892 | — | — |
 | KC20-2fl-3uni | **373** | **144** | **170** | 1987 | — | — |
-| KC30-3fl-2uni | **550** | **360** | not measured | ~cap | — | — |
-| KC30-3fl-1rl | **1476** | > 5000 | not measured | ~cap | — | — |
-| KC30-3fl-1uni | **1886** | > 5000 | not measured | ~cap | — | — |
+| KC30-3fl-2uni | **550** | **360** | > 1000 | ~cap | — | — |
+| KC30-3fl-1rl | **1476** | > 5000 | > 1000 | ~cap | — | — |
+| KC30-3fl-1uni | **1984** | > 5000 | > 1000 | ~cap | — | — |
 
-The 3-objective instances were not run with P = 65536: at that size a generation of KC30 costs about
-280 ms, and they need thousands of them, so the campaign would take hours per instance.
+The 3-objective instances were also run with P = 65536 (5 runs, cap 1000, `--trace-every 20`, 19 minutes
+each): none of the three stagnates within that budget, so their column only says the cap they were given.
+At that size a generation of KC30 costs about 280 ms per run, so going much further is a matter of
+hours.
 
 What the campaign says:
 
@@ -500,7 +502,7 @@ share of the value it reaches at generation 5000, and the size of the front:
 | Generation | 200 | 400 | 800 | 1600 | 2400 | 4000 | 5000 |
 |---|---|---|---|---|---|---|---|
 | KC30-3fl-1rl | 97.0 % · 2252 points | 97.7 % · 3156 | 98.6 % · 4243 | 99.2 % · 5567 | 99.5 % · 6323 | 99.9 % · 7444 | 100 % · 7855 |
-| KC30-3fl-1uni | not sampled | 95.6 % · 931 points | 97.2 % · 1332 | 98.5 % · 1716 | 99.2 % · 1956 | 99.8 % · 2187 | 100 % · 2306 |
+| KC30-3fl-1uni | 90.3 % · 538 points | 96.0 % · 931 | 97.6 % · 1291 | 98.8 % · 1705 | 99.4 % · 1842 | 99.8 % · 2121 | 100 % · 2189 |
 
 The useful gain arrives very early — 97 % of the result of 5000 generations by generation 200 on
 KC30-3fl-1rl — and what follows is slow refinement with a front that keeps growing. So for these two the
