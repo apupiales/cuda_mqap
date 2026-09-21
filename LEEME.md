@@ -464,8 +464,8 @@ cobertura es la fracción del frente óptimo publicado encontrada al final.
 | KC20-2fl-1uni | **185** | **100** | 1892 | — | — |
 | KC20-2fl-3uni | **373** | **144** | 1987 | — | — |
 | KC30-3fl-2uni | **550** | **360** | ~tope | — | — |
-| KC30-3fl-1rl | **1476** | > 1500 | ~tope | — | — |
-| KC30-3fl-1uni | **1886** | > 1500 | ~tope | — | — |
+| KC30-3fl-1rl | **1476** | > 5000 | ~tope | — | — |
+| KC30-3fl-1uni | **1886** | > 5000 | ~tope | — | — |
 
 Lo que dice la campaña:
 
@@ -489,10 +489,19 @@ Lo que dice la campaña:
   ahí se aplana. Lo que queda es el algoritmo: esta combinación de NSGA-II con el greedy 2-opt converge a
   un subconjunto del frente óptimo.
 
+**Las dos instancias de 3 objetivos marcadas `> 5000` no se estancan con P = 16384.** Una ejecución con
+ese tope (5 ejecuciones, `--trace-every 25`, 16 minutos cada una) muestra una asíntota en lugar de una
+parada: KC30-3fl-1uni está al 95,6 % de su hipervolumen final en la generación 400 y al 99 % en la 2400, y
+su frente sigue creciendo en la 5000 (2306 puntos distintos); KC30-3fl-1rl llega al 99,9 % en la 4250 y
+termina con 7702 puntos. Para esas dos, el número de generaciones es una decisión de presupuesto, no una
+medición: cada millar adicional sigue aportando algo. Con P = 1024 las mismas instancias sí estancan, en
+1476 y 1886, porque su meseta es más baja.
+
 Salvedades de la medición: con 3 objetivos y población grande casi toda la población es no dominada, así
-que esas trazas se grabaron con `--trace-every 10` y su hipervolumen se muestrea cada 60 a 480
+que esas trazas se grabaron con `--trace-every 10` o `25` y su hipervolumen se muestrea cada 60 a 1000
 generaciones; el análisis imprime esa ventana, porque la prueba de estancamiento pasa a exigir que no haya
-crecimiento en ella. Las dos instancias KC30 marcadas `> 1500` seguían mejorando al final de la traza.
+crecimiento en ella. Calcular el hipervolumen de frentes de varios miles de puntos es lo que limita esa
+resolución.
 
 | Instancias | P | Generaciones |
 |---|---|---|

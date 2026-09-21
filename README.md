@@ -463,8 +463,8 @@ published optimal front found at the end.
 | KC20-2fl-1uni | **185** | **100** | 1892 | — | — |
 | KC20-2fl-3uni | **373** | **144** | 1987 | — | — |
 | KC30-3fl-2uni | **550** | **360** | ~cap | — | — |
-| KC30-3fl-1rl | **1476** | > 1500 | ~cap | — | — |
-| KC30-3fl-1uni | **1886** | > 1500 | ~cap | — | — |
+| KC30-3fl-1rl | **1476** | > 5000 | ~cap | — | — |
+| KC30-3fl-1uni | **1886** | > 5000 | ~cap | — | — |
 
 What the campaign says:
 
@@ -487,10 +487,19 @@ What the campaign says:
   and flattens after that. What is left is the algorithm: this combination of NSGA-II and greedy 2-opt
   converges to a subset of the optimal front.
 
+**The two 3-objective instances marked `> 5000` never stagnate at P = 16384.** A run with that cap
+(5 runs, `--trace-every 25`, 16 minutes each) shows an asymptote instead of a stop: KC30-3fl-1uni is at
+95.6 % of its final hypervolume by generation 400 and at 99 % by 2400, and its front is still growing at
+5000 (2306 distinct points); KC30-3fl-1rl is at 99.9 % by 4250 and ends with 7702 points. So for these
+two the number of generations is a decision about the budget, not a measurement: every extra thousand
+generations still adds a little. With P = 1024 the same instances do stagnate, at 1476 and 1886, because
+their plateau is lower.
+
 Caveats of the measurement: with 3 objectives and a large population nearly the whole population is
-non-dominated, so those traces were recorded with `--trace-every 10` and their hypervolume is sampled
-every 60 to 480 generations; the analysis prints that window, since the stagnation test then asks for no
-growth over it. The two KC30 instances marked `> 1500` were still improving at the end of the trace.
+non-dominated, so those traces were recorded with `--trace-every 10` or `25` and their hypervolume is
+sampled every 60 to 1000 generations; the analysis prints that window, since the stagnation test then
+asks for no growth over it. Computing the hypervolume of fronts of several thousand points is what limits
+that resolution.
 
 | Instances | P | Generations |
 |---|---|---|
