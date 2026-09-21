@@ -491,17 +491,25 @@ Lo que dice la campaña:
 
 **Las dos instancias de 3 objetivos marcadas `> 5000` no se estancan con P = 16384.** Una ejecución con
 ese tope (5 ejecuciones, `--trace-every 25`, 16 minutos cada una) muestra una asíntota en lugar de una
-parada: KC30-3fl-1uni está al 95,6 % de su hipervolumen final en la generación 400 y al 99 % en la 2400, y
-su frente sigue creciendo en la 5000 (2306 puntos distintos); KC30-3fl-1rl llega al 99,9 % en la 4250 y
-termina con 7702 puntos. Para esas dos, el número de generaciones es una decisión de presupuesto, no una
-medición: cada millar adicional sigue aportando algo. Con P = 1024 las mismas instancias sí estancan, en
-1476 y 1886, porque su meseta es más baja.
+parada. Hipervolumen como fracción del valor que alcanza en la generación 5000, y tamaño del frente:
+
+| Generación | 200 | 400 | 800 | 1600 | 2400 | 4000 | 5000 |
+|---|---|---|---|---|---|---|---|
+| KC30-3fl-1rl | 97,0 % · 2252 puntos | 97,7 % · 3156 | 98,6 % · 4243 | 99,2 % · 5567 | 99,5 % · 6323 | 99,9 % · 7444 | 100 % · 7855 |
+| KC30-3fl-1uni | sin muestra | 95,6 % · 931 puntos | 97,2 % · 1332 | 98,5 % · 1716 | 99,2 % · 1956 | 99,8 % · 2187 | 100 % · 2306 |
+
+La ganancia útil llega muy pronto —el 97 % del resultado de 5000 generaciones en la generación 200 de
+KC30-3fl-1rl— y lo que sigue es refinamiento lento con un frente que no deja de crecer. Para esas dos, el
+número de generaciones es una decisión de presupuesto, no una medición. Con P = 1024 las mismas instancias
+sí estancan, en 1476 y 1886, porque su meseta es más baja.
 
 Salvedades de la medición: con 3 objetivos y población grande casi toda la población es no dominada, así
-que esas trazas se grabaron con `--trace-every 10` o `25` y su hipervolumen se muestrea cada 60 a 1000
-generaciones; el análisis imprime esa ventana, porque la prueba de estancamiento pasa a exigir que no haya
-crecimiento en ella. Calcular el hipervolumen de frentes de varios miles de puntos es lo que limita esa
-resolución.
+que esas trazas se grabaron con `--trace-every 10` o `25`, y calcular el hipervolumen de frentes de varios
+miles de puntos es lo que limita la resolución de la curva. El análisis imprime la ventana que acaba
+usando, porque la prueba de estancamiento pasa a exigir que no haya crecimiento en ella, y `--hv-runs N`
+limita el hipervolumen a las primeras N ejecuciones: la tabla anterior sale de `--hv-runs 1 --hv-every 8`,
+que da cinco veces más resolución al mismo coste (26 muestras en lugar de 3). Los demás indicadores usan
+siempre todas las ejecuciones.
 
 | Instancias | P | Generaciones |
 |---|---|---|

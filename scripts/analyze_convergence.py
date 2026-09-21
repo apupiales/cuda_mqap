@@ -210,7 +210,7 @@ def hypervolume_step(runs, samples, requested):
     return max(1, int(cost / HYPERVOLUME_BUDGET) + (1 if cost > HYPERVOLUME_BUDGET else 0))
 
 
-def analyze(path, po_dir, patience, epsilon, out_dir, hv_every):
+def analyze(path, po_dir, patience, epsilon, out_dir, hv_every, hv_runs):
     instance = instance_of(path)
     runs, objectives = read_trace(path)
     po = read_po(po_dir, instance) if (po_dir and objectives == 2) else None
@@ -223,7 +223,10 @@ def analyze(path, po_dir, patience, epsilon, out_dir, hv_every):
 
     present = sorted({g for data in runs.values() for g in data})
     generations = present[-1]
-    step = hypervolume_step(runs, len(present) - 1, hv_every)
+    # The hypervolume is the expensive part, so it can be limited to the first runs; the rest of the
+    # indicators always use every run. Fewer runs buy a finer curve at the same cost.
+    measured = sorted(runs)[:hv_runs] if hv_runs > 0 else sorted(runs)
+    step = hypervolume_step({r: runs[r] for r in measured}, len(present) - 1, hv_every)
     sampled = present[::step]
     if sampled[-1] != generations:
         sampled.append(generations)
@@ -231,14 +234,16 @@ def analyze(path, po_dir, patience, epsilon, out_dir, hv_every):
     # large enough to need a step, this is the real window the stagnation test looks at.
     spacing = min((b - a for a, b in zip(sampled, sampled[1:])), default=1)
     summary = {'instance': instance, 'file': os.path.basename(path), 'runs': len(runs),
-               'generations': generations, 'objectives': objectives, 'hv_step': spacing}
+               'generations': generations, 'objectives': objectives, 'hv_step': spacing,
+               'hv_runs': len(measured)}
     stalls, finals, optima, coverages = [], [], [], []
     curves = {}
     for run, data in sorted(runs.items()):
         fronts = {g: frozenset(points) for g, points in data.items()}
-        curve = [hypervolume(sorted(fronts[g]), reference) for g in sampled]
-        curves[run] = curve
-        stalls.append(stall_generation(sampled, curve, patience, epsilon))
+        if run in measured:
+            curve = [hypervolume(sorted(fronts[g]), reference) for g in sampled]
+            curves[run] = curve
+            stalls.append(stall_generation(sampled, curve, patience, epsilon))
         finals.append(final_front_generation(fronts))
         if po:
             found = [(g, len(po & set(fronts[g])) / len(po)) for g in sorted(fronts)]
@@ -289,6 +294,9 @@ def main():
     parser.add_argument('--epsilon', type=float, default=1e-4,
                         help='relative hypervolume growth counted as no improvement (default 1e-4)')
     parser.add_argument('--out-dir', default='', help='directory for the per-generation curves')
+    parser.add_argument('--hv-runs', type=int, default=0,
+                        help='runs used for the hypervolume, the slow part (default: all). The other '
+                             'indicators always use every run')
     parser.add_argument('--hv-every', type=int, default=0,
                         help='generations between two hypervolume samples (default: chosen from the size '
                              'of the fronts, so that a 3-objective trace stays tractable)')
@@ -300,8 +308,8 @@ def main():
     for pattern in args.traces:
         paths.extend(sorted(glob.glob(pattern)) or [pattern])
 
-    rows = [analyze(path, args.po_dir, args.patience, args.epsilon, args.out_dir, args.hv_every)
-            for path in paths]
+    rows = [analyze(path, args.po_dir, args.patience, args.epsilon, args.out_dir, args.hv_every,
+                    args.hv_runs) for path in paths]
 
     head = ('%-16s %5s %6s %7s %11s %9s %11s %9s %12s %11s %9s' %
             ('instance', 'runs', 'gens', 'hv_gens', 't_stall_med', 't_stall_90', 't_final_med',

@@ -488,18 +488,26 @@ What the campaign says:
   converges to a subset of the optimal front.
 
 **The two 3-objective instances marked `> 5000` never stagnate at P = 16384.** A run with that cap
-(5 runs, `--trace-every 25`, 16 minutes each) shows an asymptote instead of a stop: KC30-3fl-1uni is at
-95.6 % of its final hypervolume by generation 400 and at 99 % by 2400, and its front is still growing at
-5000 (2306 distinct points); KC30-3fl-1rl is at 99.9 % by 4250 and ends with 7702 points. So for these
-two the number of generations is a decision about the budget, not a measurement: every extra thousand
-generations still adds a little. With P = 1024 the same instances do stagnate, at 1476 and 1886, because
-their plateau is lower.
+(5 runs, `--trace-every 25`, 16 minutes each) shows an asymptote instead of a stop. Hypervolume as a
+share of the value it reaches at generation 5000, and the size of the front:
+
+| Generation | 200 | 400 | 800 | 1600 | 2400 | 4000 | 5000 |
+|---|---|---|---|---|---|---|---|
+| KC30-3fl-1rl | 97.0 % · 2252 points | 97.7 % · 3156 | 98.6 % · 4243 | 99.2 % · 5567 | 99.5 % · 6323 | 99.9 % · 7444 | 100 % · 7855 |
+| KC30-3fl-1uni | not sampled | 95.6 % · 931 points | 97.2 % · 1332 | 98.5 % · 1716 | 99.2 % · 1956 | 99.8 % · 2187 | 100 % · 2306 |
+
+The useful gain arrives very early — 97 % of the result of 5000 generations by generation 200 on
+KC30-3fl-1rl — and what follows is slow refinement with a front that keeps growing. So for these two the
+number of generations is a decision about the budget, not a measurement. With P = 1024 the same instances
+do stagnate, at 1476 and 1886, because their plateau is lower.
 
 Caveats of the measurement: with 3 objectives and a large population nearly the whole population is
-non-dominated, so those traces were recorded with `--trace-every 10` or `25` and their hypervolume is
-sampled every 60 to 1000 generations; the analysis prints that window, since the stagnation test then
-asks for no growth over it. Computing the hypervolume of fronts of several thousand points is what limits
-that resolution.
+non-dominated, so those traces were recorded with `--trace-every 10` or `25`, and computing the
+hypervolume of fronts of several thousand points is what limits the resolution of the curve. The analysis
+prints the window it ends up using, since the stagnation test then asks for no growth over it, and
+`--hv-runs N` limits the hypervolume to the first N runs: the table above comes from
+`--hv-runs 1 --hv-every 8`, which buys five times the resolution at the same cost (26 samples instead of
+3). The rest of the indicators always use every run.
 
 | Instances | P | Generations |
 |---|---|---|
