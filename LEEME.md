@@ -165,6 +165,8 @@ cuda_mqap/
 │   └── local_search.cu     Kernel Greedy 2-opt
 ├── tests/test_kernels.cu   Pruebas de cada kernel contra referencias en CPU
 ├── scripts/run_experiments.ps1   Campaña de experimentos con los parámetros de cada instancia
+├── scripts/run_convergence.ps1   Trazas de cada generación y su análisis (ver más abajo)
+├── scripts/analyze_convergence.py   Hipervolumen, estancamiento y cobertura del frente óptimo
 ├── mQAPData/               Instancias (.dat) y frentes óptimos (.PO)
 ├── mQAPMetrics/            Scripts Node.js de métricas y gráficos 3D
 ├── comparative_results_kcX_datasets.xlsx   Resultados comparativos
@@ -325,6 +327,8 @@ cuda_mqap <instance.dat> [opciones]
   --runs R         ejecuciones independientes concurrentes (defecto 1)
   --seed S         semilla (defecto: aleatoria, se imprime en la salida)
   --output FILE    fichero de resultados, en modo append (defecto result_<instancia>_nsga2_greedy_2opt.txt)
+  --trace FILE     escribe el frente de cada generacion en FILE (CSV, se sobrescribe)
+  --trace-max N    puntos guardados por ejecucion y generacion en la traza (defecto 4096)
   --verify         verifica las poblaciones finales en CPU
   --quiet          no imprime las soluciones finales
 ```
@@ -398,6 +402,44 @@ población y las iteraciones que usaba cada instancia en la versión original:
 .\scripts\run_experiments.ps1 -Runs 30                              # todas las instancias
 .\scripts\run_experiments.ps1 -Runs 10 -Seed 2026 -Instances KC10-2fl-1rl,KC30-3fl-1rl
 ```
+
+### Cuántas generaciones necesita cada instancia (`--trace`)
+
+`--trace FICHERO` escribe un CSV con `run,generation,f1,f2[,f3]`: las soluciones no dominadas distintas
+de **cada** generación de cada ejecución, desde la supervivencia de la población inicial (generación 0)
+hasta el frente final. Copia los supervivientes al host una vez por generación, así que sincroniza con el
+dispositivo y **el tiempo de una ejecución con traza no es comparable** con el de una normal; la copia es
+despreciable frente a una generación con población grande, y se nota con población pequeña.
+
+`scripts/run_convergence.ps1` graba las trazas y las analiza con `scripts/analyze_convergence.py`, que
+informa, por instancia:
+
+| Indicador | Significado |
+|---|---|
+| `t_stall` | Primera generación tras la cual el hipervolumen crece menos de `--epsilon` (relativo) durante `--patience` generaciones. La supervivencia es elitista, así que el hipervolumen solo puede crecer: una curva plana es estancamiento real, no ruido |
+| `t_final` | Primera generación cuyo frente ya es igual al último. No necesita datos de referencia y dice cuándo deja de encontrarse algo nuevo |
+| `t_optimum` | Primera generación que cubre el frente `.PO` publicado. Solo lo tienen las instancias KC10 |
+| `coverage` | Fracción del frente óptimo encontrada al final |
+
+El punto de referencia del hipervolumen es fijo para todo el fichero (la esquina peor de la generación 0),
+de modo que las generaciones y las ejecuciones son comparables entre sí. Los tres números de generación son
+variables aleatorias —cada ejecución estanca en un punto distinto—, así que el resumen da la mediana y el
+percentil 90 sobre las ejecuciones, nunca un único valor.
+
+```
+.\scripts\run_convergence.ps1 -Population 1024 -Iterations 200 -Runs 30
+.\scripts\run_convergence.ps1 -Population 4096 -Iterations 300 -Instances KC10-2fl-1rl
+python scripts\analyze_convergence.py results\convergence\*.csv --patience 30 --epsilon 1e-5
+```
+
+`--iterations` tiene que estar claramente por encima del estancamiento esperado o la medición informará
+del tope en su lugar; el análisis avisa cuando una ejecución sigue mejorando en la última generación. Las
+curvas por generación se escriben en `results/convergence/curves/<instancia>_curve.csv` (hipervolumen
+mediano, su fracción del valor final y el tamaño mediano del frente), listas para graficar.
+
+El número de generaciones depende mucho de la población, así que la respuesta útil es el coste total: el
+tiempo de una generación se conoce para cada P (ver [Rendimiento](#rendimiento)), de modo que
+`generaciones × tiempo por generación` indica qué pareja (P, generaciones) alcanza antes el objetivo.
 
 | Instancias | P | Generaciones |
 |---|---|---|

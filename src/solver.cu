@@ -24,6 +24,7 @@
  */
 #include "solver.h"
 
+#include <array>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -56,6 +57,46 @@ void validate(const Instance& instance, const SolverOptions& options) {
     if (matricesSharedMemory(instance.n, instance.objectives) > static_cast<size_t>(maxOptin)) {
         throw std::invalid_argument("instance too large: the flow and distance matrices do not fit in the "
                                     "shared memory of one block (" + std::to_string(maxOptin) + " bytes)");
+    }
+}
+
+// Keeps the distinct non-dominated fitness values of the survivors of one generation. It copies them to
+// the host, so it synchronizes with the device: only used when SolverOptions::trace is set.
+template <int OBJ>
+void recordTrace(int generation, int population, int runs, const unsigned int* fitness,
+                 const DeviceBuffer<int>& survivorIndex, const DeviceBuffer<int>& survivorRank,
+                 const SolverOptions& options, SolveStats* stats) {
+    const int rows = 2 * population;
+    std::vector<unsigned int> hostFitness(static_cast<size_t>(runs) * rows * OBJ);
+    CUDA_CHECK(cudaMemcpy(hostFitness.data(), fitness, hostFitness.size() * sizeof(unsigned int),
+                          cudaMemcpyDeviceToHost));
+    const std::vector<int> index = survivorIndex.toHost();
+    const std::vector<int> rank = survivorRank.toHost();
+    for (int run = 0; run < runs; run++) {
+        std::set<std::array<unsigned int, OBJ>> seen;
+        for (int i = 0; i < population; i++) {
+            const size_t slot = static_cast<size_t>(run) * population + i;
+            if (rank[slot] != 1) {
+                continue;  // The survivors come ordered by rank, so the rest are dominated.
+            }
+            const size_t source = static_cast<size_t>(run) * rows + index[slot];
+            std::array<unsigned int, OBJ> values{};
+            for (int o = 0; o < OBJ; o++) {
+                values[o] = hostFitness[source * OBJ + o];
+            }
+            if (!seen.insert(values).second) {
+                continue;
+            }
+            if (static_cast<int>(seen.size()) > options.traceMaxPoints) {
+                stats->traceTruncated++;
+                break;
+            }
+            TracePoint point;
+            point.run = run;
+            point.generation = generation;
+            point.fitness.assign(values.begin(), values.end());
+            stats->trace.push_back(std::move(point));
+        }
     }
 }
 
@@ -103,6 +144,9 @@ std::vector<RunResult> solveImpl(const Instance& instance, const SolverOptions& 
         // Rt (2P) -> best P by rank and crowding distance.
         launchSurvival<OBJ>(fitness, population, runs, survivorIndex.get(), survivorRank.get(), survivorCrowding.get(),
                             &survivalWorkspace);
+        if (options.trace && stats != nullptr) {
+            recordTrace<OBJ>(iteration, population, runs, fitness, survivorIndex, survivorRank, options, stats);
+        }
         if (iteration == options.iterations) {
             break;
         }

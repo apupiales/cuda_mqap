@@ -39,6 +39,7 @@ namespace {
 struct Arguments {
     std::string instancePath;
     std::string outputPath;
+    std::string tracePath;
     mqap::SolverOptions options;
     bool verify = false;
     bool quiet = false;
@@ -52,6 +53,9 @@ void printUsage(const char* program) {
         "  --runs R         independent runs executed concurrently (default 1)\n"
         "  --seed S         random seed (default: random, printed in the output)\n"
         "  --output FILE    result file, appended (default result_<instance>_nsga2_greedy_2opt.txt)\n"
+        "  --trace FILE     write the front of every generation to FILE (CSV, overwritten); it copies\n"
+        "                   the survivors once per generation, so the time is no longer comparable\n"
+        "  --trace-max N    points kept per run and generation in the trace (default 4096)\n"
         "  --verify         check the final populations on the CPU\n"
         "  --quiet          do not print the final solutions\n",
         program);
@@ -71,6 +75,11 @@ bool parseArguments(int argc, char** argv, Arguments& args) {
             args.options.seed = std::strtoull(argv[++i], nullptr, 10);
         } else if (arg == "--output" && hasValue) {
             args.outputPath = argv[++i];
+        } else if (arg == "--trace" && hasValue) {
+            args.tracePath = argv[++i];
+            args.options.trace = true;
+        } else if (arg == "--trace-max" && hasValue) {
+            args.options.traceMaxPoints = std::atoi(argv[++i]);
         } else if (arg == "--verify") {
             args.verify = true;
         } else if (arg == "--quiet") {
@@ -181,6 +190,32 @@ int main(int argc, char** argv) {
             writeRun(file, result);
         }
         file.close();
+
+        if (!args.tracePath.empty()) {
+            std::ofstream trace(args.tracePath);
+            if (!trace) {
+                std::fprintf(stderr, "Error opening %s\n", args.tracePath.c_str());
+                return 1;
+            }
+            trace << "run,generation";
+            for (int o = 0; o < instance.objectives; o++) {
+                trace << ",f" << (o + 1);
+            }
+            trace << "\n";
+            for (const mqap::TracePoint& point : stats.trace) {
+                trace << point.run << ',' << point.generation;
+                for (unsigned int value : point.fitness) {
+                    trace << ',' << value;
+                }
+                trace << "\n";
+            }
+            trace.close();
+            std::printf("Trace of %zu points written to %s\n", stats.trace.size(), args.tracePath.c_str());
+            if (stats.traceTruncated > 0) {
+                std::fprintf(stderr, "Warning: %d generations had more than %d points and were truncated\n",
+                             stats.traceTruncated, args.options.traceMaxPoints);
+            }
+        }
 
         if (!args.quiet) {
             for (size_t run = 0; run < results.size(); run++) {

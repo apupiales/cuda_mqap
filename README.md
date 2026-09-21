@@ -164,6 +164,8 @@ cuda_mqap/
 │   └── local_search.cu     Greedy 2-opt kernel
 ├── tests/test_kernels.cu   Tests of every kernel against CPU references
 ├── scripts/run_experiments.ps1   Experiment campaign with the parameters of each instance
+├── scripts/run_convergence.ps1   Traces of every generation and their analysis (see below)
+├── scripts/analyze_convergence.py   Hypervolume, stagnation and coverage of the optimal front
 ├── mQAPData/               Instances (.dat) and optimal fronts (.PO)
 ├── mQAPMetrics/            Node.js metric and 3D plot scripts
 ├── comparative_results_kcX_datasets.xlsx   Comparative results
@@ -324,6 +326,8 @@ cuda_mqap <instance.dat> [options]
   --runs R         independent runs executed concurrently (default 1)
   --seed S         random seed (default: random, printed in the output)
   --output FILE    result file, appended (default result_<instance>_nsga2_greedy_2opt.txt)
+  --trace FILE     write the front of every generation to FILE (CSV, overwritten)
+  --trace-max N    points kept per run and generation in the trace (default 4096)
   --verify         check the final populations on the CPU
   --quiet          do not print the final solutions
 ```
@@ -397,6 +401,44 @@ population and iterations each instance used in the original version:
 .\scripts\run_experiments.ps1 -Runs 30                              # all instances
 .\scripts\run_experiments.ps1 -Runs 10 -Seed 2026 -Instances KC10-2fl-1rl,KC30-3fl-1rl
 ```
+
+### How many generations each instance needs (`--trace`)
+
+`--trace FILE` writes a CSV with `run,generation,f1,f2[,f3]`: the distinct non-dominated solutions of
+**every** generation of every run, from the survival of the initial population (generation 0) to the
+final front. It copies the survivors to the host once per generation, so it synchronizes with the device
+and **the time of a traced run is not comparable** with a normal one; the copy is negligible next to a
+generation with a large population, and noticeable with a small one.
+
+`scripts/run_convergence.ps1` records the traces and analyses them with
+`scripts/analyze_convergence.py`, which reports, per instance:
+
+| Indicator | Meaning |
+|---|---|
+| `t_stall` | First generation after which the hypervolume grows less than `--epsilon` (relative) during `--patience` generations. The survival is elitist, so the hypervolume can only grow: a flat curve is real stagnation, not noise |
+| `t_final` | First generation whose front already equals the last one. It needs no reference data and says when nothing new is found again |
+| `t_optimum` | First generation that covers the published `.PO` front. Only the KC10 instances have one |
+| `coverage` | Share of the optimal front found at the end |
+
+The reference point of the hypervolume is fixed for the whole file (the worst corner of generation 0),
+so the generations and the runs are comparable with each other. The three generation numbers are random
+variables — every run stagnates at a different point — so the summary reports the median and the 90th
+percentile over the runs, never a single value.
+
+```
+.\scripts\run_convergence.ps1 -Population 1024 -Iterations 200 -Runs 30
+.\scripts\run_convergence.ps1 -Population 4096 -Iterations 300 -Instances KC10-2fl-1rl
+python scripts\analyze_convergence.py results\convergence\*.csv --patience 30 --epsilon 1e-5
+```
+
+`--iterations` must be clearly above the expected stagnation or the measurement reports the cap instead;
+the analysis warns when a run is still improving at the last generation. The per-generation curves are
+written to `results/convergence/curves/<instance>_curve.csv` (median hypervolume, its fraction of the
+final value and the median front size), ready to plot.
+
+The generation count depends strongly on the population, so the useful answer is the total cost: the
+time of a generation is known for each P (see [Performance](#performance)), so
+`generations × time per generation` tells which pair (P, generations) reaches the target sooner.
 
 | Instances | P | Generations |
 |---|---|---|

@@ -328,6 +328,44 @@ void testUniqueFront(const Instance& instance, int population, int iterations, i
     }
 }
 
+// --trace records the front of every generation: one entry per generation, no repetitions inside a
+// generation, and the last generation has to be the final front of the run.
+void testTrace(const Instance& instance, int population, int iterations, int runs) {
+    SolverOptions options;
+    options.population = population;
+    options.iterations = iterations;
+    options.runs = runs;
+    options.seed = 7;
+    options.trace = true;
+    SolveStats stats;
+    const std::vector<RunResult> results = solve(instance, options, &stats);
+    EXPECT(stats.traceTruncated == 0, "the trace was truncated %d times", stats.traceTruncated);
+
+    std::set<int> generations;
+    std::vector<std::set<std::vector<unsigned int>>> perGeneration(
+        static_cast<size_t>(runs) * (iterations + 1));
+    for (const TracePoint& point : stats.trace) {
+        EXPECT(point.run >= 0 && point.run < runs, "the trace names run %d", point.run);
+        EXPECT(point.generation >= 0 && point.generation <= iterations,
+               "the trace names generation %d", point.generation);
+        EXPECT(static_cast<int>(point.fitness.size()) == instance.objectives, "wrong number of objectives");
+        generations.insert(point.generation);
+        const size_t slot = static_cast<size_t>(point.run) * (iterations + 1) + point.generation;
+        EXPECT(perGeneration[slot].insert(point.fitness).second, "the trace repeats a point of a generation");
+    }
+    EXPECT(static_cast<int>(generations.size()) == iterations + 1,
+           "the trace holds %zu generations instead of %d", generations.size(), iterations + 1);
+
+    for (int run = 0; run < runs; run++) {
+        std::set<std::vector<unsigned int>> front;
+        for (const Solution& solution : results[run].paretoFront) {
+            front.insert(solution.fitness);
+        }
+        const size_t last = static_cast<size_t>(run) * (iterations + 1) + iterations;
+        EXPECT(perGeneration[last] == front, "the last generation of the trace is not the final front");
+    }
+}
+
 // CPU greedy 2-opt with full cost recomputation (no delta formula).
 std::vector<short> cpuGreedy(const Instance& instance, std::vector<short> p, int type) {
     const int n = instance.n;
@@ -594,6 +632,7 @@ int main(int argc, char** argv) {
     run("reproduce: survivors copied, valid children", [] { testReproduce<3>(30, 64, 3); });
     run("initial population: valid shuffled permutations", [] { testInitPopulation(30, 128, 4); });
     run("final front: every distinct solution, only once", [&] { testUniqueFront(kc10, 256, 30, 2); });
+    run("--trace: one front per generation, ending in the final one", [&] { testTrace(kc10, 64, 10, 2); });
 
     std::printf("\n%s (%d failure%s)\n", failures == 0 ? "ALL TESTS PASSED" : "TESTS FAILED", failures,
                 failures == 1 ? "" : "s");
