@@ -8,27 +8,28 @@ Multiobjetivo** (mQAP, *multiobjective Quadratic Assignment Problem*). La evalua
 de NSGA-II, la selección, la mutación y la búsqueda local se ejecutan en la GPU.
 
 Esta rama contiene la **implementación original**: una sola unidad de traducción, `kernel.cu`, con las
-instancias compiladas dentro del programa. En la rama
-[`develop_with_claude_opus_5`](https://github.com/apupiales/cuda_mqap/tree/develop_with_claude_opus_5) está
-una versión refactorizada y optimizada, que carga las instancias en tiempo de ejecución, incluye pruebas y
-corrige los [problemas conocidos](#problemas-conocidos-del-código-original).
+instancias compiladas dentro del programa. En otras ramas hay versiones reescritas y optimizadas, que cargan
+las instancias en tiempo de ejecución, incluyen pruebas, corrigen los
+[problemas conocidos](#problemas-conocidos-del-código-original) y admiten poblaciones mayores: ver
+[Ramas del repositorio](#ramas-del-repositorio).
 
 ---
 
 ## Índice
 
 1. [Características](#características)
-2. [El problema: mQAP](#el-problema-mqap)
-3. [Cómo funciona el programa](#cómo-funciona-el-programa)
-4. [Estructura del repositorio](#estructura-del-repositorio)
-5. [Requisitos](#requisitos)
-6. [Abrir en Visual Studio 2026 (plug and play)](#abrir-en-visual-studio-2026-plug-and-play)
-7. [Configuración](#configuración)
-8. [Salida](#salida)
-9. [Análisis de resultados](#análisis-de-resultados)
-10. [Problemas conocidos del código original](#problemas-conocidos-del-código-original)
-11. [Créditos y citas](#créditos-y-citas)
-12. [Licencia](#licencia)
+2. [Ramas del repositorio](#ramas-del-repositorio)
+3. [El problema: mQAP](#el-problema-mqap)
+4. [Cómo funciona el programa](#cómo-funciona-el-programa)
+5. [Estructura del repositorio](#estructura-del-repositorio)
+6. [Requisitos](#requisitos)
+7. [Abrir en Visual Studio 2026 (plug and play)](#abrir-en-visual-studio-2026-plug-and-play)
+8. [Configuración](#configuración)
+9. [Salida](#salida)
+10. [Análisis de resultados](#análisis-de-resultados)
+11. [Problemas conocidos del código original](#problemas-conocidos-del-código-original)
+12. [Créditos y citas](#créditos-y-citas)
+13. [Licencia](#licencia)
 
 ---
 
@@ -49,6 +50,24 @@ corrige los [problemas conocidos](#problemas-conocidos-del-código-original).
 6. Búsqueda local Greedy 2-opt adaptada.
 
 Admite instancias de 2 o 3 objetivos y hasta 60 instalaciones.
+
+---
+
+## Ramas del repositorio
+
+El programa original está en esta rama. Las demás ramas mantienen el mismo algoritmo (NSGA-II con un
+Greedy 2-opt adaptado sobre el mQAP) pero reescriben su implementación; cada una parte de la anterior.
+
+| Rama | Qué contiene | Diferencias principales frente a esta versión original |
+|---|---|---|
+| `master` (esta) | Implementación original (2019): todo en `kernel.cu`, con las instancias compiladas dentro del programa, más el proyecto de Visual Studio y esta documentación | — |
+| [`develop_with_claude_opus_5`](https://github.com/apupiales/cuda_mqap/tree/develop_with_claude_opus_5) | Reescritura modular y optimización en GPU del mismo algoritmo | Código repartido en `include/`, `src/` y `tests/`; las instancias se leen de los `.dat` en tiempo de ejecución y los parámetros se pasan por línea de comandos; fitness en O(n²) en lugar de tres productos de matrices densas; 2-opt con evaluación incremental en O(n); todo NSGA-II dentro de un bloque por ejecución; tres lanzamientos de kernel por generación sin sincronizar con el host; `--runs` ejecuta ejecuciones independientes de forma concurrente; pruebas automáticas, `--verify` y los [problemas conocidos](#problemas-conocidos-del-código-original) corregidos. KC30-3fl-1rl: 42,4 s → 0,14 s en una RTX 2060 |
+| [`develop_p512_single_block`](https://github.com/apupiales/cuda_mqap/tree/develop_p512_single_block) | La anterior, con una supervivencia que no guarda la matriz de dominancia | Población hasta 512 en cualquier GPU (la memoria compartida crece linealmente con P en lugar de cuadráticamente). Con P ≤ 256, resultados idénticos y menor tiempo de GPU |
+| [`develop_large_population_multiblock`](https://github.com/apupiales/cuda_mqap/tree/develop_large_population_multiblock) | La versión refactorizada con la supervivencia repartida en varios bloques | Población hasta 8192: lanzamiento cooperativo para los frentes de Pareto y ordenaciones por segmentos (CUB) para el crowding y la selección. Con P ≤ 256 usa el mismo kernel de un bloque, con resultados idénticos |
+
+Las dos últimas ramas existen porque una población mayor explora más el frente de Pareto: en
+KC10-2fl-3uni, la fracción media del frente óptimo encontrada por ejecución pasa del 68 % con P = 256 al
+82 % con P = 4096 (100 ejecuciones de cada). Su README documenta las mediciones y los límites de cada GPU.
 
 ---
 

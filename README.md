@@ -8,26 +8,27 @@ Problem** (mQAP). The fitness evaluation, the NSGA-II steps, selection, mutation
 the GPU.
 
 This branch holds the **original implementation** (single translation unit `kernel.cu`, instances compiled
-into the program). A refactored and optimized version, with runtime instance loading, tests and the fixes
-of the [known issues](#known-issues-of-the-original-code), is in the branch
-[`develop_with_claude_opus_5`](https://github.com/apupiales/cuda_mqap/tree/develop_with_claude_opus_5).
+into the program). Rewritten and optimized versions, with runtime instance loading, tests, the fixes of the
+[known issues](#known-issues-of-the-original-code) and larger populations, live in other branches: see
+[Repository branches](#repository-branches).
 
 ---
 
 ## Contents
 
 1. [Features](#features)
-2. [The problem: mQAP](#the-problem-mqap)
-3. [How the program works](#how-the-program-works)
-4. [Repository layout](#repository-layout)
-5. [Requirements](#requirements)
-6. [Open in Visual Studio 2026 (plug and play)](#open-in-visual-studio-2026-plug-and-play)
-7. [Configuration](#configuration)
-8. [Output](#output)
-9. [Result analysis](#result-analysis)
-10. [Known issues of the original code](#known-issues-of-the-original-code)
-11. [Credits and citations](#credits-and-citations)
-12. [License](#license)
+2. [Repository branches](#repository-branches)
+3. [The problem: mQAP](#the-problem-mqap)
+4. [How the program works](#how-the-program-works)
+5. [Repository layout](#repository-layout)
+6. [Requirements](#requirements)
+7. [Open in Visual Studio 2026 (plug and play)](#open-in-visual-studio-2026-plug-and-play)
+8. [Configuration](#configuration)
+9. [Output](#output)
+10. [Result analysis](#result-analysis)
+11. [Known issues of the original code](#known-issues-of-the-original-code)
+12. [Credits and citations](#credits-and-citations)
+13. [License](#license)
 
 ---
 
@@ -48,6 +49,24 @@ of the [known issues](#known-issues-of-the-original-code), is in the branch
 6. Adapted Greedy 2-opt local search.
 
 Instances with 2 or 3 objectives and up to 60 facilities.
+
+---
+
+## Repository branches
+
+The original program lives in this branch. The other branches keep the same algorithm (NSGA-II with an
+adapted Greedy 2-opt on the mQAP) but rewrite its implementation; each one builds on the previous one.
+
+| Branch | What it contains | Main differences from this original version |
+|---|---|---|
+| `master` (this one) | Original implementation (2019): everything in `kernel.cu`, with the instances compiled into the program, plus the Visual Studio project and this documentation | — |
+| [`develop_with_claude_opus_5`](https://github.com/apupiales/cuda_mqap/tree/develop_with_claude_opus_5) | Modular rewrite and GPU optimization of the same algorithm | Code split into `include/`, `src/` and `tests/`; instances read from the `.dat` files at runtime and parameters on the command line; fitness in O(n²) instead of three dense matrix products; 2-opt with O(n) delta evaluation; the whole NSGA-II inside one block per run; three kernel launches per generation with no host synchronization; `--runs` executes independent runs concurrently; automated tests, `--verify` and the [known issues](#known-issues-of-the-original-code) fixed. KC30-3fl-1rl: 42.4 s → 0.14 s on an RTX 2060 |
+| [`develop_p512_single_block`](https://github.com/apupiales/cuda_mqap/tree/develop_p512_single_block) | The previous one, with a survival that does not store the dominance matrix | Population up to 512 on any GPU (the shared memory grows linearly with P instead of quadratically). Identical results and lower GPU time for P ≤ 256 |
+| [`develop_large_population_multiblock`](https://github.com/apupiales/cuda_mqap/tree/develop_large_population_multiblock) | The refactored version with the survival split across several blocks | Population up to 8192: cooperative launch for the Pareto fronts and segmented sorts (CUB) for crowding and selection. For P ≤ 256 it uses the same single-block kernel, with identical results |
+
+The two last branches exist because a larger population explores more of the Pareto front: on
+KC10-2fl-3uni, the average share of the optimal front found per run goes from 68 % with P = 256 to 82 %
+with P = 4096 (100 runs of each). Their README documents the measurements and the limits of each GPU.
 
 ---
 
