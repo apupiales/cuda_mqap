@@ -35,6 +35,8 @@ namespace mqap {
 
 using RngState = curandStatePhilox4_32_10_t;
 
+class SurvivalWorkspace; // survival_workspace.cuh
+
 // Shared memory (bytes) needed by the fitness and greedy 2-opt kernels.
 size_t matricesSharedMemory(int n, int objectives);
 
@@ -50,11 +52,19 @@ void launchFitness(const short* genes, unsigned int* fitness, const int* flow, c
                    int rows, int n, int runs);
 
 // NSGA-II survival: non-dominated sorting, crowding distance and selection of the best P of the
-// 2P individuals of each run (one block of 2P threads per run). Writes, for each run, the P
-// survivors ordered by (rank ascending, crowding descending).
+// 2P individuals of each run. Writes, for each run, the P survivors ordered by (rank ascending,
+// crowding descending). Uses one block of 2P threads per run, or the multi-block survival when the
+// workspace says so (P > kSingleBlockMaxPopulation, or forced).
 template <int OBJ>
 void launchSurvival(const unsigned int* fitness, int population, int runs,
-                    short* survivorIndex, short* survivorRank, float* survivorCrowding);
+                    short* survivorIndex, short* survivorRank, float* survivorCrowding,
+                    SurvivalWorkspace* workspace = nullptr);
+
+// Multi-block NSGA-II survival (any population up to kMaxPopulation); see nsga2_multiblock.cu.
+template <int OBJ>
+void launchSurvivalMultiblock(const unsigned int* fitness, int population, int runs,
+                              short* survivorIndex, short* survivorRank, float* survivorCrowding,
+                              SurvivalWorkspace& workspace);
 
 // Builds the next population of each run:
 //   rows [0, P)  : survivors (with their fitness),

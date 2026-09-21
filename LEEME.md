@@ -46,8 +46,9 @@ independientes de forma concurrente** en una sola llamada al programa.
 **Rendimiento en GPU**
 - Fitness en **O(n²)** por cromosoma (un *warp* por cromosoma, con las matrices en *shared memory*),
   en lugar de tres productos de matrices densas de O(n³).
-- NSGA-II completo **dentro de un solo bloque por ejecución**: la matriz de dominancia está empaquetada
-  en bits, los frentes se extraen con `__ballot_sync`/`__popc` y los bitonic sorts se hacen en *shared memory*.
+- NSGA-II completo **en la GPU**: un bloque por ejecución hasta P = 256 (matriz de dominancia empaquetada en
+  bits en *shared memory*) y una supervivencia multibloque con lanzamiento cooperativo y ordenaciones por
+  segmentos (CUB) para P hasta 8192.
 - Greedy 2-opt con **evaluación incremental (delta) en O(n)** de cada intercambio; la búsqueda local de
   toda la descendencia es un único kernel.
 - Estados aleatorios Philox persistentes, que se inicializan una sola vez.
@@ -131,7 +132,7 @@ Parámetros:
 
 | Parámetro | Dónde | Valor por defecto |
 |---|---|---|
-| Tamaño de población `P` | `--population` | 64 (potencia de 2 entre 16 y 256) |
+| Tamaño de población `P` | `--population` | 64 (potencia de 2 entre 16 y 8192) |
 | Generaciones | `--iterations` | 70 |
 | Ejecuciones independientes | `--runs` | 1 |
 | Semilla | `--seed` | aleatoria (se imprime) |
@@ -151,13 +152,15 @@ cuda_mqap/
 │   ├── device_common.cuh   Funciones __device__ compartidas (coste por warp, delta 2-opt, bitonic sort)
 │   ├── instance.h          Struct Instance, loadInstance(), cost() de referencia en CPU
 │   ├── kernels.cuh         Declaración de los lanzadores de kernels y del layout de memoria
-│   └── solver.h            SolverOptions, Solution, RunResult, solve()
+│   ├── solver.h            SolverOptions, Solution, RunResult, solve()
+│   └── survival_workspace.cuh   Búferes de la supervivencia multibloque (se reservan una vez)
 ├── src/
 │   ├── main.cpp            Línea de comandos, fichero de resultados y --verify (solo host)
 │   ├── instance.cpp        Parser de los ficheros .dat y validación (incluido el desbordamiento del fitness)
 │   ├── solver.cu           Orquestación en el host: reservas, bucle de generaciones y recogida de resultados
 │   ├── fitness.cu          Kernel de fitness
-│   ├── nsga2.cu            Kernel de supervivencia NSGA-II
+│   ├── nsga2.cu            Kernel de supervivencia NSGA-II (un bloque por ejecución, P ≤ 256)
+│   ├── nsga2_multiblock.cu Supervivencia NSGA-II repartida en varios bloques (P > 256)
 │   ├── operators.cu        RNG, población inicial, torneo y mutaciones
 │   └── local_search.cu     Kernel Greedy 2-opt
 ├── tests/test_kernels.cu   Pruebas de cada kernel contra referencias en CPU
@@ -207,17 +210,19 @@ generaciones solo se intercambian los punteros del doble búfer.
 | Kernel | Grid × bloque | Paralelismo | Técnicas |
 |---|---|---|---|
 | `fitnessKernel<OBJ>` | `(⌈2P/4⌉, R)` × 128 | 1 warp por cromosoma | `F` y `D` en *shared memory* (carga coalescente); lecturas de `F` consecutivas por carril (sin conflictos de banco); reducción con `__shfl_down_sync` |
-| `survivalKernel<OBJ>` | `R` × `2P` | 1 bloque por ejecución, 1 hilo por individuo | Dominancia en bits (`2P × 2P/32` palabras), frentes con `__ballot_sync` + `__popc`, bitonic sort de claves de 64 bits `(rango, fitness)` y `(rango, −crowding)` en *shared memory* |
+| `survivalKernel<OBJ>` (P ≤ 256) | `R` × `2P` | 1 bloque por ejecución, 1 hilo por individuo | Dominancia en bits (`2P × 2P/32` palabras), frentes con `__ballot_sync` + `__popc`, bitonic sort de claves de 64 bits `(rango, fitness)` y `(rango, −crowding)` en *shared memory* |
 | `reproduceKernel<OBJ>` | `(⌈P/128⌉, R)` × 128 | 1 hilo por descendiente | Estado Philox en registros; torneo, mutaciones y copia en un solo paso |
 | `greedy2OptKernel<OBJ>` | `(⌈P/4⌉, R)` × 128 | 1 warp por descendiente | Matrices en *shared memory*; delta O(n) repartido entre los 32 carriles; criterio uniforme en el warp (sin divergencia) |
 | `initPopulationKernel` | `(⌈2P/128⌉, R)` × 128 | 1 hilo por cromosoma | Fisher-Yates sin sesgo |
 | `rngInitKernel` | `⌈R·2P/128⌉` × 128 | 1 hilo por estado | Una subsecuencia Philox independiente por hilo |
+| Supervivencia multibloque (P > 256) | `(⌈2P/256⌉, R)` × 256, más un lanzamiento cooperativo | 1 hilo por individuo en toda la malla | Conteo de dominadores con teselas de fitness en *shared memory*, pelado de frentes con `grid.sync()`, crowding y selección con ordenaciones por segmentos (CUB) |
 
 *Shared memory* por bloque:
 - **Fitness y 2-opt:** `(OBJ + 1)·n²·4 + 4·n·2` bytes, por ejemplo 14,6 KB para n = 30 y 3 objetivos.
   Si hace falta más de 48 KB se solicita automáticamente el máximo *opt-in* del dispositivo
   (`cudaFuncAttributeMaxDynamicSharedMemorySize`), lo que permite n = 60 con 3 objetivos en Turing.
-- **Supervivencia:** hasta ~46 KB con P = 256.
+- **Supervivencia:** hasta ~46 KB con P = 256 (camino de un bloque). El camino multibloque (P > 256) solo usa
+  teselas de fitness de unos 3 KB; ver [Límites del tamaño de población](#límites-del-tamaño-de-población-y-recursos-de-la-gpu).
 
 ### Evaluación incremental del 2-opt
 
@@ -306,7 +311,7 @@ Desde una consola *x64 Native Tools*:
 
 ```
 nvcc -O3 -arch=sm_75 -std=c++17 -Iinclude src\main.cpp src\instance.cpp src\solver.cu src\fitness.cu ^
-     src\nsga2.cu src\operators.cu src\local_search.cu -o cuda_mqap.exe
+     src\nsga2.cu src\nsga2_multiblock.cu src\operators.cu src\local_search.cu -o cuda_mqap.exe
 ```
 
 ---
@@ -315,7 +320,7 @@ nvcc -O3 -arch=sm_75 -std=c++17 -Iinclude src\main.cpp src\instance.cpp src\solv
 
 ```
 cuda_mqap <instance.dat> [opciones]
-  --population P   tamaño de población, potencia de 2 en [16, 256] (defecto 64)
+  --population P   tamaño de población, potencia de 2 en [16, 8192] (defecto 64)
   --iterations N   generaciones (defecto 70)
   --runs R         ejecuciones independientes concurrentes (defecto 1)
   --seed S         semilla (defecto: aleatoria, se imprime en la salida)
@@ -486,6 +491,7 @@ implementación independiente en CPU:
 | Frentes óptimos `.PO` | Las **374 soluciones óptimas publicadas** tienen exactamente su coste publicado, tanto en CPU como en GPU |
 | Fitness | El kernel coincide con la `Trace(F·X·Dᵀ·Xᵀ)` literal de la versión original en KC10, KC20 y KC30, con varias ejecuciones |
 | Supervivencia NSGA-II | Los rangos, el crowding y la selección coinciden con un NSGA-II en CPU para P = 16, 64 y 256, con 2 y 3 objetivos |
+| Supervivencia multibloque | La misma comprobación forzando el camino multibloque con P = 16, 64 y 256, y con P = 512, 1024 y 2048 |
 | Greedy 2-opt | La permutación resultante es **idéntica** a la de un greedy en CPU que recalcula el coste completo (n = 10, 30 y 60, este último con más de 48 KB de *shared memory*) |
 | Reproducción | Los supervivientes y su fitness se copian correctamente y los hijos son permutaciones válidas |
 | Población inicial | Todas las permutaciones son válidas y están barajadas |
@@ -598,82 +604,90 @@ son mixtos: ver [Resultados en el libro de Excel](#resultados-en-el-libro-de-exc
 
 ## Límites del tamaño de población y recursos de la GPU
 
-**En la RTX 2060, la población máxima es P = 256 en las 15 instancias.** El límite no es la memoria de
-vídeo (VRAM): son la memoria compartida y el número de hilos de **un solo bloque**, porque toda la
-supervivencia NSGA-II de una ejecución la hace un único bloque de 2P hilos. Una GPU con más VRAM no
-permite, por sí sola, poblaciones más grandes.
+**En esta rama la población máxima es P = 8192 en cualquier GPU, para las 15 instancias.** Hasta P = 256 la
+supervivencia NSGA-II de cada ejecución la sigue haciendo un único bloque de 2P hilos (`nsga2.cu`); por
+encima se usa la supervivencia multibloque de `nsga2_multiblock.cu`:
+
+1. `countDominatorsKernel`: cuántos individuos dominan a cada uno, leyendo el fitness en teselas en memoria
+   compartida.
+2. `peelFrontsKernel`: **lanzamiento cooperativo**, para que toda la malla pueda sincronizarse
+   (`grid.sync()`). En cada frente, los individuos sin dominadores restantes se añaden a una lista y los
+   demás descuentan a los miembros que los dominaban, hasta que todos tienen rango.
+3. Crowding distance: una **ordenación por segmentos** (CUB) por objetivo según (rango, fitness), que deja
+   cada frente contiguo, y después la misma acumulación que en el kernel de un bloque.
+4. Selección: ordenación por segmentos según (rango ascendente, crowding descendente); sobreviven los P
+   primeros de cada ejecución.
+
+Todos los búferes son O(N) por ejecución (N = 2P), no O(N²), así que **la VRAM tampoco es el límite**: el
+coste de una población mayor es el tiempo, que crece como N². El tope de 8192 viene de guardar los índices
+y rangos de los supervivientes como `short` (N = 2P debe quedar por debajo de 32768).
 
 ### Medido en la RTX 2060
 
-- **P = 256 funciona en las 15 instancias**, con las iteraciones de cada pestaña del libro y `--verify`.
-  Con 30 ejecuciones concurrentes tarda unos 0,1 s de GPU en KC10, 1,5 s en KC20 (300 iteraciones) y
-  1,0 s en KC30.
-- **P = 512 no se puede usar.** El programa lo rechaza y, con el tope subido en una copia de prueba, el
-  kernel de supervivencia falla al lanzarse (`cudaErrorInvalidValue` en `nsga2.cu`).
+- **Con P ≤ 256 los resultados son idénticos a `develop_with_claude_opus_5`** (mismo kernel de un bloque):
+  con la misma semilla, los ficheros de resultados coinciden byte a byte en KC10, KC20 y KC30.
+- **Las poblaciones grandes funcionan en las 15 instancias** con `--verify` OK. Tiempo de GPU de una
+  ejecución, con las iteraciones de cada pestaña del libro:
 
-El bloque de supervivencia guarda la matriz de dominancia en memoria compartida, y esta crece con el
-cuadrado de P:
+| Instancia (iteraciones) | P = 256 | P = 512 | P = 1024 | P = 2048 | P = 4096 |
+|---|---|---|---|---|---|
+| KC10-2fl-1rl (70) | 23 ms | 45 ms | 64 ms | 87 ms | 153 ms |
+| KC30-3fl-1rl (70) | 64 ms | 138 ms | 206 ms | 367 ms | 683 ms |
 
-| P | Hilos por bloque | Memoria compartida (2 objetivos) | Memoria compartida (3 objetivos) |
-|---|---|---|---|
-| 128 | 256 | 14 KB | 15 KB |
-| **256** | 512 | 45 KB | **47 KB** (el límite es 48 KB) |
-| 512 | 1024 | 156 KB | 160 KB |
-| 1024 | 2048 (no permitido) | 574 KB | 582 KB |
+  Con P = 8192 y 10 iteraciones: 51 ms en KC10-2fl-1rl y 202 ms en KC30-3fl-1rl, es decir, unos 5 ms y
+  20 ms por generación.
 
-Esa memoria depende de P y del número de objetivos, no del tamaño de la instancia; las KC30, con 3
-objetivos, son las más justas (47 KB de 48 KB). La VRAM apenas se usa: cada ejecución con P = 256 ocupa
-62 KB en KC10, 82 KB en KC20 y 106 KB en KC30.
+### Efecto del tamaño de población en la calidad
+
+Instancias KC10, 70 iteraciones y 100 ejecuciones por caso. La primera cifra es la distancia gama al frente
+de Pareto óptimo publicado (menor es mejor, calculada como `mQAPMetrics/distance_metric_*.js`); el
+porcentaje es la fracción media del frente óptimo encontrada por ejecución.
+
+| Instancia | P = 256 | P = 512 | P = 1024 | P = 2048 | P = 4096 |
+|---|---|---|---|---|---|
+| KC10-2fl-1rl | 782,85 / 75 % | 692,33 / 77 % | 651,89 / 79 % | 573,58 / 79 % | 557,29 / 79 % |
+| KC10-2fl-5rl | 16.866,45 / 62 % | 13.451,29 / 66 % | 10.487,07 / 70 % | 7.567,27 / 72 % | 6.224,17 / 74 % |
+| KC10-2fl-3uni | 160,14 / 68 % | 119,95 / 72 % | 75,45 / 76 % | 54,64 / 80 % | 29,96 / 82 % |
+
+La fracción del frente óptimo encontrada crece con P en todas las instancias, y la distancia gama baja. El
+tiempo de GPU del lote completo (100 ejecuciones) crece aproximadamente de forma lineal con P: 0,6 s con
+P = 512 y 6,1 s con P = 4096 en KC10-2fl-1rl.
 
 ### Cómo calcular el límite en otra GPU
 
-P debe ser potencia de 2 y al menos 16. El mayor P posible es el más grande que cumpla:
-
-1. **Hilos:** 2P ≤ máximo de hilos por bloque (1024 en todas las GPU actuales), así que P ≤ 512.
-2. **Memoria compartida del kernel de supervivencia** (OBJ = número de objetivos):
-   `S(P) = (2P)²/8 + 2P·(16 + 4·OBJ) + (2P/32)·4 + 12 bytes`
-   S(P) no puede superar 48 KB con el código actual; si el kernel pidiera la memoria compartida extra
-   (*opt-in*), el límite sería el máximo de la GPU.
-3. **Tope del código:** P ≤ 256 (`kMaxPopulation` en `include/config.h`).
-
-La VRAM solo determina cuántas ejecuciones concurrentes caben:
+1. **Tope del código:** P ≤ 8192 (`kMaxPopulation` en `include/config.h`), porque los índices de los
+   supervivientes son `short`.
+2. **Memoria compartida:** solo importa con P ≤ 256 (camino de un bloque, 47 KB como máximo). El camino
+   multibloque usa teselas de fitness de unos 3 KB.
+3. **Lanzamiento cooperativo:** necesario para el pelado de frentes; lo admiten todas las GPU NVIDIA desde
+   Pascal.
+4. **VRAM:** determina cuántas ejecuciones concurrentes caben:
 
 ```
-ejecuciones máximas      = min(65 535, VRAM libre / memoria por ejecución)
-memoria por ejecución    = 2P·(4n + 8·OBJ + 64) + 8P bytes        (n = número de instalaciones)
+ejecuciones máximas   = min(65 535, VRAM libre / memoria por ejecución)
+memoria por ejecución = 2P·(4n + 8·OBJ + 64) + 8P + 38·2P bytes   (el último término es el espacio de trabajo)
 ```
 
-Con 5 GB libres en la RTX 2060 y P = 256 caben unas 49 000 ejecuciones concurrentes de KC30, y hasta el
-máximo del programa (65 535) en KC10 (calculado, no ejecutado).
+Con P = 4096 en KC30, una ejecución ocupa unos 2 MB, así que 100 ejecuciones concurrentes necesitan unos
+200 MB. El espacio de trabajo solo se reserva cuando P > 256.
 
-| GPU | VRAM | Memoria compartida máx. por bloque | P máx. hoy | P máx. subiendo el tope y con opt-in |
-|---|---|---|---|---|
-| RTX 2060 (medida) | 6 GB | 64 KB | **256** | 256 |
-| RTX 3070 Laptop | 8 GB | 99 KB | **256** | 256 (512 necesita 156 KB) |
-| RTX 3080 | 10–12 GB | 99 KB | **256** | 256 |
-| RTX 4080 / 4090 | 16 / 24 GB | 99 KB | **256** | 256 |
-| RTX 5080 / 5090 | 16 / 32 GB | 99 KB | **256** | 256 |
-| A100 / H100 (centro de datos) | 40–80 GB | 163 / 227 KB | 256 | **512** |
+| GPU | VRAM | P máx. (esta rama) | Ejecuciones concurrentes de KC30 con P = 4096 (calculado) |
+|---|---|---|---|
+| RTX 2060 (medida) | 6 GB | **8192** | ~2600 |
+| RTX 3070 Laptop | 8 GB | **8192** | ~3500 |
+| RTX 3080 | 10–12 GB | **8192** | ~4400–5300 |
+| RTX 4080 / 4090 | 16 / 24 GB | **8192** | ~7000–10 600 |
+| RTX 5080 / 5090 | 16 / 32 GB | **8192** | ~7000–14 300 |
 
-Solo la fila de la RTX 2060 está medida; las demás salen de la tabla de capacidades de cómputo de la
-documentación de CUDA. En las GPU de consumo P se queda en 256 aunque tengan mucha más VRAM; lo que ganan
-es capacidad para más ejecuciones concurrentes (con P = 256 todas llegan al máximo de 65 535). Para
-comprobar una GPU concreta, consulta `cudaDevAttrMaxSharedMemoryPerBlockOptin`, `maxThreadsPerBlock` y
-`cudaMemGetInfo`.
+Solo la fila de la RTX 2060 está medida; las demás usan el 85 % de la VRAM de cada GPU. Estas cifras quedan
+muy por encima de lo que permite el tiempo: con P = 4096, cada ejecución de KC30 cuesta unos 0,7 s de GPU.
 
 ### Cómo explorar más soluciones
 
-1. **Sin tocar el código:** usa `--runs`. Las ejecuciones corren a la vez en la GPU y apenas añaden
-   tiempo: 30 ejecuciones de KC30 con P = 256 tardan alrededor de 1 s.
-2. **Cambio moderado, P = 512 en cualquier GPU:** contar los dominadores y listar cada frente en lugar de
-   guardar la matriz. La memoria compartida baja a 26–30 KB con P = 512. 512 es el tope absoluto de un
-   diseño de un solo bloque (1024 hilos). Implementado en la rama `develop_p512_single_block`.
-3. **Rediseño, P de miles:** repartir la supervivencia NSGA-II entre varios bloques y guardar la
-   dominancia en VRAM (por ejemplo, 8 MB por ejecución con P = 4096). Solo entonces la VRAM empezaría a
-   limitar P, y el tiempo crecería con el cuadrado de P. Implementado en la rama
-   `develop_large_population_multiblock`.
-
-Una población mayor da más diversidad, pero no garantiza mejores frentes para el mismo tiempo de cálculo.
+1. **Más ejecuciones concurrentes:** `--runs` (islas sin migración, por ahora).
+2. **Población mayor:** hasta 8192 en esta rama. Para ir más allá hay que pasar los índices y rangos de los
+   supervivientes de `short` a `int`; el coste lo domina entonces el conteo de dominancia, que es O(N²).
+3. **Ambas cosas:** el producto (ejecuciones × P) lo limita la VRAM y, en la práctica, el tiempo.
 
 ---
 
@@ -681,7 +695,7 @@ Una población mayor da más diversidad, pero no garantiza mejores frentes para 
 
 **Límites actuales:**
 - n ≤ 64. La *shared memory* disponible también influye: con 3 objetivos, n ≤ 63 en GPUs con 64 KB *opt-in*.
-- P es una potencia de 2 entre 16 y 256, porque la supervivencia usa un bloque de 2P hilos y bitonic sort
+- P es una potencia de 2 entre 16 y 8192 (índices `short` de supervivientes); hasta 256 la supervivencia usa un bloque de 2P hilos
   (ver [Límites del tamaño de población y recursos de la GPU](#límites-del-tamaño-de-población-y-recursos-de-la-gpu)).
 - Solo se admiten 2 o 3 objetivos (los kernels están instanciados para esos valores).
 - Los costes se almacenan como enteros de 32 bits; el cargador rechaza las instancias que podrían desbordarlos.
@@ -701,7 +715,7 @@ Una población mayor da más diversidad, pero no garantiza mejores frentes para 
 | `CUDA Toolkit X.Y Visual Studio integration not found` | El CUDA Toolkit se instaló antes que Visual Studio, o sin su *Visual Studio Integration*: vuelve a ejecutar el instalador de CUDA (instalación personalizada → Visual Studio Integration). Si tienes varios toolkits instalados, elige uno con `CudaVersion` (ver [Abrir en Visual Studio 2026](#abrir-en-visual-studio-2026-plug-and-play)) |
 | `no kernel image is available for execution on the device` | La GPU es anterior a `sm_75`, o el driver es demasiado antiguo para compilar el PTX: actualiza el driver o añade la arquitectura en `cuda_mqap.props` (`CodeGeneration`) |
 | Visual Studio pide instalar componentes al abrir la solución | Viene de `.vsconfig`: acepta para instalar la carga de trabajo de C++ y el SDK de Windows |
-| `population must be a power of two in [16, 256]` | Usa 16, 32, 64, 128 o 256 |
+| `population must be a power of two in [16, 8192]` | Usa una potencia de 2 entre 16 y 8192 |
 | `instance too large: … shared memory` | La instancia no cabe en la *shared memory* del bloque (ver límites) |
 | `costs may overflow 32-bit fitness values` | La instancia podría desbordar el fitness de 32 bits |
 | Ejecución muy lenta en Debug | Es lo esperado: Debug compila el device con `-G` y sincroniza tras cada kernel. Usa Release para medir |

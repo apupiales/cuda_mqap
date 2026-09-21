@@ -34,6 +34,7 @@
 #include "config.h"
 #include "cuda_check.cuh"
 #include "device_common.cuh"
+#include "survival_workspace.cuh"
 
 namespace mqap {
 
@@ -174,14 +175,19 @@ __global__ void survivalKernel(const unsigned int* __restrict__ fitness, int pop
 
 template <int OBJ>
 void launchSurvival(const unsigned int* fitness, int population, int runs,
-                    short* survivorIndex, short* survivorRank, float* survivorCrowding) {
+                    short* survivorIndex, short* survivorRank, float* survivorCrowding,
+                    SurvivalWorkspace* workspace) {
+    if (workspace != nullptr && workspace->multiblock()) {
+        launchSurvivalMultiblock<OBJ>(fitness, population, runs, survivorIndex, survivorRank, survivorCrowding, *workspace);
+        return;
+    }
     const int total = 2 * population;
     detail::survivalKernel<OBJ><<<runs, total, detail::survivalSharedMemory(total, OBJ)>>>(
         fitness, population, survivorIndex, survivorRank, survivorCrowding);
     CUDA_CHECK_KERNEL();
 }
 
-template void launchSurvival<2>(const unsigned int*, int, int, short*, short*, float*);
-template void launchSurvival<3>(const unsigned int*, int, int, short*, short*, float*);
+template void launchSurvival<2>(const unsigned int*, int, int, short*, short*, float*, SurvivalWorkspace*);
+template void launchSurvival<3>(const unsigned int*, int, int, short*, short*, float*, SurvivalWorkspace*);
 
 } // namespace mqap

@@ -50,6 +50,7 @@
     <CudaCompile Include="src\fitness.cu" />
     <CudaCompile Include="src\local_search.cu" />
     <CudaCompile Include="src\nsga2.cu" />
+    <CudaCompile Include="src\nsga2_multiblock.cu" />
     <CudaCompile Include="src\operators.cu" />
     <CudaCompile Include="src\solver.cu" />
   </ItemGroup>
@@ -61,6 +62,7 @@
     <ClInclude Include="include\instance.h" />
     <ClInclude Include="include\kernels.cuh" />
     <ClInclude Include="include\solver.h" />
+    <ClInclude Include="include\survival_workspace.cuh" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

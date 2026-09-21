@@ -11,6 +11,8 @@
     <ClCompile>
       <WarningLevel>Level4</WarningLevel>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <!-- CUB (used by the multi-block survival) requires the conforming MSVC preprocessor. -->
+      <AdditionalOptions>/Zc:preprocessor %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;WIN64;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
@@ -20,7 +22,7 @@
            the PTX of each one (the driver JIT-compiles it for newer GPUs, e.g. RTX 50xx). Needs CUDA >= 11.8. -->
       <CodeGeneration>compute_75,sm_75;compute_80,sm_80;compute_86,sm_86;compute_89,sm_89</CodeGeneration>
       <Include>$(MSBuildThisFileDirectory)include;%(Include)</Include>
-      <AdditionalOptions>-std=c++17 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>-std=c++17 -Xcompiler "/Zc:preprocessor" %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
     <Link>
       <SubSystem>Console</SubSystem>

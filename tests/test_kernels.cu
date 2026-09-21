@@ -35,6 +35,7 @@
 #include "device_buffer.cuh"
 #include "instance.h"
 #include "kernels.cuh"
+#include "survival_workspace.cuh"
 
 using namespace mqap;
 
@@ -208,7 +209,7 @@ std::vector<CpuSurvivor> cpuSurvival(const std::vector<unsigned int>& fit, int t
 }
 
 template <int OBJ>
-void testSurvival(int population, int runs) {
+void testSurvival(int population, int runs, bool forceMultiblock = false) {
     std::mt19937 rng(100 + population * OBJ);
     const int total = 2 * population;
     // Distinct values per objective, so the sort order (and the crowding) is unique.
@@ -228,7 +229,8 @@ void testSurvival(int population, int runs) {
     DeviceBuffer<short> dRank(static_cast<size_t>(runs) * population);
     DeviceBuffer<float> dCrowding(static_cast<size_t>(runs) * population);
     dFitness.copyFromHost(fitness);
-    launchSurvival<OBJ>(dFitness.get(), population, runs, dIndex.get(), dRank.get(), dCrowding.get());
+    SurvivalWorkspace workspace(population, runs, forceMultiblock);
+    launchSurvival<OBJ>(dFitness.get(), population, runs, dIndex.get(), dRank.get(), dCrowding.get(), &workspace);
     const std::vector<short> index = dIndex.toHost();
     const std::vector<short> rank = dRank.toHost();
     const std::vector<float> crowding = dCrowding.toHost();
@@ -489,6 +491,12 @@ int main(int argc, char** argv) {
     run("survival == CPU NSGA-II      P=64  OBJ=2", [] { testSurvival<2>(64, 3); });
     run("survival == CPU NSGA-II      P=64  OBJ=3", [] { testSurvival<3>(64, 3); });
     run("survival == CPU NSGA-II      P=256 OBJ=3", [] { testSurvival<3>(256, 2); });
+    run("multi-block survival == CPU  P=16  OBJ=2 (forced)", [] { testSurvival<2>(16, 3, true); });
+    run("multi-block survival == CPU  P=64  OBJ=3 (forced)", [] { testSurvival<3>(64, 3, true); });
+    run("multi-block survival == CPU  P=256 OBJ=2 (forced)", [] { testSurvival<2>(256, 2, true); });
+    run("multi-block survival == CPU  P=512 OBJ=2", [] { testSurvival<2>(512, 3); });
+    run("multi-block survival == CPU  P=1024 OBJ=3", [] { testSurvival<3>(1024, 2); });
+    run("multi-block survival == CPU  P=2048 OBJ=2", [] { testSurvival<2>(2048, 1); });
     run("greedy 2-opt == CPU greedy   n=10 OBJ=2", [] { testGreedy<2>(10, 64, 3); });
     run("greedy 2-opt == CPU greedy   n=30 OBJ=3", [] { testGreedy<3>(30, 32, 4); });
     run("greedy 2-opt == CPU greedy   n=60 OBJ=3 (>48 KB shared)", [] { testGreedy<3>(60, 16, 1); });

@@ -29,10 +29,13 @@ namespace mqap {
 // shared memory available per block (flow + distance matrices), checked at runtime.
 constexpr int kMaxFacilities = 64;
 
-// Population size (P) limits. P must be a power of two: the NSGA-II survival kernel runs in a
-// single block of 2P threads and uses bitonic sorts in shared memory.
+// Population size (P) limits. P must be a power of two. Up to kSingleBlockMaxPopulation the NSGA-II
+// survival of each run runs in a single block of 2P threads (bitonic sorts in shared memory); above
+// it, the multi-block survival of nsga2_multiblock.cu is used. Survivor indices and ranks are
+// stored as short, so N = 2P must stay below 32768.
 constexpr int kMinPopulation = 16;
-constexpr int kMaxPopulation = 256;
+constexpr int kSingleBlockMaxPopulation = 256;
+constexpr int kMaxPopulation = 8192;
 
 // Number of objectives supported by the kernels (they are instantiated for these values).
 constexpr int kMinObjectives = 2;

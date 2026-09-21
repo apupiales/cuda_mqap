@@ -32,6 +32,7 @@
 #include "cuda_check.cuh"
 #include "device_buffer.cuh"
 #include "kernels.cuh"
+#include "survival_workspace.cuh"
 
 namespace mqap {
 
@@ -80,6 +81,7 @@ std::vector<RunResult> solveImpl(const Instance& instance, const SolverOptions& 
     DeviceBuffer<float> survivorCrowding(static_cast<size_t>(runs) * population);
     DeviceBuffer<int> greedyType(runs);
     DeviceBuffer<RngState> rng(totalRows);
+    SurvivalWorkspace survivalWorkspace(population, runs); // multi-block buffers only when P > 256
 
     cudaEvent_t start;
     cudaEvent_t stop;
@@ -98,7 +100,8 @@ std::vector<RunResult> solveImpl(const Instance& instance, const SolverOptions& 
 
     for (int iteration = 0; iteration <= options.iterations; iteration++) {
         // Rt (2P) -> best P by rank and crowding distance.
-        launchSurvival<OBJ>(fitness, population, runs, survivorIndex.get(), survivorRank.get(), survivorCrowding.get());
+        launchSurvival<OBJ>(fitness, population, runs, survivorIndex.get(), survivorRank.get(), survivorCrowding.get(),
+                            &survivalWorkspace);
         if (iteration == options.iterations) {
             break;
         }

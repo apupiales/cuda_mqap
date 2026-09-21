@@ -48,6 +48,7 @@
     <CudaCompile Include="src\fitness.cu" />
     <CudaCompile Include="src\local_search.cu" />
     <CudaCompile Include="src\nsga2.cu" />
+    <CudaCompile Include="src\nsga2_multiblock.cu" />
     <CudaCompile Include="src\operators.cu" />
     <CudaCompile Include="src\solver.cu" />
     <CudaCompile Include="tests\test_kernels.cu" />

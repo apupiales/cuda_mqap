@@ -33,6 +33,7 @@ add_library(mqap_core STATIC
     src/instance.cpp
     src/fitness.cu
     src/nsga2.cu
+    src/nsga2_multiblock.cu
     src/operators.cu
     src/local_search.cu
     src/solver.cu
@@ -41,6 +42,12 @@ target_include_directories(mqap_core PUBLIC include)
 # Debug builds synchronize after every kernel to report errors at the failing launch.
 target_compile_definitions(mqap_core PUBLIC $<$<CONFIG:Debug>:MQAP_SYNC_CHECK>)
 target_compile_options(mqap_core PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
+if(MSVC)
+    # CUB (used by the multi-block survival) requires the conforming MSVC preprocessor.
+    target_compile_options(mqap_core PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
+        $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>)
+endif()
 
 add_executable(cuda_mqap src/main.cpp)
 target_link_libraries(cuda_mqap PRIVATE mqap_core)
