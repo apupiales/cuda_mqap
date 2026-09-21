@@ -227,8 +227,11 @@ def analyze(path, po_dir, patience, epsilon, out_dir, hv_every):
     sampled = present[::step]
     if sampled[-1] != generations:
         sampled.append(generations)
+    # Distance in generations between two hypervolume samples. With a subsampled trace, or with fronts
+    # large enough to need a step, this is the real window the stagnation test looks at.
+    spacing = min((b - a for a, b in zip(sampled, sampled[1:])), default=1)
     summary = {'instance': instance, 'file': os.path.basename(path), 'runs': len(runs),
-               'generations': generations, 'objectives': objectives, 'hv_step': step}
+               'generations': generations, 'objectives': objectives, 'hv_step': spacing}
     stalls, finals, optima, coverages = [], [], [], []
     curves = {}
     for run, data in sorted(runs.items()):
@@ -301,7 +304,7 @@ def main():
             for path in paths]
 
     head = ('%-16s %5s %6s %7s %11s %9s %11s %9s %12s %11s %9s' %
-            ('instance', 'runs', 'gens', 'hv_step', 't_stall_med', 't_stall_90', 't_final_med',
+            ('instance', 'runs', 'gens', 'hv_gens', 't_stall_med', 't_stall_90', 't_final_med',
              't_final_90', 'optimum_runs', 't_opt_med', 'coverage'))
     print(head)
     print('-' * len(head))
@@ -316,6 +319,11 @@ def main():
             print('%-16s   the run is still improving at the last generation: raise --iterations'
                   % ('(%s)' % row['instance']))
     print('\npatience = %d generations, epsilon = %g' % (args.patience, args.epsilon))
+    for row in rows:
+        if row['hv_step'] > args.patience:
+            print('%-16s   the hypervolume is sampled every %d generations, so its stagnation test asks '
+                  'for no growth over that window, not over --patience'
+                  % ('(%s)' % row['instance'], row['hv_step']))
     if args.out_dir:
         print('per-generation curves in %s' % args.out_dir)
 

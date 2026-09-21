@@ -442,6 +442,58 @@ El número de generaciones depende mucho de la población, así que la respuesta
 tiempo de una generación se conoce para cada P (ver [Rendimiento](#rendimiento)), de modo que
 `generaciones × tiempo por generación` indica qué pareja (P, generaciones) alcanza antes el objetivo.
 
+#### Resultados de la campaña (RTX 2060, 2026-09-21)
+
+Dos poblaciones, subiendo el tope de `--iterations` hasta que el estancamiento fuera observable: P = 1024
+con 30 ejecuciones y tope de 2000 generaciones, y P = 16384 con 10 ejecuciones y tope de 300 (1500 y 5
+ejecuciones en las instancias de 3 objetivos). `t_stall` es la mediana sobre las ejecuciones, y la
+cobertura es la fracción del frente óptimo publicado encontrada al final.
+
+| Instancia | `t_stall` P = 1024 | `t_stall` P = 16384 | El frente deja de cambiar (P = 1024) | Frente óptimo | Cobertura |
+|---|---|---|---|---|---|
+| KC10-2fl-2uni | **1** | **1** | 1 | 30/30 ejecuciones en la generación 1 | 100 % |
+| KC10-2fl-2rl | **6** | **4,5** | 9 | 30/30 ejecuciones en la generación 9 | 100 % |
+| KC10-2fl-1uni | **6,5** | **5,5** | 6,5 | nunca | 92,3 % |
+| KC10-2fl-3rl | **13** | **6,5** | 845 | nunca | 72,7 % |
+| KC10-2fl-1rl | **14** | **5,5** | 53 | nunca | 79,3 % |
+| KC10-2fl-4rl | **16,5** | **6** | 320 | nunca | 73,6 % |
+| KC10-2fl-5rl | **29** | **20** | 1054 | nunca | 78,6 % |
+| KC10-2fl-3uni | **52** | **22,5** | 1182 | nunca | 86,3 % |
+| KC20-2fl-2uni | **46,5** | **28,5** | 65 | — | — |
+| KC20-2fl-1rl | **98** | **55,5** | 1817 | — | — |
+| KC20-2fl-1uni | **185** | **100** | 1892 | — | — |
+| KC20-2fl-3uni | **373** | **144** | 1987 | — | — |
+| KC30-3fl-2uni | **550** | **360** | ~tope | — | — |
+| KC30-3fl-1rl | **1476** | > 1500 | ~tope | — | — |
+| KC30-3fl-1uni | **1886** | > 1500 | ~tope | — | — |
+
+Lo que dice la campaña:
+
+- **Las 70 generaciones heredadas de la versión original encajan en las instancias KC10** (estancan entre 1
+  y 52), se quedan **cortas en KC20** (46 a 373) y **claramente cortas en KC30** (550 a 1886, y dos de
+  ellas no estancan ni en 2000).
+- **`t_stall` no depende del tope**: multiplicarlo por cuatro (500 → 2000) no movió los valores de KC10 ni
+  de KC20, así que son la respuesta real y no un artefacto del presupuesto.
+- **`t_final` no converge** (845, 1054, 1182, 1817, 1987…): el frente sigue admitiendo micro-refinamientos
+  casi indefinidamente, sin ganancia medible. Para decidir cuántas generaciones usar, el indicador es
+  `t_stall`.
+- **Más generaciones casi no compran calidad.** Pasar de 500 a 2000 generaciones movió la cobertura entre
+  0,0 y 3,8 puntos.
+- **Más población reduce las generaciones a la mitad, pero no sale a cuenta en tiempo.** Multiplicar la
+  población por 16 baja `t_stall` entre 1,5× y 2,5×, mientras que cada generación cuesta unas 31 veces más
+  (0,25 ms frente a 7,8 ms por ejecución y generación en KC10), así que P = 1024 llega a su meseta unas
+  doce veces más barato.
+- **Hay un techo de cobertura que no rompe ni la población ni las generaciones**: KC10-2fl-1rl se queda en
+  el 79,3 % con P = 1024, con P = 16384 y, como muestra el libro, también con P = 65536 (46 de sus 58
+  puntos óptimos). La población sí manda en el rango bajo —de P = 64 (38 de 58) a P = 1024— y a partir de
+  ahí se aplana. Lo que queda es el algoritmo: esta combinación de NSGA-II con el greedy 2-opt converge a
+  un subconjunto del frente óptimo.
+
+Salvedades de la medición: con 3 objetivos y población grande casi toda la población es no dominada, así
+que esas trazas se grabaron con `--trace-every 10` y su hipervolumen se muestrea cada 60 a 480
+generaciones; el análisis imprime esa ventana, porque la prueba de estancamiento pasa a exigir que no haya
+crecimiento en ella. Las dos instancias KC30 marcadas `> 1500` seguían mejorando al final de la traza.
+
 | Instancias | P | Generaciones |
 |---|---|---|
 | KC10-2fl-1rl, 3rl, 4rl, 5rl | 64 | 70 |

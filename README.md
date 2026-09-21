@@ -441,6 +441,57 @@ The generation count depends strongly on the population, so the useful answer is
 time of a generation is known for each P (see [Performance](#performance)), so
 `generations × time per generation` tells which pair (P, generations) reaches the target sooner.
 
+#### Results of the campaign (RTX 2060, 2026-09-21)
+
+Two populations, with the cap of `--iterations` raised until the stagnation was observable: P = 1024 with
+30 runs and a cap of 2000 generations, and P = 16384 with 10 runs and a cap of 300 (1500 and 5 runs for
+the 3-objective instances). `t_stall` is the median over the runs, and the coverage is the share of the
+published optimal front found at the end.
+
+| Instance | `t_stall` P = 1024 | `t_stall` P = 16384 | Front stops changing (P = 1024) | Optimal front | Coverage |
+|---|---|---|---|---|---|
+| KC10-2fl-2uni | **1** | **1** | 1 | 30/30 runs at generation 1 | 100 % |
+| KC10-2fl-2rl | **6** | **4.5** | 9 | 30/30 runs at generation 9 | 100 % |
+| KC10-2fl-1uni | **6.5** | **5.5** | 6.5 | never | 92.3 % |
+| KC10-2fl-3rl | **13** | **6.5** | 845 | never | 72.7 % |
+| KC10-2fl-1rl | **14** | **5.5** | 53 | never | 79.3 % |
+| KC10-2fl-4rl | **16.5** | **6** | 320 | never | 73.6 % |
+| KC10-2fl-5rl | **29** | **20** | 1054 | never | 78.6 % |
+| KC10-2fl-3uni | **52** | **22.5** | 1182 | never | 86.3 % |
+| KC20-2fl-2uni | **46.5** | **28.5** | 65 | — | — |
+| KC20-2fl-1rl | **98** | **55.5** | 1817 | — | — |
+| KC20-2fl-1uni | **185** | **100** | 1892 | — | — |
+| KC20-2fl-3uni | **373** | **144** | 1987 | — | — |
+| KC30-3fl-2uni | **550** | **360** | ~cap | — | — |
+| KC30-3fl-1rl | **1476** | > 1500 | ~cap | — | — |
+| KC30-3fl-1uni | **1886** | > 1500 | ~cap | — | — |
+
+What the campaign says:
+
+- **The 70 generations inherited from the original version fit the KC10 instances** (they stagnate between
+  1 and 52), are **short for KC20** (46 to 373) and **clearly short for KC30** (550 to 1886, and two of
+  them do not stagnate even in 2000).
+- **`t_stall` does not depend on the cap**: multiplying it by four (500 → 2000) left the KC10 and KC20
+  values untouched, so they are the real answer and not an artifact of the budget.
+- **`t_final` does not converge** (845, 1054, 1182, 1817, 1987…): the front keeps taking tiny refinements
+  almost indefinitely, without measurable gain. To choose a number of generations, the indicator is
+  `t_stall`.
+- **More generations buy almost nothing.** Going from 500 to 2000 generations moved the coverage by 0.0 to
+  3.8 points.
+- **More population halves the generations, but does not pay for itself in time.** Sixteen times the
+  population cuts `t_stall` by 1.5× to 2.5×, while a generation costs about 31 times more (0.25 ms against
+  7.8 ms per run and generation on KC10), so P = 1024 reaches its plateau about twelve times cheaper.
+- **There is a coverage ceiling that neither the population nor the generations break**: KC10-2fl-1rl
+  stays at 79.3 % with P = 1024, with P = 16384 and, as the workbook shows, also with P = 65536 (46 of its
+  58 optimal points). The population does decide in the low range — from P = 64 (38 of 58) to P = 1024 —
+  and flattens after that. What is left is the algorithm: this combination of NSGA-II and greedy 2-opt
+  converges to a subset of the optimal front.
+
+Caveats of the measurement: with 3 objectives and a large population nearly the whole population is
+non-dominated, so those traces were recorded with `--trace-every 10` and their hypervolume is sampled
+every 60 to 480 generations; the analysis prints that window, since the stagnation test then asks for no
+growth over it. The two KC30 instances marked `> 1500` were still improving at the end of the trace.
+
 | Instances | P | Generations |
 |---|---|---|
 | KC10-2fl-1rl, 3rl, 4rl, 5rl | 64 | 70 |
