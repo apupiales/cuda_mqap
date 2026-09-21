@@ -488,6 +488,30 @@ exactamente sobre el frente óptimo publicado**, no que se haya encontrado el fr
 de KC10-2fl-1uni tiene 12 de sus 13 puntos. La ejecución que se dibuja en los gráficos es una ejecución
 única aparte, con semilla 20260920; esta tabla compara los lotes de 100 ejecuciones.
 
+**Una semilla para el lote, un flujo aleatorio por ejecución.** `--seed` no repite la misma aleatoriedad en
+todas las ejecuciones. `curand_init(seed, id, 0, ...)`, en `src/operators.cu`, da a cada uno de los
+`runs × 2P` estados su propia subsecuencia de Philox, así que la ejecución *r* saca sus números del tramo
+`[r·2P, (r+1)·2P)` y dos ejecuciones nunca comparten números: con la misma semilla, tres ejecuciones de
+P = 16 y cero generaciones ya dan tres poblaciones distintas. Lo que se repite entre ejecuciones es la
+convergencia, no la aleatoriedad. Contando los frentes distintos de las 100 ejecuciones de cada lote:
+
+| Instancia | Frentes distintos / 100 | Tamaños |
+|---|---|---|
+| KC10-2fl-3uni | 60 | 113–119 puntos |
+| KC10-2fl-1rl | 21 | 47–50 puntos |
+| KC10-2fl-1uni | 2 | 12 y 13 puntos |
+
+En KC10-2fl-1rl, 64 de las 100 ejecuciones acaban exactamente en el mismo frente de 47 puntos, porque con
+P = 65536 la búsqueda converge a él; en KC10-2fl-1uni uno de los dos frentes tiene 12 de los 13 puntos
+óptimos publicados y el otro los 13. Por eso también la desviación típica vale 0,00 en 1uni, 2rl y 2uni:
+no porque las ejecuciones sean iguales, sino porque en todas ellas cada solución encontrada está sobre el
+frente óptimo, de modo que la distancia es 0 en todas.
+
+Una semilla fija mantiene el lote reproducible: repetir el comando de la nota de A11 devuelve exactamente
+las cifras de la tabla. Una semilla tomada del reloj no añadiría independencia entre ejecuciones —ya la
+tienen— y sí se perdería eso. Lo que tampoco responde un timestamp es si el resultado depende de la
+semilla concreta; eso se comprueba repitiendo el lote con una segunda semilla fija y comparando las medias.
+
 **Calidad frente al Greedy 2-opt original.** Los resultados son mixtos:
 
 | Instancia | Métrica | Original | Esta versión |

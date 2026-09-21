@@ -487,6 +487,31 @@ published optimal front** — not that the whole front was found: the red series
 its 13 points. The run drawn in the charts is a separate single run, with seed 20260920; this table
 compares the 100-run batches.
 
+**One seed for the batch, one random stream per run.** `--seed` does not repeat the same randomness in
+every run. `curand_init(seed, id, 0, ...)` in `src/operators.cu` gives each of the `runs × 2P` states its
+own Philox subsequence, so run *r* draws from the block `[r·2P, (r+1)·2P)` and no two runs share numbers:
+with the same seed, three runs of P = 16 and no generations already produce three different populations.
+What repeats between runs is convergence, not randomness. Counting the distinct fronts of the 100 runs of
+each batch:
+
+| Instance | Distinct fronts / 100 | Sizes |
+|---|---|---|
+| KC10-2fl-3uni | 60 | 113–119 points |
+| KC10-2fl-1rl | 21 | 47–50 points |
+| KC10-2fl-1uni | 2 | 12 and 13 points |
+
+On KC10-2fl-1rl, 64 of the 100 runs end on exactly the same front of 47 points, because with P = 65536 the
+search converges to it; on KC10-2fl-1uni one of the two fronts has 12 of the 13 published optimal points
+and the other has all 13. This is also why the standard deviation is 0.00 on 1uni, 2rl and 2uni: not
+because the runs are identical, but because in every one of them every solution found lies on the optimal
+front, so the distance is 0 in all of them.
+
+A fixed seed keeps the batch reproducible: running the command in the note of A11 again gives exactly the
+numbers of the table. A seed taken from the clock would add no independence between runs — they already
+have it — and would lose that. What a timestamp does not answer either is whether the result depends on
+the particular seed; that is checked by repeating the batch with a second fixed seed and comparing the
+means.
+
 **Quality versus the original Greedy 2-opt.** The results are mixed:
 
 | Instance | Metric | Original | This version |
