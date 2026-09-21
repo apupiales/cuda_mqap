@@ -261,7 +261,10 @@ reescriben el programa llevan su propia copia, con sus resultados añadidos junt
   una serie **roja** con las mismas iteraciones y la población máxima de esa rama, P = 65536. Alcanza más
   puntos del frente óptimo publicado en todas las instancias KC10 — 114 de los 130 óptimos de
   KC10-2fl-3uni frente a 66 de la serie verde, 39 de 49 frente a 26 en KC10-2fl-5rl, y 46 de 58 frente a
-  38 en KC10-2fl-1rl — y su README documenta las ejecuciones y las distancias.
+  38 en KC10-2fl-1rl. Su pestaña *Distance Metric* incluye además la distancia gama de esa población sobre
+  100 ejecuciones por instancia KC10 (26.891,28 → 3.409,13 en KC10-2fl-5rl; 0,00 en 1uni, 2rl y 2uni, donde
+  todas las soluciones encontradas caen sobre el frente óptimo), y su README documenta las ejecuciones y
+  las distancias.
 
 ---
 

@@ -258,7 +258,9 @@ branches that rewrite the program carry their own copy, with their results added
   one, a **red** series with the same iterations and the maximum population of that branch, P = 65536. It
   reaches more of the published optimal front on every KC10 instance — 114 of the 130 optimal points of
   KC10-2fl-3uni against 66 of the green series, 39 of 49 against 26 on KC10-2fl-5rl, 46 of 58 against 38
-  on KC10-2fl-1rl — and its README documents the runs and the distances.
+  on KC10-2fl-1rl. Its *Distance Metric* tab also carries the gamma distance of that population over 100
+  runs per KC10 instance (26,891.28 → 3,409.13 on KC10-2fl-5rl; 0.00 on 1uni, 2rl and 2uni, where every
+  solution found lands on the optimal front), and its README documents the runs and the distances.
 
 ---
 
