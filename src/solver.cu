@@ -76,8 +76,8 @@ std::vector<RunResult> solveImpl(const Instance& instance, const SolverOptions& 
     DeviceBuffer<short> genesB(totalRows * n);
     DeviceBuffer<unsigned int> fitnessA(totalRows * OBJ);
     DeviceBuffer<unsigned int> fitnessB(totalRows * OBJ);
-    DeviceBuffer<short> survivorIndex(static_cast<size_t>(runs) * population);
-    DeviceBuffer<short> survivorRank(static_cast<size_t>(runs) * population);
+    DeviceBuffer<int> survivorIndex(static_cast<size_t>(runs) * population);
+    DeviceBuffer<int> survivorRank(static_cast<size_t>(runs) * population);
     DeviceBuffer<float> survivorCrowding(static_cast<size_t>(runs) * population);
     DeviceBuffer<int> greedyType(runs);
     DeviceBuffer<RngState> rng(totalRows);
@@ -127,8 +127,8 @@ std::vector<RunResult> solveImpl(const Instance& instance, const SolverOptions& 
     std::vector<unsigned int> hostFitness(totalRows * OBJ);
     CUDA_CHECK(cudaMemcpy(hostGenes.data(), genes, hostGenes.size() * sizeof(short), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaMemcpy(hostFitness.data(), fitness, hostFitness.size() * sizeof(unsigned int), cudaMemcpyDeviceToHost));
-    const std::vector<short> hostIndex = survivorIndex.toHost();
-    const std::vector<short> hostRank = survivorRank.toHost();
+    const std::vector<int> hostIndex = survivorIndex.toHost();
+    const std::vector<int> hostRank = survivorRank.toHost();
 
     std::vector<RunResult> results(runs);
     for (int run = 0; run < runs; run++) {

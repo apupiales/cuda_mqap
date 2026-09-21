@@ -53,7 +53,7 @@ size_t survivalSharedMemory(int total, int objectives) {
 // blockIdx.x = run, blockDim.x = 2P (power of two, multiple of 32).
 template <int OBJ>
 __global__ void survivalKernel(const unsigned int* __restrict__ fitness, int population,
-                               short* __restrict__ survivorIndex, short* __restrict__ survivorRank,
+                               int* __restrict__ survivorIndex, int* __restrict__ survivorRank,
                                float* __restrict__ survivorCrowding) {
     const int total = blockDim.x;
     const int words = total / 32;
@@ -165,7 +165,7 @@ __global__ void survivalKernel(const unsigned int* __restrict__ fitness, int pop
     if (i < population) {
         const size_t out = static_cast<size_t>(run) * population + i;
         const int id = sIndex[i];
-        survivorIndex[out] = static_cast<short>(id);
+        survivorIndex[out] = id;
         survivorRank[out] = sRank[id];
         survivorCrowding[out] = sCrowding[id];
     }
@@ -175,7 +175,7 @@ __global__ void survivalKernel(const unsigned int* __restrict__ fitness, int pop
 
 template <int OBJ>
 void launchSurvival(const unsigned int* fitness, int population, int runs,
-                    short* survivorIndex, short* survivorRank, float* survivorCrowding,
+                    int* survivorIndex, int* survivorRank, float* survivorCrowding,
                     SurvivalWorkspace* workspace) {
     if (workspace != nullptr && workspace->multiblock()) {
         launchSurvivalMultiblock<OBJ>(fitness, population, runs, survivorIndex, survivorRank, survivorCrowding, *workspace);
@@ -187,7 +187,7 @@ void launchSurvival(const unsigned int* fitness, int population, int runs,
     CUDA_CHECK_KERNEL();
 }
 
-template void launchSurvival<2>(const unsigned int*, int, int, short*, short*, float*, SurvivalWorkspace*);
-template void launchSurvival<3>(const unsigned int*, int, int, short*, short*, float*, SurvivalWorkspace*);
+template void launchSurvival<2>(const unsigned int*, int, int, int*, int*, float*, SurvivalWorkspace*);
+template void launchSurvival<3>(const unsigned int*, int, int, int*, int*, float*, SurvivalWorkspace*);
 
 } // namespace mqap

@@ -225,14 +225,14 @@ void testSurvival(int population, int runs, bool forceMultiblock = false) {
         }
     }
     DeviceBuffer<unsigned int> dFitness(fitness.size());
-    DeviceBuffer<short> dIndex(static_cast<size_t>(runs) * population);
-    DeviceBuffer<short> dRank(static_cast<size_t>(runs) * population);
+    DeviceBuffer<int> dIndex(static_cast<size_t>(runs) * population);
+    DeviceBuffer<int> dRank(static_cast<size_t>(runs) * population);
     DeviceBuffer<float> dCrowding(static_cast<size_t>(runs) * population);
     dFitness.copyFromHost(fitness);
     SurvivalWorkspace workspace(population, runs, forceMultiblock);
     launchSurvival<OBJ>(dFitness.get(), population, runs, dIndex.get(), dRank.get(), dCrowding.get(), &workspace);
-    const std::vector<short> index = dIndex.toHost();
-    const std::vector<short> rank = dRank.toHost();
+    const std::vector<int> index = dIndex.toHost();
+    const std::vector<int> rank = dRank.toHost();
     const std::vector<float> crowding = dCrowding.toHost();
 
     for (int r = 0; r < runs; r++) {
@@ -249,6 +249,49 @@ void testSurvival(int population, int runs, bool forceMultiblock = false) {
                               crowding[k] == expected[q].crowding;
             EXPECT(same, "survival P=%d OBJ=%d run %d pos %d: crowding %f != %f",
                    population, OBJ, r, q, crowding[k], expected[q].crowding);
+        }
+    }
+}
+
+// Survival with more than 32767 individuals per run: the CPU reference would be too slow, so this
+// checks the invariants that the selection must satisfy, with indices and ranks beyond a short.
+template <int OBJ>
+void testLargeSurvival(int population) {
+    std::mt19937 rng(population);
+    const int total = 2 * population;
+    std::vector<unsigned int> fitness(static_cast<size_t>(total) * OBJ);
+    for (unsigned int& f : fitness) f = rng() % 1000000u;
+    DeviceBuffer<unsigned int> dFitness(fitness.size());
+    DeviceBuffer<int> dIndex(population), dRank(population);
+    DeviceBuffer<float> dCrowding(population);
+    dFitness.copyFromHost(fitness);
+    SurvivalWorkspace workspace(population, 1);
+    launchSurvival<OBJ>(dFitness.get(), population, 1, dIndex.get(), dRank.get(), dCrowding.get(), &workspace);
+    const std::vector<int> index = dIndex.toHost();
+    const std::vector<int> rank = dRank.toHost();
+    const std::vector<float> crowding = dCrowding.toHost();
+
+    std::vector<int> seen(total, 0);
+    for (int q = 0; q < population; q++) {
+        EXPECT(index[q] >= 0 && index[q] < total && !seen[index[q]]++, "survival P=%d: invalid index at %d",
+               population, q);
+        EXPECT(rank[q] >= 1 && rank[q] <= total, "survival P=%d: rank %d out of range", population, rank[q]);
+        if (q == 0) continue;
+        EXPECT(rank[q] >= rank[q - 1], "survival P=%d: ranks not sorted at %d", population, q);
+        EXPECT(rank[q] > rank[q - 1] || crowding[q] <= crowding[q - 1],
+               "survival P=%d: crowding not descending inside rank %d", population, rank[q]);
+    }
+    // Nobody in the population can dominate a survivor of rank 1.
+    for (int q = 0; q < population && rank[q] == 1; q++) {
+        const unsigned int* mine = &fitness[static_cast<size_t>(index[q]) * OBJ];
+        for (int j = 0; j < total; j++) {
+            const unsigned int* other = &fitness[static_cast<size_t>(j) * OBJ];
+            bool lessOrEqual = true, less = false;
+            for (int o = 0; o < OBJ; o++) {
+                lessOrEqual &= other[o] <= mine[o];
+                less |= other[o] < mine[o];
+            }
+            EXPECT(!(lessOrEqual && less), "survival P=%d: rank 1 survivor %d is dominated", population, index[q]);
         }
     }
 }
@@ -327,8 +370,8 @@ void testReproduce(int n, int population, int runs) {
     const std::vector<short> genes = randomPermutations(rows * runs, n, rng);
     std::vector<unsigned int> fitness(static_cast<size_t>(rows) * runs * OBJ);
     for (unsigned int& f : fitness) f = rng();
-    std::vector<short> index(static_cast<size_t>(runs) * population);
-    std::vector<short> rank(index.size());
+    std::vector<int> index(static_cast<size_t>(runs) * population);
+    std::vector<int> rank(index.size());
     std::vector<float> crowding(index.size());
     for (int r = 0; r < runs; r++) {
         std::vector<short> ids(rows);
@@ -336,7 +379,7 @@ void testReproduce(int n, int population, int runs) {
         std::shuffle(ids.begin(), ids.end(), rng);
         for (int q = 0; q < population; q++) {
             index[static_cast<size_t>(r) * population + q] = ids[q];
-            rank[static_cast<size_t>(r) * population + q] = static_cast<short>(1 + q / 8);
+            rank[static_cast<size_t>(r) * population + q] = 1 + q / 8;
             crowding[static_cast<size_t>(r) * population + q] = static_cast<float>(rng() % 100);
         }
     }
@@ -344,7 +387,7 @@ void testReproduce(int n, int population, int runs) {
     DeviceBuffer<unsigned int> dFitness(fitness.size()), dNextFitness(fitness.size());
     // Offspring fitness is computed later by the greedy kernel; zero it so the buffer can be copied back.
     CUDA_CHECK(cudaMemset(dNextFitness.get(), 0, dNextFitness.size() * sizeof(unsigned int)));
-    DeviceBuffer<short> dIndex(index.size()), dRank(rank.size());
+    DeviceBuffer<int> dIndex(index.size()), dRank(rank.size());
     DeviceBuffer<float> dCrowding(crowding.size());
     DeviceBuffer<int> dTypes(runs);
     DeviceBuffer<RngState> dRng(static_cast<size_t>(rows) * runs);
@@ -476,8 +519,20 @@ void run(const char* name, F test) {
 
 } // namespace
 
+// Usage: test_kernels [mQAPData directory] [--quick]
+// --quick skips the two tests with more than 32767 individuals, which are too slow under
+// compute-sanitizer (racecheck in particular).
 int main(int argc, char** argv) {
-    const std::string data = argc > 1 ? argv[1] : "mQAPData";
+    std::string data = "mQAPData";
+    bool quick = false;
+    for (int i = 1; i < argc; i++) {
+        const std::string arg = argv[i];
+        if (arg == "--quick") {
+            quick = true;
+        } else {
+            data = arg;
+        }
+    }
     const Instance kc10 = loadInstance(data + "/KC10-2fl-1rl.dat");
     const Instance kc20 = loadInstance(data + "/KC20-2fl-1rl.dat");
     const Instance kc30 = loadInstance(data + "/KC30-3fl-1rl.dat");
@@ -497,6 +552,10 @@ int main(int argc, char** argv) {
     run("multi-block survival == CPU  P=512 OBJ=2", [] { testSurvival<2>(512, 3); });
     run("multi-block survival == CPU  P=1024 OBJ=3", [] { testSurvival<3>(1024, 2); });
     run("multi-block survival == CPU  P=2048 OBJ=2", [] { testSurvival<2>(2048, 1); });
+    if (!quick) {
+        run("multi-block survival       P=32768 OBJ=2 (invariants)", [] { testLargeSurvival<2>(32768); });
+        run("multi-block survival       P=65536 OBJ=3 (invariants)", [] { testLargeSurvival<3>(65536); });
+    }
     run("greedy 2-opt == CPU greedy   n=10 OBJ=2", [] { testGreedy<2>(10, 64, 3); });
     run("greedy 2-opt == CPU greedy   n=30 OBJ=3", [] { testGreedy<3>(30, 32, 4); });
     run("greedy 2-opt == CPU greedy   n=60 OBJ=3 (>48 KB shared)", [] { testGreedy<3>(60, 16, 1); });

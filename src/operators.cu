@@ -63,7 +63,7 @@ __global__ void initPopulationKernel(RngState* rng, short* genes, int rows, int 
 template <int OBJ>
 __global__ void reproduceKernel(const short* __restrict__ genes, const unsigned int* __restrict__ fitness,
                                 short* __restrict__ nextGenes, unsigned int* __restrict__ nextFitness,
-                                const short* __restrict__ survivorIndex, const short* __restrict__ survivorRank,
+                                const int* __restrict__ survivorIndex, const int* __restrict__ survivorRank,
                                 const float* __restrict__ survivorCrowding,
                                 RngState* rng, int* greedyType, int population, int n) {
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -73,8 +73,8 @@ __global__ void reproduceKernel(const short* __restrict__ genes, const unsigned 
     const int run = blockIdx.y;
     const int rows = 2 * population;
     const size_t runBase = static_cast<size_t>(run) * rows;
-    const short* index = survivorIndex + static_cast<size_t>(run) * population;
-    const short* rank = survivorRank + static_cast<size_t>(run) * population;
+    const int* index = survivorIndex + static_cast<size_t>(run) * population;
+    const int* rank = survivorRank + static_cast<size_t>(run) * population;
     const float* crowding = survivorCrowding + static_cast<size_t>(run) * population;
 
     // Survivor i becomes row i of the next population (Pt+1).
@@ -159,7 +159,7 @@ void launchInitPopulation(RngState* rng, short* genes, int rows, int n, int runs
 template <int OBJ>
 void launchReproduce(const short* genes, const unsigned int* fitness,
                      short* nextGenes, unsigned int* nextFitness,
-                     const short* survivorIndex, const short* survivorRank, const float* survivorCrowding,
+                     const int* survivorIndex, const int* survivorRank, const float* survivorCrowding,
                      RngState* rng, int* greedyType, int population, int n, int runs) {
     const dim3 grid((population + kThreadsPerBlock - 1) / kThreadsPerBlock, runs);
     detail::reproduceKernel<OBJ><<<grid, kThreadsPerBlock>>>(genes, fitness, nextGenes, nextFitness,
@@ -169,8 +169,8 @@ void launchReproduce(const short* genes, const unsigned int* fitness,
 }
 
 template void launchReproduce<2>(const short*, const unsigned int*, short*, unsigned int*,
-                                 const short*, const short*, const float*, RngState*, int*, int, int, int);
+                                 const int*, const int*, const float*, RngState*, int*, int, int, int);
 template void launchReproduce<3>(const short*, const unsigned int*, short*, unsigned int*,
-                                 const short*, const short*, const float*, RngState*, int*, int, int, int);
+                                 const int*, const int*, const float*, RngState*, int*, int, int, int);
 
 } // namespace mqap

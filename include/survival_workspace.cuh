@@ -45,7 +45,7 @@ public:
     int total = 0;                      // N = 2P
 
     DeviceBuffer<int> dominators;       // [R][N] number of remaining dominators
-    DeviceBuffer<short> rank;           // [R][N]
+    DeviceBuffer<int> rank;             // [R][N]
     DeviceBuffer<float> crowding;       // [R][N]
     DeviceBuffer<int> frontList;        // [R][N] members of the current front
     DeviceBuffer<int> frontSize;        // [2][R] double buffered front sizes

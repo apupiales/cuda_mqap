@@ -31,11 +31,11 @@ constexpr int kMaxFacilities = 64;
 
 // Population size (P) limits. P must be a power of two. Up to kSingleBlockMaxPopulation the NSGA-II
 // survival of each run runs in a single block of 2P threads (bitonic sorts in shared memory); above
-// it, the multi-block survival of nsga2_multiblock.cu is used. Survivor indices and ranks are
-// stored as short, so N = 2P must stay below 32768.
+// it, the multi-block survival of nsga2_multiblock.cu is used. Survivor indices and ranks are int,
+// so the cap is set by the cost of the O(N^2) dominance counting, not by the index type.
 constexpr int kMinPopulation = 16;
 constexpr int kSingleBlockMaxPopulation = 256;
-constexpr int kMaxPopulation = 8192;
+constexpr int kMaxPopulation = 65536;
 
 // Number of objectives supported by the kernels (they are instantiated for these values).
 constexpr int kMinObjectives = 2;

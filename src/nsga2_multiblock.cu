@@ -68,7 +68,7 @@ __device__ inline bool dominatesValues(const unsigned int* a, const unsigned int
 // Grid (ceil(N / 256), R). Also resets rank and crowding.
 template <int OBJ>
 __global__ void countDominatorsKernel(const unsigned int* __restrict__ fitness, int total,
-                                      int* __restrict__ dominators, short* __restrict__ rank,
+                                      int* __restrict__ dominators, int* __restrict__ rank,
                                       float* __restrict__ crowding) {
     __shared__ unsigned int tile[kMultiblockThreads * OBJ];
     const int run = blockIdx.y;
@@ -112,7 +112,7 @@ __global__ void countDominatorsKernel(const unsigned int* __restrict__ fitness, 
 // frontSize[0][*] and flags[0] must be zero at launch.
 template <int OBJ>
 __global__ void peelFrontsKernel(const unsigned int* __restrict__ fitness, int total, int runs,
-                                 int* __restrict__ dominators, short* __restrict__ rank,
+                                 int* __restrict__ dominators, int* __restrict__ rank,
                                  int* __restrict__ frontList, int* __restrict__ frontSize, int* flags) {
     cg::grid_group grid = cg::this_grid();
     const long long items = static_cast<long long>(runs) * total;
@@ -127,7 +127,7 @@ __global__ void peelFrontsKernel(const unsigned int* __restrict__ fitness, int t
         for (long long item = first; item < items; item += stride) {
             if (rank[item] == 0 && dominators[item] == 0) {
                 const int run = static_cast<int>(item / total);
-                rank[item] = static_cast<short>(front);
+                rank[item] = front;
                 const int position = atomicAdd(&size[run], 1);
                 frontList[static_cast<size_t>(run) * total + position] = static_cast<int>(item - static_cast<long long>(run) * total);
             }
@@ -169,7 +169,7 @@ __global__ void peelFrontsKernel(const unsigned int* __restrict__ fitness, int t
 // Grid (ceil(N / 256), R): keys (rank, fitness of objective o), local indices, min/max per run.
 template <int OBJ>
 __global__ void crowdingKeysKernel(const unsigned int* __restrict__ fitness, int total, int objective,
-                                   const short* __restrict__ rank, unsigned long long* __restrict__ keys,
+                                   const int* __restrict__ rank, unsigned long long* __restrict__ keys,
                                    int* __restrict__ values, unsigned int* minFitness, unsigned int* maxFitness) {
     const int run = blockIdx.y;
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -178,7 +178,7 @@ __global__ void crowdingKeysKernel(const unsigned int* __restrict__ fitness, int
     }
     const size_t item = static_cast<size_t>(run) * total + i;
     const unsigned int value = fitness[item * OBJ + objective];
-    keys[item] = (static_cast<unsigned long long>(static_cast<unsigned short>(rank[item])) << 32) | value;
+    keys[item] = (static_cast<unsigned long long>(static_cast<unsigned int>(rank[item])) << 32) | value;
     values[item] = i;
     atomicMin(&minFitness[run], value);
     atomicMax(&maxFitness[run], value);
@@ -187,7 +187,7 @@ __global__ void crowdingKeysKernel(const unsigned int* __restrict__ fitness, int
 // Grid (ceil(N / 256), R): thread q handles sorted position q of its run.
 template <int OBJ>
 __global__ void crowdingAccumulateKernel(const unsigned int* __restrict__ fitness, int total, int objective,
-                                         const short* __restrict__ rank, const int* __restrict__ sorted,
+                                         const int* __restrict__ rank, const int* __restrict__ sorted,
                                          const unsigned int* __restrict__ minFitness,
                                          const unsigned int* __restrict__ maxFitness, float* __restrict__ crowding) {
     const int run = blockIdx.y;
@@ -198,7 +198,7 @@ __global__ void crowdingAccumulateKernel(const unsigned int* __restrict__ fitnes
     const size_t base = static_cast<size_t>(run) * total;
     const int* order = sorted + base;
     const int id = order[q];
-    const short r = rank[base + id];
+    const int r = rank[base + id];
     const bool first = (q == 0) || rank[base + order[q - 1]] != r;
     const bool last = (q == total - 1) || rank[base + order[q + 1]] != r;
     const float range = static_cast<float>(maxFitness[run] - minFitness[run]);
@@ -211,7 +211,7 @@ __global__ void crowdingAccumulateKernel(const unsigned int* __restrict__ fitnes
 }
 
 // Grid (ceil(N / 256), R): keys (rank ascending, crowding descending).
-__global__ void selectionKeysKernel(int total, const short* __restrict__ rank, const float* __restrict__ crowding,
+__global__ void selectionKeysKernel(int total, const int* __restrict__ rank, const float* __restrict__ crowding,
                                     unsigned long long* __restrict__ keys, int* __restrict__ values) {
     const int run = blockIdx.y;
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -219,15 +219,15 @@ __global__ void selectionKeysKernel(int total, const short* __restrict__ rank, c
         return;
     }
     const size_t item = static_cast<size_t>(run) * total + i;
-    keys[item] = (static_cast<unsigned long long>(static_cast<unsigned short>(rank[item])) << 32) |
+    keys[item] = (static_cast<unsigned long long>(static_cast<unsigned int>(rank[item])) << 32) |
                  (0xffffffffu - __float_as_uint(crowding[item]));
     values[item] = i;
 }
 
 // Grid (ceil(P / 256), R): the first P sorted individuals of each run survive.
 __global__ void survivorsKernel(int total, int population, const int* __restrict__ sorted,
-                                const short* __restrict__ rank, const float* __restrict__ crowding,
-                                short* __restrict__ survivorIndex, short* __restrict__ survivorRank,
+                                const int* __restrict__ rank, const float* __restrict__ crowding,
+                                int* __restrict__ survivorIndex, int* __restrict__ survivorRank,
                                 float* __restrict__ survivorCrowding) {
     const int run = blockIdx.y;
     const int q = blockIdx.x * blockDim.x + threadIdx.x;
@@ -237,7 +237,7 @@ __global__ void survivorsKernel(int total, int population, const int* __restrict
     const size_t base = static_cast<size_t>(run) * total;
     const int id = sorted[base + q];
     const size_t out = static_cast<size_t>(run) * population + q;
-    survivorIndex[out] = static_cast<short>(id);
+    survivorIndex[out] = id;
     survivorRank[out] = rank[base + id];
     survivorCrowding[out] = crowding[base + id];
 }
@@ -298,7 +298,7 @@ SurvivalWorkspace::SurvivalWorkspace(int population_, int runs_, bool forceMulti
     }
     const size_t items = static_cast<size_t>(runs) * total;
     dominators = DeviceBuffer<int>(items);
-    rank = DeviceBuffer<short>(items);
+    rank = DeviceBuffer<int>(items);
     crowding = DeviceBuffer<float>(items);
     frontList = DeviceBuffer<int>(items);
     frontSize = DeviceBuffer<int>(2 * static_cast<size_t>(runs));
@@ -320,7 +320,7 @@ SurvivalWorkspace::SurvivalWorkspace(int population_, int runs_, bool forceMulti
 }
 
 size_t SurvivalWorkspace::deviceBytes() const {
-    return dominators.size() * sizeof(int) + rank.size() * sizeof(short) + crowding.size() * sizeof(float) +
+    return dominators.size() * sizeof(int) + rank.size() * sizeof(int) + crowding.size() * sizeof(float) +
            frontList.size() * sizeof(int) + frontSize.size() * sizeof(int) + flags.size() * sizeof(int) +
            (keysIn.size() + keysOut.size()) * sizeof(unsigned long long) +
            (valuesIn.size() + valuesOut.size()) * sizeof(int) +
@@ -330,7 +330,7 @@ size_t SurvivalWorkspace::deviceBytes() const {
 
 template <int OBJ>
 void launchSurvivalMultiblock(const unsigned int* fitness, int population, int runs,
-                              short* survivorIndex, short* survivorRank, float* survivorCrowding,
+                              int* survivorIndex, int* survivorRank, float* survivorCrowding,
                               SurvivalWorkspace& ws) {
     using detail::kMultiblockThreads;
     const int total = 2 * population;
@@ -346,7 +346,7 @@ void launchSurvivalMultiblock(const unsigned int* fitness, int population, int r
     CUDA_CHECK(cudaMemsetAsync(ws.frontSize.get(), 0, ws.frontSize.size() * sizeof(int)));
     CUDA_CHECK(cudaMemsetAsync(ws.flags.get(), 0, ws.flags.size() * sizeof(int)));
     int* dominators = ws.dominators.get();
-    short* rank = ws.rank.get();
+    int* rank = ws.rank.get();
     int* frontList = ws.frontList.get();
     int* frontSize = ws.frontSize.get();
     int* flags = ws.flags.get();
@@ -385,7 +385,7 @@ void launchSurvivalMultiblock(const unsigned int* fitness, int population, int r
     CUDA_CHECK_KERNEL();
 }
 
-template void launchSurvivalMultiblock<2>(const unsigned int*, int, int, short*, short*, float*, SurvivalWorkspace&);
-template void launchSurvivalMultiblock<3>(const unsigned int*, int, int, short*, short*, float*, SurvivalWorkspace&);
+template void launchSurvivalMultiblock<2>(const unsigned int*, int, int, int*, int*, float*, SurvivalWorkspace&);
+template void launchSurvivalMultiblock<3>(const unsigned int*, int, int, int*, int*, float*, SurvivalWorkspace&);
 
 } // namespace mqap

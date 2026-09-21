@@ -7,7 +7,7 @@
  * Memory layout (R independent runs, population P, n facilities, OBJ objectives):
  *   genes    short        [R][2P][n]   rows [0, P) survivors, rows [P, 2P) offspring
  *   fitness  unsigned int [R][2P][OBJ]
- *   survivor arrays (index/rank/crowding)  [R][P]
+ *   survivor arrays  index/rank int, crowding float  [R][P]
  *   rng      RngState     [R][2P]
  *
  * Copyright (C) 2019-2026 Andres Pupiales Arevalo <apupiales@gmail.com>
@@ -57,13 +57,13 @@ void launchFitness(const short* genes, unsigned int* fitness, const int* flow, c
 // workspace says so (P > kSingleBlockMaxPopulation, or forced).
 template <int OBJ>
 void launchSurvival(const unsigned int* fitness, int population, int runs,
-                    short* survivorIndex, short* survivorRank, float* survivorCrowding,
+                    int* survivorIndex, int* survivorRank, float* survivorCrowding,
                     SurvivalWorkspace* workspace = nullptr);
 
 // Multi-block NSGA-II survival (any population up to kMaxPopulation); see nsga2_multiblock.cu.
 template <int OBJ>
 void launchSurvivalMultiblock(const unsigned int* fitness, int population, int runs,
-                              short* survivorIndex, short* survivorRank, float* survivorCrowding,
+                              int* survivorIndex, int* survivorRank, float* survivorCrowding,
                               SurvivalWorkspace& workspace);
 
 // Builds the next population of each run:
@@ -73,7 +73,7 @@ void launchSurvivalMultiblock(const unsigned int* fitness, int population, int r
 template <int OBJ>
 void launchReproduce(const short* genes, const unsigned int* fitness,
                      short* nextGenes, unsigned int* nextFitness,
-                     const short* survivorIndex, const short* survivorRank, const float* survivorCrowding,
+                     const int* survivorIndex, const int* survivorRank, const float* survivorCrowding,
                      RngState* rng, int* greedyType, int population, int n, int runs);
 
 // Adapted greedy 2-opt on rows [P, 2P) of each run with O(n) delta evaluation. Leaves the
