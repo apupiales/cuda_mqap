@@ -56,6 +56,7 @@ void printUsage(const char* program) {
         "  --trace FILE     write the front of every generation to FILE (CSV, overwritten); it copies\n"
         "                   the survivors once per generation, so the time is no longer comparable\n"
         "  --trace-max N    points kept per run and generation in the trace (default 4096)\n"
+        "  --trace-every K  record the front every K generations, plus the last one (default 1)\n"
         "  --verify         check the final populations on the CPU\n"
         "  --quiet          do not print the final solutions\n",
         program);
@@ -80,6 +81,8 @@ bool parseArguments(int argc, char** argv, Arguments& args) {
             args.options.trace = true;
         } else if (arg == "--trace-max" && hasValue) {
             args.options.traceMaxPoints = std::atoi(argv[++i]);
+        } else if (arg == "--trace-every" && hasValue) {
+            args.options.traceEvery = std::atoi(argv[++i]);
         } else if (arg == "--verify") {
             args.verify = true;
         } else if (arg == "--quiet") {

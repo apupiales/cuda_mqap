@@ -328,6 +328,7 @@ cuda_mqap <instance.dat> [options]
   --output FILE    result file, appended (default result_<instance>_nsga2_greedy_2opt.txt)
   --trace FILE     write the front of every generation to FILE (CSV, overwritten)
   --trace-max N    points kept per run and generation in the trace (default 4096)
+  --trace-every K  record the front every K generations, plus the last one (default 1)
   --verify         check the final populations on the CPU
   --quiet          do not print the final solutions
 ```

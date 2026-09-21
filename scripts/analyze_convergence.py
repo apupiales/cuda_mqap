@@ -69,17 +69,32 @@ def hypervolume_2d(points, reference):
     return total
 
 
+def insert_2d(front, point):
+    """Adds a point to a minimal set sorted by the first objective, dropping what it dominates."""
+    if any(a <= point[0] and b <= point[1] for a, b in front):
+        return front
+    kept = [p for p in front if not (point[0] <= p[0] and point[1] <= p[1])]
+    kept.append(point)
+    kept.sort()
+    return kept
+
+
 def hypervolume_3d(points, reference):
-    """Volume dominated by the points, by slicing along the third objective."""
+    """Volume dominated by the points, slicing along the third objective.
+
+    The projection of the points already processed is kept between slices, instead of being rebuilt,
+    which is what makes the traces of the 3-objective instances tractable.
+    """
     ordered = sorted(points, key=lambda p: p[2])
     total = 0.0
+    front = []
     for i, point in enumerate(ordered):
+        front = insert_2d(front, (point[0], point[1]))
         low = point[2]
         high = ordered[i + 1][2] if i + 1 < len(ordered) else reference[2]
         if high <= low or low >= reference[2]:
             continue
-        slab = [(p[0], p[1]) for p in ordered[:i + 1]]
-        total += hypervolume_2d(non_dominated(slab), (reference[0], reference[1])) * (high - low)
+        total += hypervolume_2d(front, (reference[0], reference[1])) * (high - low)
     return total
 
 
@@ -142,17 +157,22 @@ def instance_of(path):
 
 # --------------------------------------------------------------------------- indicators
 
-def stall_generation(curve, patience, epsilon):
-    """First generation after which the hypervolume grows less than epsilon during `patience`."""
-    last = len(curve) - 1
-    for g in range(last + 1):
-        end = min(g + patience, last)
-        if end == g:
-            return g
-        reference = curve[g] if curve[g] > 0 else 1.0
-        if (curve[end] - curve[g]) / reference <= epsilon:
-            return g
-    return last
+def stall_generation(sampled, curve, patience, epsilon):
+    """First sampled generation after which the hypervolume grows less than epsilon during `patience`.
+
+    Returns the last generation when the window does not fit any more, which means the run was still
+    improving at the end of the trace and the cap of --iterations was too low.
+    """
+    for i, generation in enumerate(sampled):
+        end = i
+        while end + 1 < len(sampled) and sampled[end] - generation < patience:
+            end += 1
+        if sampled[end] - generation < patience:
+            break
+        reference = curve[i] if curve[i] > 0 else 1.0
+        if (curve[end] - curve[i]) / reference <= epsilon:
+            return generation
+    return sampled[-1]
 
 
 def final_front_generation(fronts):
@@ -175,7 +195,22 @@ def percentile(values, fraction):
     return ordered[low] + (ordered[high] - ordered[low]) * (position - low)
 
 
-def analyze(path, po_dir, patience, epsilon, out_dir):
+# Simple operations the hypervolume of one front is worth; it sets how often it is computed so that a
+# trace of a 3-objective instance (hundreds of points per generation) stays tractable.
+HYPERVOLUME_BUDGET = 2.0e8
+
+
+def hypervolume_step(runs, samples, requested):
+    """Recorded fronts between two hypervolume samples: 1 unless the fronts are too large."""
+    if requested > 0:
+        return requested
+    points = [len(front) for data in runs.values() for front in data.values()]
+    average = sum(points) / len(points) if points else 0.0
+    cost = len(runs) * (samples + 1) * average * average
+    return max(1, int(cost / HYPERVOLUME_BUDGET) + (1 if cost > HYPERVOLUME_BUDGET else 0))
+
+
+def analyze(path, po_dir, patience, epsilon, out_dir, hv_every):
     instance = instance_of(path)
     runs, objectives = read_trace(path)
     po = read_po(po_dir, instance) if (po_dir and objectives == 2) else None
@@ -186,21 +221,26 @@ def analyze(path, po_dir, patience, epsilon, out_dir):
         sys.exit('%s: there is no generation 0 in the trace' % path)
     reference = tuple(max(p[o] for p in first) + 1 for o in range(objectives))
 
-    generations = max(max(data) for data in runs.values())
+    present = sorted({g for data in runs.values() for g in data})
+    generations = present[-1]
+    step = hypervolume_step(runs, len(present) - 1, hv_every)
+    sampled = present[::step]
+    if sampled[-1] != generations:
+        sampled.append(generations)
     summary = {'instance': instance, 'file': os.path.basename(path), 'runs': len(runs),
-               'generations': generations, 'objectives': objectives}
+               'generations': generations, 'objectives': objectives, 'hv_step': step}
     stalls, finals, optima, coverages = [], [], [], []
     curves = {}
     for run, data in sorted(runs.items()):
         fronts = {g: frozenset(points) for g, points in data.items()}
-        curve = [hypervolume(sorted(fronts[g]), reference) for g in range(generations + 1)]
+        curve = [hypervolume(sorted(fronts[g]), reference) for g in sampled]
         curves[run] = curve
-        stalls.append(stall_generation(curve, patience, epsilon))
+        stalls.append(stall_generation(sampled, curve, patience, epsilon))
         finals.append(final_front_generation(fronts))
         if po:
-            found = [len(po & set(fronts[g])) / len(po) for g in range(generations + 1)]
-            coverages.append(found[-1])
-            reached = [g for g, value in enumerate(found) if value >= 1.0]
+            found = [(g, len(po & set(fronts[g])) / len(po)) for g in sorted(fronts)]
+            coverages.append(found[-1][1])
+            reached = [g for g, value in found if value >= 1.0]
             optima.append(reached[0] if reached else None)
 
     summary['t_stall_median'] = percentile(stalls, 0.5)
@@ -228,9 +268,9 @@ def analyze(path, po_dir, patience, epsilon, out_dir):
             writer = csv.writer(f)
             writer.writerow(['generation', 'hypervolume_median', 'hypervolume_fraction_of_final_median',
                              'front_size_median'])
-            for g in range(generations + 1):
-                values = [curves[run][g] for run in curves]
-                fractions = [curves[run][g] / final[run] if final[run] else 0.0 for run in curves]
+            for i, g in enumerate(sampled):
+                values = [curves[run][i] for run in curves]
+                fractions = [curves[run][i] / final[run] if final[run] else 0.0 for run in curves]
                 sizes = [len(runs[run].get(g, [])) for run in curves]
                 writer.writerow([g, '%.6g' % percentile(values, 0.5), '%.6f' % percentile(fractions, 0.5),
                                  '%.1f' % percentile(sizes, 0.5)])
@@ -246,6 +286,9 @@ def main():
     parser.add_argument('--epsilon', type=float, default=1e-4,
                         help='relative hypervolume growth counted as no improvement (default 1e-4)')
     parser.add_argument('--out-dir', default='', help='directory for the per-generation curves')
+    parser.add_argument('--hv-every', type=int, default=0,
+                        help='generations between two hypervolume samples (default: chosen from the size '
+                             'of the fronts, so that a 3-objective trace stays tractable)')
     args = parser.parse_args()
 
     self_test()
@@ -254,18 +297,19 @@ def main():
     for pattern in args.traces:
         paths.extend(sorted(glob.glob(pattern)) or [pattern])
 
-    rows = [analyze(path, args.po_dir, args.patience, args.epsilon, args.out_dir) for path in paths]
+    rows = [analyze(path, args.po_dir, args.patience, args.epsilon, args.out_dir, args.hv_every)
+            for path in paths]
 
-    head = ('%-16s %5s %6s %11s %9s %11s %9s %12s %11s %9s' %
-            ('instance', 'runs', 'gens', 't_stall_med', 't_stall_90', 't_final_med', 't_final_90',
-             'optimum_runs', 't_opt_med', 'coverage'))
+    head = ('%-16s %5s %6s %7s %11s %9s %11s %9s %12s %11s %9s' %
+            ('instance', 'runs', 'gens', 'hv_step', 't_stall_med', 't_stall_90', 't_final_med',
+             't_final_90', 'optimum_runs', 't_opt_med', 'coverage'))
     print(head)
     print('-' * len(head))
     for row in rows:
         known = row['coverage_final_mean'] == row['coverage_final_mean']  # false for nan: no .PO front
-        print('%-16s %5d %6d %11.1f %9.1f %11.1f %9.1f %12s %11s %9s' % (
-            row['instance'], row['runs'], row['generations'], row['t_stall_median'], row['t_stall_p90'],
-            row['t_final_median'], row['t_final_p90'], row['optimum_runs'],
+        print('%-16s %5d %6d %7d %11.1f %9.1f %11.1f %9.1f %12s %11s %9s' % (
+            row['instance'], row['runs'], row['generations'], row['hv_step'], row['t_stall_median'],
+            row['t_stall_p90'], row['t_final_median'], row['t_final_p90'], row['optimum_runs'],
             '%.1f' % row['t_optimum_median'] if row['t_optimum_median'] == row['t_optimum_median'] else '-',
             '%.1f%%' % (100.0 * row['coverage_final_mean']) if known else '-'))
         if max(row['t_stall_median'], row['t_final_median']) >= row['generations']:

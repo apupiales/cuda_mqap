@@ -144,7 +144,8 @@ std::vector<RunResult> solveImpl(const Instance& instance, const SolverOptions& 
         // Rt (2P) -> best P by rank and crowding distance.
         launchSurvival<OBJ>(fitness, population, runs, survivorIndex.get(), survivorRank.get(), survivorCrowding.get(),
                             &survivalWorkspace);
-        if (options.trace && stats != nullptr) {
+        const int every = options.traceEvery > 0 ? options.traceEvery : 1;
+        if (options.trace && stats != nullptr && (iteration % every == 0 || iteration == options.iterations)) {
             recordTrace<OBJ>(iteration, population, runs, fitness, survivorIndex, survivorRank, options, stats);
         }
         if (iteration == options.iterations) {

@@ -38,6 +38,7 @@ param(
     [int]$Iterations = 200,
     [int]$Runs = 30,
     [int]$TraceMax = 4096,
+    [int]$TraceEvery = 1,
     [UInt64]$Seed = 20260921,
     [string]$OutDir = "results\convergence",
     [string[]]$Instances = @(),
@@ -75,10 +76,17 @@ foreach ($name in $selected) {
     $result = Join-Path $outPath "$name`_P$Population`_result.txt"
     if (Test-Path $result) { Remove-Item $result }
     $watch = [Diagnostics.Stopwatch]::StartNew()
+    # The program warns on stderr when a front did not fit in --trace-max; that must not stop the
+    # campaign, so the stream is merged and only the exit code decides.
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     & $exePath $dat --population $Population --iterations $Iterations --runs $Runs --seed $Seed `
-        --quiet --trace $trace --trace-max $TraceMax --output $result | Out-Null
+        --quiet --trace $trace --trace-max $TraceMax --trace-every $TraceEvery --output $result 2>&1 |
+        Where-Object { $_ -match 'Warning' } | ForEach-Object { Write-Warning "$name`: $_" }
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $previous
     $watch.Stop()
-    if ($LASTEXITCODE -ne 0) { throw "$name failed with exit code $LASTEXITCODE" }
+    if ($code -ne 0) { throw "$name failed with exit code $code" }
     $traces += $trace
     "{0,-16} P={1,-6} gens={2,-4} runs={3,-4} {4,7:N1}s  {5:N1} MB" -f `
         $name, $Population, $Iterations, $Runs, $watch.Elapsed.TotalSeconds, ((Get-Item $trace).Length / 1MB)

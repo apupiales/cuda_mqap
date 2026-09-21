@@ -329,6 +329,7 @@ cuda_mqap <instance.dat> [opciones]
   --output FILE    fichero de resultados, en modo append (defecto result_<instancia>_nsga2_greedy_2opt.txt)
   --trace FILE     escribe el frente de cada generacion en FILE (CSV, se sobrescribe)
   --trace-max N    puntos guardados por ejecucion y generacion en la traza (defecto 4096)
+  --trace-every K  guarda el frente cada K generaciones, mas la ultima (defecto 1)
   --verify         verifica las poblaciones finales en CPU
   --quiet          no imprime las soluciones finales
 ```

@@ -38,6 +38,9 @@ struct SolverOptions {
     // the measured time is no longer comparable with a normal run.
     bool trace = false;
     int traceMaxPoints = 4096;       // Points kept per run and generation; the rest are not recorded.
+    int traceEvery = 1;              // Generations between two recorded fronts; the last one is always
+                                     // recorded. It bounds the size of the trace when the fronts are
+                                     // large (3 objectives with a big population).
 };
 
 struct Solution {
