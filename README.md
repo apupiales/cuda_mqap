@@ -7,8 +7,11 @@ combined with an **adapted Greedy 2-opt** local search, to solve instances of th
 **multiobjective Quadratic Assignment Problem** (mQAP).
 
 The whole algorithm runs on the GPU: fitness evaluation, non-dominated sorting, crowding distance,
-selection, mutation and local search. Each generation takes **3 kernel launches with no host
-synchronization**, and **several independent runs can execute concurrently** in a single call to
+selection, mutation and local search. The host only copies the instance in before the loop and the
+results out after it, so **it does not synchronize with the device inside the loop**. A generation takes
+**3 kernel launches up to P = 256**, where the survival of each run fits in one block; above that the
+multi-block survival adds a cooperative launch and the segmented sorts of CUB, about 37 launches per
+generation measured at P = 4096. **Several independent runs execute concurrently** in a single call to
 the program.
 
 ---
@@ -245,6 +248,11 @@ The accumulators are 64-bit.
 - The host only waits at the end (`cudaEventSynchronize`), to measure the time and copy the results.
 - Inside the kernels, `__syncthreads()` only separates phases that share *shared memory*, and
   `__syncwarp()` makes the swap applied by the 2-opt visible to the whole warp.
+- The multi-block survival (P > 256) peels the Pareto fronts with a **cooperative launch**: the whole
+  grid synchronizes with `grid.sync()` between the phases of each front, inside the kernel, without going
+  back to the host.
+- `--trace` is the exception: it copies the survivors once per generation, so a traced run does
+  synchronize with the device and its time is not comparable with a normal one.
 - In Debug builds, `MQAP_SYNC_CHECK` makes `CUDA_CHECK_KERNEL()` synchronize after every kernel, so an
   execution error is reported at the launch that caused it.
 

@@ -7,9 +7,12 @@ combinado con una búsqueda local **Greedy 2-opt adaptada**, para resolver insta
 **Problema de Asignación Cuadrática Multiobjetivo** (mQAP, *multiobjective Quadratic Assignment Problem*).
 
 Todo el algoritmo se ejecuta en la GPU: la evaluación del fitness, la ordenación no dominada, el
-crowding distance, la selección, la mutación y la búsqueda local. Cada generación son **3 lanzamientos
-de kernel sin sincronización con el host**. Además, se pueden ejecutar **varias ejecuciones
-independientes de forma concurrente** en una sola llamada al programa.
+crowding distance, la selección, la mutación y la búsqueda local. El host solo copia la instancia antes
+del bucle y los resultados al terminar, de modo que **no sincroniza con el dispositivo dentro del
+bucle**. Una generación son **3 lanzamientos de kernel hasta P = 256**, donde la supervivencia de cada
+ejecución cabe en un bloque; por encima, la supervivencia multibloque añade un lanzamiento cooperativo y
+las ordenaciones por segmentos de CUB, unos 37 lanzamientos por generación medidos con P = 4096. Además,
+se ejecutan **varias ejecuciones independientes de forma concurrente** en una sola llamada al programa.
 
 ---
 
@@ -246,6 +249,11 @@ Los acumuladores son de 64 bits.
 - El host solo espera al final (`cudaEventSynchronize`), para medir el tiempo y copiar los resultados.
 - Dentro de los kernels, `__syncthreads()` solo separa fases que comparten *shared memory*, y `__syncwarp()`
   hace visible a todo el warp el intercambio aplicado en el 2-opt.
+- La supervivencia multibloque (P > 256) pela los frentes de Pareto con un **lanzamiento cooperativo**:
+  toda la malla se sincroniza con `grid.sync()` entre las fases de cada frente, dentro del kernel, sin
+  volver al host.
+- `--trace` es la excepción: copia los supervivientes una vez por generación, así que una ejecución con
+  traza sí sincroniza con el dispositivo y su tiempo no es comparable con el de una normal.
 - En Debug, `MQAP_SYNC_CHECK` hace que `CUDA_CHECK_KERNEL()` sincronice después de cada kernel, de modo
   que un error de ejecución se reporta en el lanzamiento que lo causó.
 
