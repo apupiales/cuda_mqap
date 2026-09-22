@@ -11,7 +11,8 @@ crowding distance, la selección, la mutación y la búsqueda local. El host sol
 del bucle y los resultados al terminar, de modo que **no sincroniza con el dispositivo dentro del
 bucle**. Una generación son **3 lanzamientos de kernel hasta P = 256**, donde la supervivencia de cada
 ejecución cabe en un bloque; por encima, la supervivencia multibloque añade un lanzamiento cooperativo y
-las ordenaciones por segmentos de CUB, unos 37 lanzamientos por generación medidos con P = 4096. Además,
+las ordenaciones por segmentos de CUB (la biblioteca de primitivas paralelas de NVIDIA), unos 37
+lanzamientos por generación medidos con P = 4096. Además,
 se ejecutan **varias ejecuciones independientes de forma concurrente** en una sola llamada al programa.
 
 ---
@@ -33,7 +34,8 @@ se ejecutan **varias ejecuciones independientes de forma concurrente** en una so
 13. [Límites del tamaño de población y recursos de la GPU](#límites-del-tamaño-de-población-y-recursos-de-la-gpu)
 14. [Limitaciones y trabajo futuro](#limitaciones-y-trabajo-futuro)
 15. [Solución de problemas](#solución-de-problemas)
-16. [Créditos y licencia](#créditos-y-licencia)
+16. [Glosario](#glosario)
+17. [Créditos y licencia](#créditos-y-licencia)
 
 ---
 
@@ -947,6 +949,51 @@ muy por encima de lo que permite el tiempo: con P = 4096, cada ejecución de KC3
 | `costs may overflow 32-bit fitness values` | La instancia podría desbordar el fitness de 32 bits |
 | Ejecución muy lenta en Debug | Es lo esperado: Debug compila el device con `-G` y sincroniza tras cada kernel. Usa Release para medir |
 | `[CUDA] … at <fichero>:<línea>` | Error de CUDA con su ubicación exacta; para más detalle, ejecuta bajo `compute-sanitizer` |
+
+---
+
+## Glosario
+
+Términos que aparecen a lo largo del documento, en el sentido que tienen aquí.
+
+**La GPU**
+
+| Término | Qué significa |
+|---|---|
+| Kernel | Función que se ejecuta en la GPU. El host la *lanza* con una malla de bloques de hilos; cada lanzamiento cuesta unos microsegundos de trámite, y por eso importa cuántos hay por generación |
+| Bloque de hilos | Grupo de hilos que se ejecutan en el mismo multiprocesador, pueden compartir *shared memory* y sincronizarse entre sí (`__syncthreads()`). Como máximo 1024 hilos |
+| Warp | Los 32 hilos que un multiprocesador ejecuta realmente al unísono. Si toman ramas distintas, los dos caminos se ejecutan uno detrás de otro (*divergencia*), y por eso el código procura que un warp entero haga el mismo trabajo |
+| Malla (*grid*) | El conjunto de bloques de un lanzamiento. Los bloques de una misma malla no pueden sincronizarse entre sí, salvo que el lanzamiento sea cooperativo |
+| SM (*streaming multiprocessor*) | La unidad que ejecuta bloques. Una RTX 2060 tiene 30, cada uno con hasta 1024 hilos residentes: 30 720 ranuras de hilo en total |
+| Shared memory | Memoria dentro del multiprocesador, compartida por un bloque y unas cien veces más rápida que la global. Es el recurso escaso que limita la población de la supervivencia de un bloque |
+| Ocupación | Cómo de llena está la GPU: aquí, la media temporal de las ranuras de hilo en uso |
+| Lanzamiento cooperativo | Lanzamiento en el que toda la malla puede sincronizarse (`grid.sync()`), porque CUDA garantiza que todos los bloques están residentes a la vez. La supervivencia multibloque lo necesita para pelar un frente de Pareto antes de empezar el siguiente |
+| CUB | Biblioteca de primitivas paralelas de NVIDIA para CUDA (ordenaciones, *scans*, reducciones), incluida en el toolkit. Este proyecto usa su *ordenación por segmentos*: una sola llamada ordena muchos bloques de datos independientes a la vez —aquí, los individuos de cada ejecución— en lugar de lanzar una ordenación por ejecución |
+| Philox | Generador aleatorio basado en contador de cuRAND. Cada hilo recibe su propia subsecuencia de la misma semilla, así que las ejecuciones son independientes y reproducibles |
+| Stream | La cola por la que van los lanzamientos. Aquí todo usa el *default stream*, que ya los mantiene en orden |
+
+**El algoritmo**
+
+| Término | Qué significa |
+|---|---|
+| mQAP | Problema de Asignación Cuadrática Multiobjetivo: asignar `n` instalaciones a `n` ubicaciones minimizando a la vez varios costes de flujo por distancia |
+| Dominancia | Una solución domina a otra cuando no es peor en ningún objetivo y es mejor en al menos uno |
+| Frente de Pareto | El conjunto de soluciones no dominadas. Con objetivos en conflicto no hay una solución mejor, sino un frente de compromisos |
+| Rango | Resultado de la ordenación no dominada: rango 1 es el frente de la población, rango 2 el frente de lo que queda, y así sucesivamente |
+| Crowding distance | Cómo de aislada está una solución dentro de su frente. NSGA-II prefiere las aisladas, para repartir el frente en lugar de amontonarlo en una zona |
+| Elitismo (μ + λ) | Padres y descendientes compiten juntos, de modo que las mejores soluciones no se pueden perder entre generaciones |
+| Greedy 2-opt | Búsqueda local que prueba intercambiar cada par de posiciones de una permutación y conserva el intercambio cuando no empeora el criterio de la generación |
+| Evaluación incremental (*delta*) | Calcular lo que cambia un intercambio, en O(n), en lugar de recalcular el coste completo, en O(n²) |
+
+**Las métricas**
+
+| Término | Qué significa |
+|---|---|
+| Hipervolumen | Volumen de la región dominada por un frente, acotada por un punto de referencia. Es la medida de calidad habitual porque premia a la vez acercarse al óptimo y cubrirlo; con supervivencia elitista solo puede crecer |
+| Punto de referencia | La esquina que acota el hipervolumen. Tiene que ser el mismo en todas las mediciones que se comparen, o las cifras no significan nada juntas |
+| Frente de referencia | Aquello contra lo que se mide la calidad: el óptimo publicado (`.PO`) cuando existe y, si no, el mejor frente que conoce la campaña |
+| Cobertura | Fracción de los puntos del frente de referencia que una ejecución llegó a encontrar. Separa configuraciones que el hipervolumen muestra casi iguales |
+| Distancia gama | Distancia media de cada solución encontrada al punto más cercano del frente publicado; es la métrica que calculan los scripts originales de `mQAPMetrics` |
 
 ---
 
