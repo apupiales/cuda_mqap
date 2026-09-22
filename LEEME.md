@@ -442,112 +442,99 @@ El número de generaciones depende mucho de la población, así que la respuesta
 tiempo de una generación se conoce para cada P (ver [Rendimiento](#rendimiento)), de modo que
 `generaciones × tiempo por generación` indica qué pareja (P, generaciones) alcanza antes el objetivo.
 
-#### Resultados de la campaña (RTX 2060, 2026-09-21)
+#### Resultados de la campaña (RTX 2060, 2026-09-22)
 
-Tres poblaciones, subiendo el tope de `--iterations` hasta que el estancamiento fuera observable:
-P = 1024 con 30 ejecuciones y tope de 2000 generaciones, P = 16384 con 10 ejecuciones y tope de 300 (1500
-y 5 ejecuciones en las instancias de 3 objetivos), y P = 65536 —el máximo de esta rama— con 5 ejecuciones,
-tope de 300 y `--trace-every 5`, así que sus valores tienen una resolución de 5 generaciones. `t_stall` es
-la mediana sobre las ejecuciones, y la cobertura es la fracción del frente óptimo publicado encontrada al
-final con P = 1024.
+Tres poblaciones por instancia: P = 1024 con tope de 2000 generaciones (30 ejecuciones en las instancias
+de 2 objetivos, 10 en las de 3), y P = 16384 y P = 65536 con el tope que cada instancia necesitó, desde
+300 generaciones en KC10 hasta 10 000 en KC30-3fl-1rl y KC30-3fl-1uni.
 
-| Instancia | `t_stall` P = 1024 | P = 16384 | P = 65536 | El frente deja de cambiar (P = 1024) | Frente óptimo | Cobertura |
-|---|---|---|---|---|---|---|
-| KC10-2fl-2uni | **1** | **1** | ≤ 5 | 1 | 30/30 ejecuciones en la generación 1 | 100 % |
-| KC10-2fl-2rl | **6** | **4,5** | **5** | 9 | 30/30 ejecuciones en la generación 9 | 100 % |
-| KC10-2fl-1uni | **6,5** | **5,5** | **10** | 6,5 | nunca | 92,3 % |
-| KC10-2fl-3rl | **13** | **6,5** | **10** | 845 | nunca | 72,7 % |
-| KC10-2fl-1rl | **14** | **5,5** | **10** | 53 | nunca | 79,3 % |
-| KC10-2fl-4rl | **16,5** | **6** | **10** | 320 | nunca | 73,6 % |
-| KC10-2fl-5rl | **29** | **20** | **10** | 1054 | nunca | 78,6 % |
-| KC10-2fl-3uni | **52** | **22,5** | **10** | 1182 | nunca | 86,3 % |
-| KC20-2fl-2uni | **46,5** | **28,5** | **40** | 65 | — | — |
-| KC20-2fl-1rl | **98** | **55,5** | **45** | 1817 | — | — |
-| KC20-2fl-1uni | **185** | **100** | **80** | 1892 | — | — |
-| KC20-2fl-3uni | **373** | **144** | **170** | 1987 | — | — |
-| KC30-3fl-2uni | **550** | **360** | **550** | ~tope | — | — |
-| KC30-3fl-1rl | **1476** | > 5000 | > 5000 | ~tope | — | — |
-| KC30-3fl-1uni | **1984** | > 5000 | > 5000 | ~tope | — | — |
+Todo está medido en la misma escala, y llegar a eso exigió dos correcciones que conviene declarar:
 
-Las instancias de 3 objetivos también se ejecutaron con P = 65536 y tope de 5000 generaciones (5
-ejecuciones, `--trace-every 25`, 1 h 35 min por instancia, 4 h 45 min en total). Solo KC30-3fl-2uni se
-estanca, en la generación 550; las otras dos siguen mejorando al final, igual que ya ocurría con
-P = 16384. Su hipervolumen, como fracción del valor alcanzado en la generación 5000:
+- **La calidad es una fracción de un frente de referencia, no de la propia ejecución.** En KC10 ese frente
+  es el óptimo publicado, así que la cifra es la fracción del hipervolumen óptimo. En KC20 y KC30 no hay
+  óptimo publicado, de modo que la referencia es el mejor frente que conoce la campaña: la unión no
+  dominada de los frentes finales de todas las ejecuciones y todas las poblaciones. Normalizar cada
+  ejecución contra su propia última generación, como hacía una versión anterior de esta sección, hace
+  aparecer un 100 % por construcción y esconde la diferencia entre poblaciones.
+- **La prueba de estancamiento usa la misma ventana en todas partes** (`--hv-window`): 20 generaciones en
+  KC10 y KC20, 50 en KC30. Con cada fichero eligiendo su ventana, KC30-3fl-1rl parecía estancarse en la
+  generación 612 con P = 1024 y en la 4875 con P = 65536; con ventana común las mismas trazas dan 1200 y
+  1450. La mayor parte de esa diferencia era la ventana.
 
-| Generación | 500 | 1000 | 1500 | 2500 | 3500 | 4500 | 5000 |
-|---|---|---|---|---|---|---|---|
-| KC30-3fl-1rl | 98,7 % · 4692 puntos | 99,1 % · 5963 | 99,4 % · 6888 | 99,6 % · 8056 | 99,8 % · 8866 | 99,9 % · 9422 | 100 % · 9653 |
+**Generaciones hasta que el frente deja de cambiar.** Es el número que hay que usar para elegir
+`--iterations`: a partir de ahí ninguna ejecución encontró nada nuevo.
 
-El cuadro con el tope de la rama es el mismo que con P = 16384: un codo muy temprano —el 98,7 % del
-resultado de 5000 generaciones en la generación 500— seguido de un frente que no deja de crecer, de 4692 a
-9653 soluciones distintas, sin que el hipervolumen se mueva mucho. A esa población una generación de KC30
-cuesta unos 280 ms por ejecución, así que ir más lejos es cuestión de horas.
+| Instancia | P = 1024 | P = 16384 | P = 65536 |
+|---|---|---|---|
+| KC10-2fl-2uni | 1 | 1 | ≤ 5 |
+| KC10-2fl-1uni | 6,5 | 5,5 | 10 |
+| KC10-2fl-2rl | 9 | 4,5 | 5 |
+| KC10-2fl-1rl | 53 | 6,5 | 10 |
+| KC10-2fl-4rl | 320 | 20 | 10 |
+| KC10-2fl-3rl | 845 | 143 | 30 |
+| KC10-2fl-5rl | 1054 | 104 | 10 |
+| KC10-2fl-3uni | 1182 | 149 | 55 |
+| KC20-2fl-2uni | 65 | 31,5 | 40 |
+| KC20-2fl-1rl | 1817 | 236 | 230 |
+| KC20-2fl-1uni | 1892 | 230 | 200 |
+| KC20-2fl-3uni | 1987 | 294 | 285 |
+| KC30-3fl-2uni | 1997 | 1490 | 4975 |
+| KC30-3fl-1uni | 1998 | > 5000 | > 10000 |
+| KC30-3fl-1rl | 1999 | > 5000 | > 10000 |
+
+**Calidad alcanzada**, como fracción del frente de referencia. El primer número es el hipervolumen; el
+segundo, la fracción de los puntos de ese frente que la ejecución llegó a encontrar.
+
+| Instancia | P = 1024 | P = 16384 | P = 65536 |
+|---|---|---|---|
+| KC10-2fl-2uni | 100 % · 100 % | 100 % · 100 % | 100 % · 100 % |
+| KC10-2fl-2rl | 100 % · 100 % | 100 % · 100 % | 100 % · 100 % |
+| KC10-2fl-1uni | 99,99 % · 92,3 % | 99,99 % · 92,3 % | 99,99 % · 92,3 % |
+| KC10-2fl-5rl | 99,97 % · 78,6 % | 99,97 % · 79,6 % | 99,98 % · 81,2 % |
+| KC10-2fl-3uni | 99,96 % · 86,3 % | 99,96 % · 87,1 % | 99,96 % · 87,4 % |
+| KC10-2fl-1rl | 99,94 % · 79,3 % | 99,94 % · 79,3 % | 99,94 % · 79,3 % |
+| KC10-2fl-4rl | 99,49 % · 73,6 % | 99,49 % · 73,8 % | 99,49 % · 74,3 % |
+| KC10-2fl-3rl | 99,25 % · 72,7 % | 99,25 % · 72,9 % | 99,30 % · 73,8 % |
+| KC20-2fl-1rl | 99,94 % · 87,4 % | 99,96 % · 88,1 % | 99,98 % · 92,3 % |
+| KC20-2fl-1uni | 99,44 % · 52,0 % | 99,88 % · 84,5 % | 99,99 % · 95,8 % |
+| KC20-2fl-2uni | 99,31 % · 60,4 % | 99,93 % · 91,3 % | 100 % · 97,5 % |
+| KC20-2fl-3uni | 99,30 % · 43,1 % | 99,51 % · 60,9 % | 99,68 % · 77,4 % |
+| KC30-3fl-1rl | 95,52 % · 1,4 % | 98,64 % · 32,8 % | 99,31 % · 61,6 % |
+| KC30-3fl-1uni | 88,88 % · 1,5 % | 96,38 % · 20,0 % | 98,93 % · 48,1 % |
+| KC30-3fl-2uni | 88,06 % · 5,8 % | 96,17 % · 28,3 % | 98,00 % · 61,6 % |
 
 Lo que dice la campaña:
 
-- **Las 70 generaciones heredadas de la versión original encajan en las instancias KC10** (estancan entre 1
-  y 52), se quedan **cortas en KC20** (46 a 373) y **claramente cortas en KC30** (550 a 1984, y dos de
-  ellas no estancan ni en 2000).
-- **`t_stall` no depende del tope**: multiplicarlo por cuatro (500 → 2000) no movió los valores de KC10 ni
-  de KC20, así que son la respuesta real y no un artefacto del presupuesto.
-- **`t_final` no converge** (845, 1054, 1182, 1817, 1987…): el frente sigue admitiendo micro-refinamientos
-  casi indefinidamente, sin ganancia medible. Para decidir cuántas generaciones usar, el indicador es
-  `t_stall`.
-- **Más generaciones casi no compran calidad.** Pasar de 500 a 2000 generaciones movió la cobertura entre
-  0,0 y 3,8 puntos.
-- **Más población recorta las generaciones, pero no sale a cuenta en tiempo.** Las instancias KC10
-  estancan en 10 generaciones o menos con P = 65536, frente a 1 a 52 con P = 1024, pero cada generación
-  cuesta 86 ms en lugar de 0,25 ms por ejecución. Llegar a la meseta de KC10-2fl-1rl cuesta 3,5 ms por
-  ejecución con P = 1024 y 860 ms con P = 65536: unas 245 veces más para el mismo 79,3 % del frente
-  óptimo.
-- **Hay un techo de cobertura que no rompe ni la población ni las generaciones**: KC10-2fl-1rl se queda en
-  el 79,3 % con P = 1024, con P = 16384 y con P = 65536 (46 de sus 58 puntos óptimos). Multiplicar por 64
-  la población mueve las demás instancias menos de tres puntos (KC10-2fl-5rl 78,6 % → 81,2 %, KC10-2fl-3uni
-  86,3 % → 87,4 %, KC10-2fl-4rl 73,6 % → 74,3 %). La población sí manda en el rango bajo —de P = 64 (38 de
-  58) a P = 1024— y a partir de ahí se aplana. Lo que queda es el algoritmo: esta combinación de NSGA-II
-  con el greedy 2-opt converge a un subconjunto del frente óptimo.
+- **El hipervolumen apenas separa las instancias de 2 objetivos.** Todas las configuraciones de KC10 y
+  KC20 quedan entre el 99,25 % y el 100 % de su referencia, y en KC10 esa referencia es el óptimo
+  publicado: el frente encontrado domina prácticamente el mismo volumen que el óptimo incluso con
+  P = 1024.
+- **Lo que sí las separa es cuántas soluciones de ese frente encuentran.** En KC20-2fl-1uni se pasa del
+  52 % de los puntos de referencia con P = 1024 al 95,8 % con P = 65536, y en KC30-3fl-2uni del 5,8 % al
+  61,6 %. Una población pequeña devuelve un frente que vale casi lo mismo en volumen con muchas menos
+  soluciones distintas.
+- **Más población necesita menos generaciones**, y ahora el patrón es limpio: KC10-2fl-5rl pasa de 1054
+  generaciones a 10, y KC20-2fl-1rl de 1817 a 230. Una generación no es una cantidad fija de trabajo —con
+  P = 65536 evalúa 64 veces más descendientes que con P = 1024—, así que esto no dice nada del tiempo
+  total: en KC10-2fl-1rl una generación cuesta 0,25 ms por ejecución con P = 1024 y 86 ms con P = 65536.
+- **En KC10 hay un techo que no rompe ni la población ni las generaciones**: KC10-2fl-1rl se queda en el
+  79,3 % de los puntos óptimos publicados con las tres poblaciones, y KC10-2fl-3rl en torno al 73 %. Lo
+  que queda es el algoritmo: esta combinación de NSGA-II con el greedy 2-opt converge a un subconjunto
+  del frente óptimo.
+- **Las instancias de 3 objetivos no paran nunca**: KC30-3fl-1rl y KC30-3fl-1uni seguían mejorando en la
+  generación 10 000 con P = 65536, habiendo alcanzado el 99,31 % y el 98,93 % del hipervolumen de
+  referencia. Pasar de 5000 a 10 000 generaciones añadió 0,67 y 2,55 puntos. Ahí el número de
+  generaciones es una decisión de presupuesto, no una medición.
 
-**Las dos instancias de 3 objetivos marcadas `> 5000` no se estancan con P = 16384.** Una ejecución con
-ese tope (5 ejecuciones, `--trace-every 25`, 16 minutos cada una) muestra una asíntota en lugar de una
-parada. Hipervolumen como fracción del valor que alcanza en la generación 5000, y tamaño del frente:
+El frente de referencia de KC20 y KC30 es el mejor **conocido**, no el óptimo: tiene 14 029 puntos en
+KC30-3fl-1rl y 3112 en KC30-3fl-1uni. Una ejecución más larga podría mejorarlo, y entonces todos estos
+porcentajes bajarían. Los frentes `.PO` de KC10 no tienen esa salvedad.
 
-| Generación | 200 | 400 | 800 | 1600 | 2400 | 4000 | 5000 |
-|---|---|---|---|---|---|---|---|
-| KC30-3fl-1rl | 97,0 % · 2252 puntos | 97,7 % · 3156 | 98,6 % · 4243 | 99,2 % · 5567 | 99,5 % · 6323 | 99,9 % · 7444 | 100 % · 7855 |
-| KC30-3fl-1uni | 90,3 % · 538 puntos | 96,0 % · 931 | 97,6 % · 1291 | 98,8 % · 1705 | 99,4 % · 1842 | 99,8 % · 2121 | 100 % · 2189 |
-
-La ganancia útil llega muy pronto —el 97 % del resultado de 5000 generaciones en la generación 200 de
-KC30-3fl-1rl— y lo que sigue es refinamiento lento con un frente que no deja de crecer. Para esas dos, el
-número de generaciones es una decisión de presupuesto, no una medición. Con P = 1024 las mismas instancias
-sí estancan, en 1476 y 1984, porque su meseta es más baja.
-
-Salvedades de la medición: con 3 objetivos y población grande casi toda la población es no dominada, así
-que esas trazas se grabaron con `--trace-every 10` o `25`, y calcular el hipervolumen de frentes de varios
-miles de puntos es lo que limita la resolución de la curva. El análisis imprime la ventana que acaba
-usando, porque la prueba de estancamiento pasa a exigir que no haya crecimiento en ella, y `--hv-runs N`
-limita el hipervolumen a las primeras N ejecuciones: la tabla anterior sale de `--hv-runs 1 --hv-every 8`,
-que da cinco veces más resolución al mismo coste (26 muestras en lugar de 3). Los demás indicadores usan
-siempre todas las ejecuciones.
-
-| Instancias | P | Generaciones |
-|---|---|---|
-| KC10-2fl-1rl, 3rl, 4rl, 5rl | 64 | 70 |
-| KC10-2fl-1uni, 2rl, 2uni ¹ | 16 | 70 |
-| KC10-2fl-3uni | 128 | 25 |
-| KC20-2fl-1rl, 1uni, 2uni, 3uni | 64 | 300 |
-| KC30-3fl-1rl, 1uni, 2uni | 32 | 70 |
-
-¹ KC10-2fl-2uni usaba P = 4; ahora el mínimo es 16.
-
-Los resultados se guardan en `results\result_<instancia>_nsga2_greedy_2opt.txt`. En la RTX 2060, la
-campaña completa (15 instancias × 3 ejecuciones) tarda unos 2 segundos.
-
-**Métricas (`mQAPMetrics/`)** — scripts de Node.js que contienen los frentes obtenidos, copiados de los ficheros de resultados:
-- `distance_metric_*.js`: distancia generacional, es decir, la media de la distancia euclídea de cada
-  solución obtenida al punto más cercano del frente óptimo `.PO`. Reporta la media y la desviación típica
-  entre ejecuciones, para NSGA-II y para NSGA-II + Greedy 2-opt.
-- `3D_plot-*.js`: gráficos 3D de los frentes de las instancias de 3 objetivos, con LightningChart JS
-  (`@arction/lcjs`).
+Dos notas prácticas para repetirlo. Graba todas las trazas con el mismo `--trace-every`, elegido por la
+instancia más cara, para que cualquier ventana múltiplo de él esté disponible en todos los ficheros sin
+volver a usar la GPU; eso es lo que obligó a las correcciones anteriores. Y en las instancias de 3
+objetivos el hipervolumen de frentes de diez mil puntos es lo que limita la resolución de las curvas:
+`--hv-runs 1` da cinco veces más resolución al mismo coste, y las cifras de KC30 de arriba lo usan.
 
 ### Resultados en el libro de Excel
 
