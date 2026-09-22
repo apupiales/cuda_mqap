@@ -38,14 +38,22 @@ copy of the GNU General Public License along with this program. If not, see
 <https://www.gnu.org/licenses/>.
 """
 import argparse
+import bisect
 import csv
 import glob
 import os
+import random
 import re
 import sys
 
 
 # --------------------------------------------------------------------------- hypervolume
+
+try:
+    import numpy as np
+except ImportError:  # the slow reference path still works without it
+    np = None
+
 
 def non_dominated(points):
     """Keeps the minimal points (every objective is minimized)."""
@@ -57,7 +65,7 @@ def non_dominated(points):
     return out
 
 
-def hypervolume_2d(points, reference):
+def hypervolume_2d_slow(points, reference):
     """Area dominated by the points and bounded by the reference point."""
     total = 0.0
     previous = reference[1]
@@ -79,12 +87,8 @@ def insert_2d(front, point):
     return kept
 
 
-def hypervolume_3d(points, reference):
-    """Volume dominated by the points, slicing along the third objective.
-
-    The projection of the points already processed is kept between slices, instead of being rebuilt,
-    which is what makes the traces of the 3-objective instances tractable.
-    """
+def hypervolume_3d_slow(points, reference):
+    """Volume dominated by the points, slicing along the third objective."""
     ordered = sorted(points, key=lambda p: p[2])
     total = 0.0
     front = []
@@ -96,7 +100,64 @@ def hypervolume_3d(points, reference):
         high = min(ordered[i + 1][2] if i + 1 < len(ordered) else reference[2], reference[2])
         if high <= low or low >= reference[2]:
             continue
-        total += hypervolume_2d(front, (reference[0], reference[1])) * (high - low)
+        total += hypervolume_2d_slow(front, (reference[0], reference[1])) * (high - low)
+    return total
+
+
+def _staircase_area(xs, ys, reference):
+    """Area of a staircase already sorted by x ascending and y descending."""
+    x = np.asarray(xs, dtype=np.float64)
+    y = np.asarray(ys, dtype=np.float64)
+    keep = (x < reference[0]) & (y < reference[1])
+    x, y = x[keep], y[keep]
+    if x.size == 0:
+        return 0.0
+    previous = np.empty_like(y)
+    previous[0] = reference[1]
+    previous[1:] = y[:-1]
+    return float(np.sum((reference[0] - x) * (previous - y)))
+
+
+def hypervolume_2d_fast(points, reference):
+    data = np.asarray(sorted(set(points)), dtype=np.float64)
+    if data.size == 0:
+        return 0.0
+    # Staircase: walking in x ascending order, keep the points that lower the best y seen so far.
+    best = np.minimum.accumulate(data[:, 1])
+    keep = np.empty(len(data), dtype=bool)
+    keep[0] = True
+    keep[1:] = best[1:] < best[:-1]
+    return _staircase_area(data[keep, 0], data[keep, 1], reference)
+
+
+def hypervolume_3d_fast(points, reference):
+    """Same slicing as the reference version, but the staircase is kept between slabs and its area is
+    recomputed only when a point actually changes it."""
+    data = np.asarray(points, dtype=np.float64)
+    data = data[np.argsort(data[:, 2], kind='stable')]
+    z = data[:, 2]
+    upper = np.empty_like(z)
+    upper[:-1] = z[1:]
+    upper[-1] = reference[2]
+    np.minimum(upper, reference[2], out=upper)
+    heights = upper - z
+
+    total = 0.0
+    area = 0.0
+    xs, ys = [], []  # staircase, x ascending and y descending
+    for i in range(len(data)):
+        a, b = data[i, 0], data[i, 1]
+        position = bisect.bisect_left(xs, a)
+        dominated = position > 0 and ys[position - 1] <= b
+        if not dominated:
+            while position < len(xs) and ys[position] >= b:
+                del xs[position]
+                del ys[position]
+            xs.insert(position, a)
+            ys.insert(position, b)
+            area = _staircase_area(xs, ys, reference)
+        if heights[i] > 0 and z[i] < reference[2]:
+            total += area * heights[i]
     return total
 
 
@@ -104,9 +165,11 @@ def hypervolume(points, reference):
     if not points:
         return 0.0
     if len(reference) == 2:
-        return hypervolume_2d(points, reference)
+        return hypervolume_2d_fast(points, reference) if np is not None else \
+            hypervolume_2d_slow(points, reference)
     if len(reference) == 3:
-        return hypervolume_3d(points, reference)
+        return hypervolume_3d_fast(points, reference) if np is not None else \
+            hypervolume_3d_slow(points, reference)
     raise ValueError('only 2 and 3 objectives are supported')
 
 
@@ -124,6 +187,19 @@ def self_test():
     assert hypervolume([(1, 1, 5)], (2, 2, 2)) == 0.0
     # Covering a set can never lower the volume, which is what makes the curve usable.
     assert hypervolume([(0, 1, 1), (1, 0, 1)], (2, 2, 2)) <= hypervolume([(0, 0, 1), (1, 0, 1)], (2, 2, 2))
+    if np is None:
+        return
+    # The vectorized version has to agree with the reference one, which is the version checked by hand.
+    generator = random.Random(20260922)
+    for objectives in (2, 3):
+        for _ in range(20):
+            reference = tuple([100] * objectives)
+            points = [tuple(generator.randrange(0, 120) for _ in range(objectives))
+                      for _ in range(generator.randrange(1, 40))]
+            slow = hypervolume_2d_slow(points, reference) if objectives == 2 else \
+                hypervolume_3d_slow(points, reference)
+            fast = hypervolume(points, reference)
+            assert abs(slow - fast) <= 1e-6 * max(1.0, abs(slow)), (objectives, points, slow, fast)
 
 
 # --------------------------------------------------------------------------- data
@@ -203,9 +279,12 @@ def percentile(values, fraction):
     return ordered[low] + (ordered[high] - ordered[low]) * (position - low)
 
 
-# Simple operations the hypervolume of one front is worth; it sets how often it is computed so that a
-# trace of a 3-objective instance (hundreds of points per generation) stays tractable.
-HYPERVOLUME_BUDGET = 2.0e8
+# Work the hypervolume of a whole file is worth, counted as runs * samples * points^2. It sets how often
+# the hypervolume is computed, so that a 3-objective trace with thousands of points per generation stays
+# tractable. The value is calibrated against the vectorized implementation: about 3.4e7 units per second
+# on the machine where it was measured, so this is roughly two minutes per file. With no numpy the
+# reference implementation is two orders of magnitude slower, so pass --hv-every or --hv-runs there.
+HYPERVOLUME_BUDGET = 4.0e9
 
 
 def hypervolume_step(runs, samples, requested):
