@@ -463,14 +463,23 @@ runs, and the coverage is the share of the published optimal front found at the 
 | KC20-2fl-1rl | **98** | **55.5** | **45** | 1817 | — | — |
 | KC20-2fl-1uni | **185** | **100** | **80** | 1892 | — | — |
 | KC20-2fl-3uni | **373** | **144** | **170** | 1987 | — | — |
-| KC30-3fl-2uni | **550** | **360** | > 1000 | ~cap | — | — |
-| KC30-3fl-1rl | **1476** | > 5000 | > 1000 | ~cap | — | — |
-| KC30-3fl-1uni | **1984** | > 5000 | > 1000 | ~cap | — | — |
+| KC30-3fl-2uni | **550** | **360** | **550** | ~cap | — | — |
+| KC30-3fl-1rl | **1476** | > 5000 | > 5000 | ~cap | — | — |
+| KC30-3fl-1uni | **1984** | > 5000 | > 5000 | ~cap | — | — |
 
-The 3-objective instances were also run with P = 65536 (5 runs, cap 1000, `--trace-every 20`, 19 minutes
-each): none of the three stagnates within that budget, so their column only says the cap they were given.
-At that size a generation of KC30 costs about 280 ms per run, so going much further is a matter of
-hours.
+The 3-objective instances were also run with P = 65536 and a cap of 5000 generations (5 runs,
+`--trace-every 25`, 1 h 35 min per instance, 4 h 45 min in total). Only KC30-3fl-2uni stagnates, at
+generation 550; the other two are still improving at the end, as they already were with P = 16384. Their
+hypervolume, as a share of the value reached at generation 5000:
+
+| Generation | 500 | 1000 | 1500 | 2500 | 3500 | 4500 | 5000 |
+|---|---|---|---|---|---|---|---|
+| KC30-3fl-1rl | 98.7 % · 4692 points | 99.1 % · 5963 | 99.4 % · 6888 | 99.6 % · 8056 | 99.8 % · 8866 | 99.9 % · 9422 | 100 % · 9653 |
+
+So the picture at the cap of the branch is the same as at P = 16384: a knee very early — 98.7 % of the
+result of 5000 generations by generation 500 — followed by a front that keeps growing, from 4692 to 9653
+distinct solutions, without the hypervolume moving much. A generation of KC30 costs about 280 ms per run
+at that population, so going further is a matter of hours.
 
 What the campaign says:
 

@@ -465,14 +465,23 @@ final con P = 1024.
 | KC20-2fl-1rl | **98** | **55,5** | **45** | 1817 | — | — |
 | KC20-2fl-1uni | **185** | **100** | **80** | 1892 | — | — |
 | KC20-2fl-3uni | **373** | **144** | **170** | 1987 | — | — |
-| KC30-3fl-2uni | **550** | **360** | > 1000 | ~tope | — | — |
-| KC30-3fl-1rl | **1476** | > 5000 | > 1000 | ~tope | — | — |
-| KC30-3fl-1uni | **1984** | > 5000 | > 1000 | ~tope | — | — |
+| KC30-3fl-2uni | **550** | **360** | **550** | ~tope | — | — |
+| KC30-3fl-1rl | **1476** | > 5000 | > 5000 | ~tope | — | — |
+| KC30-3fl-1uni | **1984** | > 5000 | > 5000 | ~tope | — | — |
 
-Las instancias de 3 objetivos también se ejecutaron con P = 65536 (5 ejecuciones, tope 1000,
-`--trace-every 20`, 19 minutos cada una): ninguna de las tres se estanca dentro de ese presupuesto, así
-que su columna solo indica el tope que se les dio. A ese tamaño una generación de KC30 cuesta unos 280 ms
-por ejecución, de modo que ir mucho más lejos es cuestión de horas.
+Las instancias de 3 objetivos también se ejecutaron con P = 65536 y tope de 5000 generaciones (5
+ejecuciones, `--trace-every 25`, 1 h 35 min por instancia, 4 h 45 min en total). Solo KC30-3fl-2uni se
+estanca, en la generación 550; las otras dos siguen mejorando al final, igual que ya ocurría con
+P = 16384. Su hipervolumen, como fracción del valor alcanzado en la generación 5000:
+
+| Generación | 500 | 1000 | 1500 | 2500 | 3500 | 4500 | 5000 |
+|---|---|---|---|---|---|---|---|
+| KC30-3fl-1rl | 98,7 % · 4692 puntos | 99,1 % · 5963 | 99,4 % · 6888 | 99,6 % · 8056 | 99,8 % · 8866 | 99,9 % · 9422 | 100 % · 9653 |
+
+El cuadro con el tope de la rama es el mismo que con P = 16384: un codo muy temprano —el 98,7 % del
+resultado de 5000 generaciones en la generación 500— seguido de un frente que no deja de crecer, de 4692 a
+9653 soluciones distintas, sin que el hipervolumen se mueva mucho. A esa población una generación de KC30
+cuesta unos 280 ms por ejecución, así que ir más lejos es cuestión de horas.
 
 Lo que dice la campaña:
 
