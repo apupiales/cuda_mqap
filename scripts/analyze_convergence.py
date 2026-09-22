@@ -234,6 +234,40 @@ def read_po(po_dir, instance):
     return set(points)
 
 
+def minimal(points):
+    """Non-dominated subset, computed by sweeping instead of comparing every pair."""
+    ordered = sorted(set(points))
+    kept = []
+    for point in ordered:
+        if not any(all(k <= p for k, p in zip(keeper, point)) for keeper in kept[-64:]) and \
+                not any(all(k <= p for k, p in zip(keeper, point)) for keeper in kept):
+            kept.append(point)
+    return kept
+
+
+def read_front_csv(path):
+    """Reference front: a CSV with f1,f2[,f3], or a .PO file of the instance."""
+    if path.lower().endswith('.po'):
+        points = []
+        for line in open(path, encoding='utf-8'):
+            values = [int(v) for v in line.split()]
+            if values:
+                points.append(tuple(values[-2:]))
+        return points
+    with open(path, encoding='utf-8-sig', newline='') as f:
+        reader = csv.DictReader(f)
+        columns = [c for c in reader.fieldnames or [] if c.startswith('f')]
+        return [tuple(int(row[c]) for c in columns) for row in reader]
+
+
+def reference_point_of(front, margin=0.1):
+    """Corner that bounds the reference front, with a margin so its own extremes count."""
+    objectives = len(front[0])
+    ideal = [min(p[o] for p in front) for o in range(objectives)]
+    nadir = [max(p[o] for p in front) for o in range(objectives)]
+    return tuple(nadir[o] + max(1, int(margin * (nadir[o] - ideal[o]))) for o in range(objectives))
+
+
 def instance_of(path):
     match = re.search(r'(KC\d+-\d+fl-[A-Za-z0-9]+)', os.path.basename(path))
     return match.group(1) if match else os.path.splitext(os.path.basename(path))[0]
@@ -297,23 +331,38 @@ def hypervolume_step(runs, samples, requested):
     return max(1, int(cost / HYPERVOLUME_BUDGET) + (1 if cost > HYPERVOLUME_BUDGET else 0))
 
 
-def analyze(path, po_dir, patience, epsilon, out_dir, hv_every, hv_runs):
+def analyze(path, po_dir, patience, epsilon, out_dir, hv_every, hv_runs, reference_front, hv_window,
+            cover_target):
     instance = instance_of(path)
     runs, objectives = read_trace(path)
     po = read_po(po_dir, instance) if (po_dir and objectives == 2) else None
 
-    # Reference point common to the whole file: the worst corner of the first generation.
-    first = [p for data in runs.values() for p in data.get(0, [])]
-    if not first:
-        sys.exit('%s: there is no generation 0 in the trace' % path)
-    reference = tuple(max(p[o] for p in first) + 1 for o in range(objectives))
+    # A reference front makes the numbers absolute and comparable between files: the hypervolume is
+    # reported as a share of the one that front dominates, and the reference point comes from it, so it
+    # does not depend on how each run started. Without one, the corner of the first generation is used
+    # and the curve can only be read inside its own file.
+    front = reference_front or (list(po) if po else None)
+    if front:
+        reference = reference_point_of(front)
+        reference_volume = hypervolume(minimal(front), reference)
+    else:
+        first = [p for data in runs.values() for p in data.get(0, [])]
+        if not first:
+            sys.exit('%s: there is no generation 0 in the trace' % path)
+        reference = tuple(max(p[o] for p in first) + 1 for o in range(objectives))
+        reference_volume = 0.0
 
     present = sorted({g for data in runs.values() for g in data})
     generations = present[-1]
     # The hypervolume is the expensive part, so it can be limited to the first runs; the rest of the
     # indicators always use every run. Fewer runs buy a finer curve at the same cost.
     measured = sorted(runs)[:hv_runs] if hv_runs > 0 else sorted(runs)
-    step = hypervolume_step({r: runs[r] for r in measured}, len(present) - 1, hv_every)
+    granularity = min((b - a for a, b in zip(present, present[1:])), default=1)
+    if hv_window > 0:
+        # A window in generations, translated into recorded fronts, so every file uses the same one.
+        step = max(1, int(round(hv_window / granularity)))
+    else:
+        step = hypervolume_step({r: runs[r] for r in measured}, len(present) - 1, hv_every)
     sampled = present[::step]
     if sampled[-1] != generations:
         sampled.append(generations)
@@ -322,8 +371,12 @@ def analyze(path, po_dir, patience, epsilon, out_dir, hv_every, hv_runs):
     spacing = min((b - a for a, b in zip(sampled, sampled[1:])), default=1)
     summary = {'instance': instance, 'file': os.path.basename(path), 'runs': len(runs),
                'generations': generations, 'objectives': objectives, 'hv_step': spacing,
-               'hv_runs': len(measured)}
+               'hv_runs': len(measured), 'reference_volume': reference_volume}
+    # Share of the reference front already found. It needs no window: a set intersection per recorded
+    # generation. With an elitist survival a point that enters the front stays, so it does not go down.
+    reference_points = set(minimal(front)) if front else set()
     stalls, finals, optima, coverages = [], [], [], []
+    cover_ends, cover_reached = [], []
     curves = {}
     for run, data in sorted(runs.items()):
         fronts = {g: frozenset(points) for g, points in data.items()}
@@ -332,12 +385,24 @@ def analyze(path, po_dir, patience, epsilon, out_dir, hv_every, hv_runs):
             curves[run] = curve
             stalls.append(stall_generation(sampled, curve, patience, epsilon))
         finals.append(final_front_generation(fronts))
+        if reference_points:
+            share = [(g, len(reference_points & set(fronts[g])) / len(reference_points))
+                     for g in sorted(fronts)]
+            cover_ends.append(share[-1][1])
+            hit = [g for g, value in share if value >= cover_target]
+            cover_reached.append(hit[0] if hit else None)
         if po:
             found = [(g, len(po & set(fronts[g])) / len(po)) for g in sorted(fronts)]
             coverages.append(found[-1][1])
             reached = [g for g, value in found if value >= 1.0]
             optima.append(reached[0] if reached else None)
 
+    summary['cover_end'] = (sum(cover_ends) / len(cover_ends)) if cover_ends else float('nan')
+    hit = [g for g in cover_reached if g is not None]
+    summary['t_cover'] = percentile(hit, 0.5) if hit else float('nan')
+    summary['cover_runs'] = '%d/%d' % (len(hit), len(cover_reached)) if cover_reached else '-'
+    ends = [curve[-1] for curve in curves.values()]
+    summary['hv_end_share'] = (percentile(ends, 0.5) / reference_volume) if reference_volume > 0 else float('nan')
     summary['t_stall_median'] = percentile(stalls, 0.5)
     summary['t_stall_p90'] = percentile(stalls, 0.9)
     summary['t_stall_max'] = max(stalls)
@@ -361,11 +426,12 @@ def analyze(path, po_dir, patience, epsilon, out_dir, hv_every, hv_runs):
         final = {run: curve[-1] for run, curve in curves.items()}
         with open(curve_path, 'w', encoding='utf-8', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(['generation', 'hypervolume_median', 'hypervolume_fraction_of_final_median',
+            writer.writerow(['generation', 'hypervolume_median', 'hypervolume_share_median',
                              'front_size_median'])
             for i, g in enumerate(sampled):
                 values = [curves[run][i] for run in curves]
-                fractions = [curves[run][i] / final[run] if final[run] else 0.0 for run in curves]
+                divisor = reference_volume if reference_volume > 0 else None
+                fractions = [curves[run][i] / (divisor if divisor else (final[run] or 1.0)) for run in curves]
                 sizes = [len(runs[run].get(g, [])) for run in curves]
                 writer.writerow([g, '%.6g' % percentile(values, 0.5), '%.6f' % percentile(fractions, 0.5),
                                  '%.1f' % percentile(sizes, 0.5)])
@@ -381,6 +447,20 @@ def main():
     parser.add_argument('--epsilon', type=float, default=1e-4,
                         help='relative hypervolume growth counted as no improvement (default 1e-4)')
     parser.add_argument('--out-dir', default='', help='directory for the per-generation curves')
+    parser.add_argument('--reference-front', default='',
+                        help='CSV (f1,f2[,f3]) or .PO file whose hypervolume the curves are reported '
+                             'against. Without it the KC10 instances use their published front and the '
+                             'rest fall back to the value each run reaches at its last generation, '
+                             'which cannot be compared between files')
+    parser.add_argument('--hv-window', type=int, default=0,
+                        help='window of the stagnation test, in generations, applied to every file '
+                             'whatever granularity its trace has. Use it to compare t_stall between '
+                             'files; without it each file picks its own step from the cost')
+    parser.add_argument('--cover-target', type=float, default=0.99,
+                        help='share of the reference front that t_cover looks for (default 0.99)')
+    parser.add_argument('--write-reference', default='',
+                        help='write the non-dominated union of every point of the given traces to this '
+                             'CSV and stop; that file is the best known front of the campaign')
     parser.add_argument('--hv-runs', type=int, default=0,
                         help='runs used for the hypervolume, the slow part (default: all). The other '
                              'indicators always use every run')
@@ -395,21 +475,43 @@ def main():
     for pattern in args.traces:
         paths.extend(sorted(glob.glob(pattern)) or [pattern])
 
-    rows = [analyze(path, args.po_dir, args.patience, args.epsilon, args.out_dir, args.hv_every,
-                    args.hv_runs) for path in paths]
+    if args.write_reference:
+        union = []
+        for path in paths:
+            data, _ = read_trace(path)
+            # Only the last front of each run: the earlier ones are dominated by it, and reading every
+            # generation of a large trace would not fit in memory.
+            union.extend(p for run in data.values() for p in run[max(run)])
+        front = minimal(union)
+        with open(args.write_reference, 'w', encoding='utf-8', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['f%d' % (o + 1) for o in range(len(front[0]))])
+            writer.writerows(front)
+        print('%d non-dominated points out of %d written to %s'
+              % (len(front), len(set(union)), args.write_reference))
+        return
 
-    head = ('%-16s %5s %6s %7s %11s %9s %11s %9s %12s %11s %9s' %
+    reference = read_front_csv(args.reference_front) if args.reference_front else None
+    rows = [analyze(path, args.po_dir, args.patience, args.epsilon, args.out_dir, args.hv_every,
+                    args.hv_runs, reference, args.hv_window, args.cover_target) for path in paths]
+
+    head = ('%-16s %5s %6s %7s %11s %9s %11s %12s %11s %9s %8s %9s %8s' %
             ('instance', 'runs', 'gens', 'hv_gens', 't_stall_med', 't_stall_90', 't_final_med',
-             't_final_90', 'optimum_runs', 't_opt_med', 'coverage'))
+             'optimum_runs', 't_opt_med', 'coverage', 'hv_end', 'cover_end', 't_cover'))
     print(head)
     print('-' * len(head))
     for row in rows:
         known = row['coverage_final_mean'] == row['coverage_final_mean']  # false for nan: no .PO front
-        print('%-16s %5d %6d %7d %11.1f %9.1f %11.1f %9.1f %12s %11s %9s' % (
+        share = row['hv_end_share']
+        cover = row['cover_end']
+        print('%-16s %5d %6d %7d %11.1f %9.1f %11.1f %12s %11s %9s %8s %9s %8s' % (
             row['instance'], row['runs'], row['generations'], row['hv_step'], row['t_stall_median'],
-            row['t_stall_p90'], row['t_final_median'], row['t_final_p90'], row['optimum_runs'],
+            row['t_stall_p90'], row['t_final_median'], row['optimum_runs'],
             '%.1f' % row['t_optimum_median'] if row['t_optimum_median'] == row['t_optimum_median'] else '-',
-            '%.1f%%' % (100.0 * row['coverage_final_mean']) if known else '-'))
+            '%.1f%%' % (100.0 * row['coverage_final_mean']) if known else '-',
+            '%.2f%%' % (100.0 * share) if share == share else '-',
+            '%.2f%%' % (100.0 * cover) if cover == cover else '-',
+            '%.0f' % row['t_cover'] if row['t_cover'] == row['t_cover'] else '-'))
         if max(row['t_stall_median'], row['t_final_median']) >= row['generations']:
             print('%-16s   the run is still improving at the last generation: raise --iterations'
                   % ('(%s)' % row['instance']))
