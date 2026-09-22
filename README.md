@@ -6,11 +6,13 @@ GPU-parallel implementation (CUDA C++) of the multiobjective evolutionary algori
 combined with an **adapted Greedy 2-opt** local search, to solve instances of the
 **multiobjective Quadratic Assignment Problem** (mQAP).
 
-The whole algorithm runs on the GPU: fitness evaluation, non-dominated sorting, crowding distance,
+The whole algorithm runs on the GPU: fitness evaluation, non-dominated sorting,
+[crowding distance](#g-crowding),
 selection, mutation and local search. The host only copies the instance in before the loop and the
 results out after it, so **it does not synchronize with the device inside the loop**. A generation takes
-**3 kernel launches up to P = 256**, where the survival of each run fits in one block; above that the
-multi-block survival adds a cooperative launch and the segmented sorts of CUB (NVIDIA's library of
+**3 [kernel](#g-kernel) launches up to P = 256**, where the survival of each run fits in one block; above that the
+multi-block survival adds a [cooperative launch](#g-cooperative-launch) and the segmented sorts of
+[CUB](#g-cub) (NVIDIA's library of
 parallel primitives), about 37 launches per
 generation measured at P = 4096. **Several independent runs execute concurrently** in a single call to
 the program.
@@ -42,20 +44,22 @@ the program.
 ## Features
 
 **Algorithm**
-- Complete NSGA-II: fast non-dominated sorting, crowding distance and elitist (μ + λ) selection.
+- Complete NSGA-II: fast non-dominated sorting, crowding distance and
+  [elitist (μ + λ)](#g-elitism) selection.
 - Binary tournament selection, exchange mutation and transposition mutation (reversal of a segment).
 - Greedy 2-opt adapted to several objectives: in each generation the improvement criterion is chosen at
   random, either the sum of all objectives or a single objective.
 - Instances with 2 or 3 objectives (flow matrices) and up to 64 facilities.
 
 **GPU performance**
-- **O(n²)** fitness per chromosome (one *warp* per chromosome, with the matrices in *shared memory*),
+- **O(n²)** fitness per chromosome (one [*warp*](#g-warp) per chromosome, with the matrices in
+  [*shared memory*](#g-shared-memory)),
   instead of three O(n³) dense matrix products.
 - Complete NSGA-II **on the GPU**: one block per run up to P = 256 (bit-packed dominance matrix in shared
   memory), and a multi-block survival with cooperative launch and segmented sorts (CUB) for P up to 65536.
-- Greedy 2-opt with **O(n) incremental (delta) evaluation** of each swap; the local search of the whole
+- Greedy 2-opt with **O(n) [incremental (delta) evaluation](#g-delta)** of each swap; the local search of the whole
   offspring is a single kernel.
-- Persistent Philox random states, initialized only once.
+- Persistent [Philox](#g-philox) random states, initialized only once.
 - **Independent runs in parallel** (`--runs R`) to use the whole GPU in experiment campaigns.
 
 **Engineering**
@@ -117,7 +121,8 @@ flowchart TD
 Each generation does the following:
 
 1. **NSGA-II survival** over the `2P` solutions of `Rt = Pt ∪ Qt`:
-   - *Non-dominated sorting*: rank 1 for the first Pareto front, rank 2 for the next one, and so on.
+   - *Non-dominated sorting*: [rank](#g-rank) 1 for the first [Pareto front](#g-pareto-front),
+     rank 2 for the next one, and so on.
    - *Crowding distance* of each front. For each objective the members of the front are sorted; the
      extremes get ∞ and the interior points add `(f[next] − f[previous]) / (max − min)`, with the maximum
      and minimum taken over the whole population.
@@ -127,7 +132,7 @@ Each generation does the following:
    The winner is copied and mutated:
    - **Exchange mutation**: two random genes are swapped; it is applied twice.
    - **Transposition mutation**: the segment between two random positions is reversed.
-3. **Adapted Greedy 2-opt** on each offspring. All pairs of positions `(r < s)` are visited in order and
+3. **Adapted [Greedy 2-opt](#g-greedy-2opt)** on each offspring. All pairs of positions `(r < s)` are visited in order and
    a swap is kept if it does not worsen the criterion of the generation, chosen at random for each run and
    generation: the sum of all objectives or a single objective `k`. The idea of adapting the criterion
    comes from <https://arxiv.org/ftp/arxiv/papers/1109/1109.1276.pdf>.
@@ -426,10 +431,10 @@ generation with a large population, and noticeable with a small one.
 
 | Indicator | Meaning |
 |---|---|
-| `t_stall` | First generation after which the hypervolume grows less than `--epsilon` (relative) during `--patience` generations. The survival is elitist, so the hypervolume can only grow: a flat curve is real stagnation, not noise |
+| `t_stall` | First generation after which the [hypervolume](#g-hypervolume) grows less than `--epsilon` (relative) during `--patience` generations. The survival is elitist, so the hypervolume can only grow: a flat curve is real stagnation, not noise |
 | `t_final` | First generation whose front already equals the last one. It needs no reference data and says when nothing new is found again |
 | `t_optimum` | First generation that covers the published `.PO` front. Only the KC10 instances have one |
-| `coverage` | Share of the optimal front found at the end |
+| `coverage` | [Share of the optimal front](#g-coverage) found at the end |
 
 The reference point of the hypervolume is fixed for the whole file (the worst corner of generation 0),
 so the generations and the runs are comparable with each other. The three generation numbers are random
@@ -459,7 +464,7 @@ instances, 10 on the 3-objective ones), P = 16384 and P = 65536 with the cap eac
 
 Everything is measured on the same scale, which took two corrections worth stating:
 
-- **The quality is a share of a reference front, not of the run itself.** On KC10 that front is the
+- **The quality is a share of a [reference front](#g-reference-front), not of the run itself.** On KC10 that front is the
   published optimum, so the figure is the share of the optimal hypervolume. On KC20 and KC30 there is no
   published optimum, so the reference is the best front the campaign knows: the non-dominated union of
   the final fronts of every run and every population. Normalizing each run against its own last
@@ -556,7 +561,7 @@ On 2026-09-19 the results of this version were added to `comparative_results_kcX
   - A note below each block records the command, seed and time.
   - KC10-2fl-2uni ran with P = 16 (the original series used P = 2).
 - **Distance Metric:** columns F–G (mean and standard deviation) and column H of the second table, with the
-  gamma distance of this version over 100 runs per KC10 instance. It is computed exactly like
+  [gamma distance](#g-gamma) of this version over 100 runs per KC10 instance. It is computed exactly like
   `mQAPMetrics/distance_metric_*.js` and truncated to 2 decimals, like the existing values.
 
 **Maximum population of the branch (2026-09-21).** The same 12 experiments were run again with
@@ -953,40 +958,40 @@ Terms that appear throughout this document, in the meaning they have here.
 
 | Term | What it means |
 |---|---|
-| Kernel | A function that runs on the GPU. The host *launches* it with a grid of thread blocks; a launch is what costs a few microseconds of overhead, which is why the number of launches per generation matters |
-| Thread block | A group of threads that run on the same multiprocessor, can share *shared memory* and can synchronize with each other (`__syncthreads()`). At most 1024 threads |
-| Warp | The 32 threads that a multiprocessor really executes in lockstep. If they take different branches, the two paths run one after the other (*divergence*), and that is why the code keeps whole warps doing the same work |
-| Grid | The set of blocks of one launch. Blocks of the same grid cannot synchronize with each other, unless the launch is cooperative |
-| SM (*streaming multiprocessor*) | The unit that executes blocks. An RTX 2060 has 30, each holding up to 1024 resident threads, so 30,720 thread slots in total |
-| Shared memory | Memory inside the multiprocessor, shared by a block and about a hundred times faster than global memory. It is the scarce resource that caps the population of the single-block survival |
-| Occupancy | How full the GPU is: here, the time-weighted average of the thread slots in use |
-| Cooperative launch | A launch in which the whole grid can synchronize (`grid.sync()`), because CUDA guarantees that every block is resident at once. The multi-block survival needs it to peel one Pareto front before starting the next |
-| CUB | NVIDIA's library of parallel primitives for CUDA (sorts, scans, reductions), shipped with the toolkit. This project uses its *segmented sort*: one call sorts many independent blocks of data at once — here, the individuals of each run — instead of launching one sort per run |
-| Philox | The counter-based random generator of cuRAND. Every thread gets its own subsequence of the same seed, so the runs are independent and reproducible |
-| Stream | The queue where launches go. Everything here uses the default stream, which already keeps them in order |
+| <a id="g-kernel"></a>Kernel | A function that runs on the GPU. The host *launches* it with a grid of thread blocks; a launch is what costs a few microseconds of overhead, which is why the number of launches per generation matters |
+| <a id="g-block"></a>Thread block | A group of threads that run on the same multiprocessor, can share *shared memory* and can synchronize with each other (`__syncthreads()`). At most 1024 threads |
+| <a id="g-warp"></a>Warp | The 32 threads that a multiprocessor really executes in lockstep. If they take different branches, the two paths run one after the other (*divergence*), and that is why the code keeps whole warps doing the same work |
+| <a id="g-grid"></a>Grid | The set of blocks of one launch. Blocks of the same grid cannot synchronize with each other, unless the launch is cooperative |
+| <a id="g-sm"></a>SM (*streaming multiprocessor*) | The unit that executes blocks. An RTX 2060 has 30, each holding up to 1024 resident threads, so 30,720 thread slots in total |
+| <a id="g-shared-memory"></a>Shared memory | Memory inside the multiprocessor, shared by a block and about a hundred times faster than global memory. It is the scarce resource that caps the population of the single-block survival |
+| <a id="g-occupancy"></a>Occupancy | How full the GPU is: here, the time-weighted average of the thread slots in use |
+| <a id="g-cooperative-launch"></a>Cooperative launch | A launch in which the whole grid can synchronize (`grid.sync()`), because CUDA guarantees that every block is resident at once. The multi-block survival needs it to peel one Pareto front before starting the next |
+| <a id="g-cub"></a>CUB | NVIDIA's library of parallel primitives for CUDA (sorts, scans, reductions), shipped with the toolkit. This project uses its *segmented sort*: one call sorts many independent blocks of data at once — here, the individuals of each run — instead of launching one sort per run |
+| <a id="g-philox"></a>Philox | The counter-based random generator of cuRAND. Every thread gets its own subsequence of the same seed, so the runs are independent and reproducible |
+| <a id="g-stream"></a>Stream | The queue where launches go. Everything here uses the default stream, which already keeps them in order |
 
 **The algorithm**
 
 | Term | What it means |
 |---|---|
-| mQAP | Multiobjective Quadratic Assignment Problem: assign `n` facilities to `n` locations minimizing several flow-by-distance costs at once |
-| Dominance | A solution dominates another when it is not worse in any objective and is better in at least one |
-| Pareto front | The set of non-dominated solutions. With conflicting objectives there is no single best solution, but a front of trade-offs |
-| Rank | Result of the non-dominated sorting: rank 1 is the front of the population, rank 2 the front of what is left, and so on |
-| Crowding distance | How isolated a solution is inside its front. NSGA-II prefers the isolated ones, to spread the front instead of crowding one region |
-| Elitism (μ + λ) | Parents and offspring compete together, so the best solutions cannot be lost between generations |
-| Greedy 2-opt | Local search that tries swapping every pair of positions of a permutation and keeps the swap when it does not worsen the criterion of the generation |
-| Delta evaluation | Computing what a swap changes, in O(n), instead of recomputing the whole cost, in O(n²) |
+| <a id="g-mqap"></a>mQAP | Multiobjective Quadratic Assignment Problem: assign `n` facilities to `n` locations minimizing several flow-by-distance costs at once |
+| <a id="g-dominance"></a>Dominance | A solution dominates another when it is not worse in any objective and is better in at least one |
+| <a id="g-pareto-front"></a>Pareto front | The set of non-dominated solutions. With conflicting objectives there is no single best solution, but a front of trade-offs |
+| <a id="g-rank"></a>Rank | Result of the non-dominated sorting: rank 1 is the front of the population, rank 2 the front of what is left, and so on |
+| <a id="g-crowding"></a>Crowding distance | How isolated a solution is inside its front. NSGA-II prefers the isolated ones, to spread the front instead of crowding one region |
+| <a id="g-elitism"></a>Elitism (μ + λ) | Parents and offspring compete together, so the best solutions cannot be lost between generations |
+| <a id="g-greedy-2opt"></a>Greedy 2-opt | Local search that tries swapping every pair of positions of a permutation and keeps the swap when it does not worsen the criterion of the generation |
+| <a id="g-delta"></a>Delta evaluation | Computing what a swap changes, in O(n), instead of recomputing the whole cost, in O(n²) |
 
 **The metrics**
 
 | Term | What it means |
 |---|---|
-| Hypervolume | Volume of the region dominated by a front, bounded by a reference point. It is the usual quality measure because it rewards both getting close to the optimum and covering it; with an elitist survival it can only grow |
-| Reference point | The corner that bounds the hypervolume. It has to be the same for every measurement being compared, or the numbers mean nothing next to each other |
-| Reference front | What the quality is measured against: the published optimum (`.PO`) when it exists, and otherwise the best front the campaign knows |
-| Coverage | Share of the points of the reference front that a run actually found. It separates configurations that the hypervolume shows as almost equal |
-| Gamma distance | Average distance from each solution found to the closest point of the published front; it is the metric the original `mQAPMetrics` scripts compute |
+| <a id="g-hypervolume"></a>Hypervolume | Volume of the region dominated by a front, bounded by a reference point. It is the usual quality measure because it rewards both getting close to the optimum and covering it; with an elitist survival it can only grow |
+| <a id="g-reference-point"></a>Reference point | The corner that bounds the hypervolume. It has to be the same for every measurement being compared, or the numbers mean nothing next to each other |
+| <a id="g-reference-front"></a>Reference front | What the quality is measured against: the published optimum (`.PO`) when it exists, and otherwise the best front the campaign knows |
+| <a id="g-coverage"></a>Coverage | Share of the points of the reference front that a run actually found. It separates configurations that the hypervolume shows as almost equal |
+| <a id="g-gamma"></a>Gamma distance | Average distance from each solution found to the closest point of the published front; it is the metric the original `mQAPMetrics` scripts compute |
 
 ---
 

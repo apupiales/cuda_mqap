@@ -7,11 +7,11 @@ combinado con una búsqueda local **Greedy 2-opt adaptada**, para resolver insta
 **Problema de Asignación Cuadrática Multiobjetivo** (mQAP, *multiobjective Quadratic Assignment Problem*).
 
 Todo el algoritmo se ejecuta en la GPU: la evaluación del fitness, la ordenación no dominada, el
-crowding distance, la selección, la mutación y la búsqueda local. El host solo copia la instancia antes
+[crowding distance](#g-crowding), la selección, la mutación y la búsqueda local. El host solo copia la instancia antes
 del bucle y los resultados al terminar, de modo que **no sincroniza con el dispositivo dentro del
-bucle**. Una generación son **3 lanzamientos de kernel hasta P = 256**, donde la supervivencia de cada
-ejecución cabe en un bloque; por encima, la supervivencia multibloque añade un lanzamiento cooperativo y
-las ordenaciones por segmentos de CUB (la biblioteca de primitivas paralelas de NVIDIA), unos 37
+bucle**. Una generación son **3 lanzamientos de [kernel](#g-kernel) hasta P = 256**, donde la supervivencia de cada
+ejecución cabe en un bloque; por encima, la supervivencia multibloque añade un
+[lanzamiento cooperativo](#g-cooperative-launch) y las ordenaciones por segmentos de [CUB](#g-cub) (la biblioteca de primitivas paralelas de NVIDIA), unos 37
 lanzamientos por generación medidos con P = 4096. Además,
 se ejecutan **varias ejecuciones independientes de forma concurrente** en una sola llamada al programa.
 
@@ -42,21 +42,23 @@ se ejecutan **varias ejecuciones independientes de forma concurrente** en una so
 ## Características
 
 **Algoritmo**
-- NSGA-II completo: ordenación no dominada rápida, crowding distance y selección elitista (μ + λ).
+- NSGA-II completo: ordenación no dominada rápida, crowding distance y selección
+  [elitista (μ + λ)](#g-elitism).
 - Selección por torneo binario, mutación por intercambio y mutación por transposición (inversión de un segmento).
 - Greedy 2-opt adaptado a varios objetivos: en cada generación se elige al azar si el criterio de mejora
   es la suma de todos los objetivos o un único objetivo.
 - Instancias de 2 y 3 objetivos (flujos) y hasta 64 instalaciones.
 
 **Rendimiento en GPU**
-- Fitness en **O(n²)** por cromosoma (un *warp* por cromosoma, con las matrices en *shared memory*),
+- Fitness en **O(n²)** por cromosoma (un [*warp*](#g-warp) por cromosoma, con las matrices en
+  [*shared memory*](#g-shared-memory)),
   en lugar de tres productos de matrices densas de O(n³).
 - NSGA-II completo **en la GPU**: un bloque por ejecución hasta P = 256 (matriz de dominancia empaquetada en
   bits en *shared memory*) y una supervivencia multibloque con lanzamiento cooperativo y ordenaciones por
   segmentos (CUB) para P hasta 65536.
-- Greedy 2-opt con **evaluación incremental (delta) en O(n)** de cada intercambio; la búsqueda local de
+- Greedy 2-opt con **[evaluación incremental (delta)](#g-delta) en O(n)** de cada intercambio; la búsqueda local de
   toda la descendencia es un único kernel.
-- Estados aleatorios Philox persistentes, que se inicializan una sola vez.
+- Estados aleatorios [Philox](#g-philox) persistentes, que se inicializan una sola vez.
 - **Ejecuciones independientes en paralelo** (`--runs R`) para aprovechar toda la GPU en las campañas de experimentos.
 
 **Ingeniería**
@@ -118,7 +120,8 @@ flowchart TD
 Cada generación hace lo siguiente:
 
 1. **Supervivencia NSGA-II** sobre las `2P` soluciones de `Rt = Pt ∪ Qt`:
-   - *Ordenación no dominada*: rango 1 para el primer frente de Pareto, rango 2 para el siguiente, etc.
+   - *Ordenación no dominada*: [rango](#g-rank) 1 para el primer
+     [frente de Pareto](#g-pareto-front), rango 2 para el siguiente, etc.
    - *Crowding distance* de cada frente. Para cada objetivo se ordenan los miembros del frente; los
      extremos reciben ∞ y los puntos interiores suman `(f[siguiente] − f[anterior]) / (máx − mín)`,
      con el máximo y el mínimo calculados sobre toda la población.
@@ -128,7 +131,7 @@ Cada generación hace lo siguiente:
    El ganador se copia y se muta:
    - **Mutación por intercambio**: se intercambian dos genes al azar; se aplica 2 veces.
    - **Mutación por transposición**: se invierte el segmento comprendido entre dos posiciones aleatorias.
-3. **Greedy 2-opt adaptado** sobre cada descendiente. Se recorren en orden todos los pares de posiciones
+3. **[Greedy 2-opt](#g-greedy-2opt) adaptado** sobre cada descendiente. Se recorren en orden todos los pares de posiciones
    `(r < s)` y se conserva el intercambio si no empeora el criterio de la generación, elegido al azar para
    cada ejecución y generación: la suma de todos los objetivos o un único objetivo `k`. La idea de adaptar
    el criterio proviene de <https://arxiv.org/ftp/arxiv/papers/1109/1109.1276.pdf>.
@@ -427,10 +430,10 @@ informa, por instancia:
 
 | Indicador | Significado |
 |---|---|
-| `t_stall` | Primera generación tras la cual el hipervolumen crece menos de `--epsilon` (relativo) durante `--patience` generaciones. La supervivencia es elitista, así que el hipervolumen solo puede crecer: una curva plana es estancamiento real, no ruido |
+| `t_stall` | Primera generación tras la cual el [hipervolumen](#g-hypervolume) crece menos de `--epsilon` (relativo) durante `--patience` generaciones. La supervivencia es elitista, así que el hipervolumen solo puede crecer: una curva plana es estancamiento real, no ruido |
 | `t_final` | Primera generación cuyo frente ya es igual al último. No necesita datos de referencia y dice cuándo deja de encontrarse algo nuevo |
 | `t_optimum` | Primera generación que cubre el frente `.PO` publicado. Solo lo tienen las instancias KC10 |
-| `coverage` | Fracción del frente óptimo encontrada al final |
+| `coverage` | [Fracción del frente óptimo](#g-coverage) encontrada al final |
 
 El punto de referencia del hipervolumen es fijo para todo el fichero (la esquina peor de la generación 0),
 de modo que las generaciones y las ejecuciones son comparables entre sí. Los tres números de generación son
@@ -460,7 +463,8 @@ de 2 objetivos, 10 en las de 3), y P = 16384 y P = 65536 con el tope que cada in
 
 Todo está medido en la misma escala, y llegar a eso exigió dos correcciones que conviene declarar:
 
-- **La calidad es una fracción de un frente de referencia, no de la propia ejecución.** En KC10 ese frente
+- **La calidad es una fracción de un [frente de referencia](#g-reference-front), no de la propia
+  ejecución.** En KC10 ese frente
   es el óptimo publicado, así que la cifra es la fracción del hipervolumen óptimo. En KC20 y KC30 no hay
   óptimo publicado, de modo que la referencia es el mejor frente que conoce la campaña: la unión no
   dominada de los frentes finales de todas las ejecuciones y todas las poblaciones. Normalizar cada
@@ -558,7 +562,7 @@ El 2026-09-19 se añadieron a `comparative_results_kcX_datasets.xlsx` los result
   - Debajo de cada bloque hay una nota con el comando, la semilla y el tiempo.
   - KC10-2fl-2uni se ejecutó con P = 16 (las series originales usaron P = 2).
 - **Distance Metric:** columnas F–G (media y desviación típica) y columna H de la segunda tabla, con la
-  distancia gama de esta versión sobre 100 ejecuciones por instancia KC10. Se calcula igual que
+  [distancia gama](#g-gamma) de esta versión sobre 100 ejecuciones por instancia KC10. Se calcula igual que
   `mQAPMetrics/distance_metric_*.js` y se trunca a 2 decimales, como los valores existentes.
 
 **Población máxima de la rama (2026-09-21).** Los mismos 12 experimentos se repitieron con
@@ -960,40 +964,40 @@ Términos que aparecen a lo largo del documento, en el sentido que tienen aquí.
 
 | Término | Qué significa |
 |---|---|
-| Kernel | Función que se ejecuta en la GPU. El host la *lanza* con una malla de bloques de hilos; cada lanzamiento cuesta unos microsegundos de trámite, y por eso importa cuántos hay por generación |
-| Bloque de hilos | Grupo de hilos que se ejecutan en el mismo multiprocesador, pueden compartir *shared memory* y sincronizarse entre sí (`__syncthreads()`). Como máximo 1024 hilos |
-| Warp | Los 32 hilos que un multiprocesador ejecuta realmente al unísono. Si toman ramas distintas, los dos caminos se ejecutan uno detrás de otro (*divergencia*), y por eso el código procura que un warp entero haga el mismo trabajo |
-| Malla (*grid*) | El conjunto de bloques de un lanzamiento. Los bloques de una misma malla no pueden sincronizarse entre sí, salvo que el lanzamiento sea cooperativo |
-| SM (*streaming multiprocessor*) | La unidad que ejecuta bloques. Una RTX 2060 tiene 30, cada uno con hasta 1024 hilos residentes: 30 720 ranuras de hilo en total |
-| Shared memory | Memoria dentro del multiprocesador, compartida por un bloque y unas cien veces más rápida que la global. Es el recurso escaso que limita la población de la supervivencia de un bloque |
-| Ocupación | Cómo de llena está la GPU: aquí, la media temporal de las ranuras de hilo en uso |
-| Lanzamiento cooperativo | Lanzamiento en el que toda la malla puede sincronizarse (`grid.sync()`), porque CUDA garantiza que todos los bloques están residentes a la vez. La supervivencia multibloque lo necesita para pelar un frente de Pareto antes de empezar el siguiente |
-| CUB | Biblioteca de primitivas paralelas de NVIDIA para CUDA (ordenaciones, *scans*, reducciones), incluida en el toolkit. Este proyecto usa su *ordenación por segmentos*: una sola llamada ordena muchos bloques de datos independientes a la vez —aquí, los individuos de cada ejecución— en lugar de lanzar una ordenación por ejecución |
-| Philox | Generador aleatorio basado en contador de cuRAND. Cada hilo recibe su propia subsecuencia de la misma semilla, así que las ejecuciones son independientes y reproducibles |
-| Stream | La cola por la que van los lanzamientos. Aquí todo usa el *default stream*, que ya los mantiene en orden |
+| <a id="g-kernel"></a>Kernel | Función que se ejecuta en la GPU. El host la *lanza* con una malla de bloques de hilos; cada lanzamiento cuesta unos microsegundos de trámite, y por eso importa cuántos hay por generación |
+| <a id="g-block"></a>Bloque de hilos | Grupo de hilos que se ejecutan en el mismo multiprocesador, pueden compartir *shared memory* y sincronizarse entre sí (`__syncthreads()`). Como máximo 1024 hilos |
+| <a id="g-warp"></a>Warp | Los 32 hilos que un multiprocesador ejecuta realmente al unísono. Si toman ramas distintas, los dos caminos se ejecutan uno detrás de otro (*divergencia*), y por eso el código procura que un warp entero haga el mismo trabajo |
+| <a id="g-grid"></a>Malla (*grid*) | El conjunto de bloques de un lanzamiento. Los bloques de una misma malla no pueden sincronizarse entre sí, salvo que el lanzamiento sea cooperativo |
+| <a id="g-sm"></a>SM (*streaming multiprocessor*) | La unidad que ejecuta bloques. Una RTX 2060 tiene 30, cada uno con hasta 1024 hilos residentes: 30 720 ranuras de hilo en total |
+| <a id="g-shared-memory"></a>Shared memory | Memoria dentro del multiprocesador, compartida por un bloque y unas cien veces más rápida que la global. Es el recurso escaso que limita la población de la supervivencia de un bloque |
+| <a id="g-occupancy"></a>Ocupación | Cómo de llena está la GPU: aquí, la media temporal de las ranuras de hilo en uso |
+| <a id="g-cooperative-launch"></a>Lanzamiento cooperativo | Lanzamiento en el que toda la malla puede sincronizarse (`grid.sync()`), porque CUDA garantiza que todos los bloques están residentes a la vez. La supervivencia multibloque lo necesita para pelar un frente de Pareto antes de empezar el siguiente |
+| <a id="g-cub"></a>CUB | Biblioteca de primitivas paralelas de NVIDIA para CUDA (ordenaciones, *scans*, reducciones), incluida en el toolkit. Este proyecto usa su *ordenación por segmentos*: una sola llamada ordena muchos bloques de datos independientes a la vez —aquí, los individuos de cada ejecución— en lugar de lanzar una ordenación por ejecución |
+| <a id="g-philox"></a>Philox | Generador aleatorio basado en contador de cuRAND. Cada hilo recibe su propia subsecuencia de la misma semilla, así que las ejecuciones son independientes y reproducibles |
+| <a id="g-stream"></a>Stream | La cola por la que van los lanzamientos. Aquí todo usa el *default stream*, que ya los mantiene en orden |
 
 **El algoritmo**
 
 | Término | Qué significa |
 |---|---|
-| mQAP | Problema de Asignación Cuadrática Multiobjetivo: asignar `n` instalaciones a `n` ubicaciones minimizando a la vez varios costes de flujo por distancia |
-| Dominancia | Una solución domina a otra cuando no es peor en ningún objetivo y es mejor en al menos uno |
-| Frente de Pareto | El conjunto de soluciones no dominadas. Con objetivos en conflicto no hay una solución mejor, sino un frente de compromisos |
-| Rango | Resultado de la ordenación no dominada: rango 1 es el frente de la población, rango 2 el frente de lo que queda, y así sucesivamente |
-| Crowding distance | Cómo de aislada está una solución dentro de su frente. NSGA-II prefiere las aisladas, para repartir el frente en lugar de amontonarlo en una zona |
-| Elitismo (μ + λ) | Padres y descendientes compiten juntos, de modo que las mejores soluciones no se pueden perder entre generaciones |
-| Greedy 2-opt | Búsqueda local que prueba intercambiar cada par de posiciones de una permutación y conserva el intercambio cuando no empeora el criterio de la generación |
-| Evaluación incremental (*delta*) | Calcular lo que cambia un intercambio, en O(n), en lugar de recalcular el coste completo, en O(n²) |
+| <a id="g-mqap"></a>mQAP | Problema de Asignación Cuadrática Multiobjetivo: asignar `n` instalaciones a `n` ubicaciones minimizando a la vez varios costes de flujo por distancia |
+| <a id="g-dominance"></a>Dominancia | Una solución domina a otra cuando no es peor en ningún objetivo y es mejor en al menos uno |
+| <a id="g-pareto-front"></a>Frente de Pareto | El conjunto de soluciones no dominadas. Con objetivos en conflicto no hay una solución mejor, sino un frente de compromisos |
+| <a id="g-rank"></a>Rango | Resultado de la ordenación no dominada: rango 1 es el frente de la población, rango 2 el frente de lo que queda, y así sucesivamente |
+| <a id="g-crowding"></a>Crowding distance | Cómo de aislada está una solución dentro de su frente. NSGA-II prefiere las aisladas, para repartir el frente en lugar de amontonarlo en una zona |
+| <a id="g-elitism"></a>Elitismo (μ + λ) | Padres y descendientes compiten juntos, de modo que las mejores soluciones no se pueden perder entre generaciones |
+| <a id="g-greedy-2opt"></a>Greedy 2-opt | Búsqueda local que prueba intercambiar cada par de posiciones de una permutación y conserva el intercambio cuando no empeora el criterio de la generación |
+| <a id="g-delta"></a>Evaluación incremental (*delta*) | Calcular lo que cambia un intercambio, en O(n), en lugar de recalcular el coste completo, en O(n²) |
 
 **Las métricas**
 
 | Término | Qué significa |
 |---|---|
-| Hipervolumen | Volumen de la región dominada por un frente, acotada por un punto de referencia. Es la medida de calidad habitual porque premia a la vez acercarse al óptimo y cubrirlo; con supervivencia elitista solo puede crecer |
-| Punto de referencia | La esquina que acota el hipervolumen. Tiene que ser el mismo en todas las mediciones que se comparen, o las cifras no significan nada juntas |
-| Frente de referencia | Aquello contra lo que se mide la calidad: el óptimo publicado (`.PO`) cuando existe y, si no, el mejor frente que conoce la campaña |
-| Cobertura | Fracción de los puntos del frente de referencia que una ejecución llegó a encontrar. Separa configuraciones que el hipervolumen muestra casi iguales |
-| Distancia gama | Distancia media de cada solución encontrada al punto más cercano del frente publicado; es la métrica que calculan los scripts originales de `mQAPMetrics` |
+| <a id="g-hypervolume"></a>Hipervolumen | Volumen de la región dominada por un frente, acotada por un punto de referencia. Es la medida de calidad habitual porque premia a la vez acercarse al óptimo y cubrirlo; con supervivencia elitista solo puede crecer |
+| <a id="g-reference-point"></a>Punto de referencia | La esquina que acota el hipervolumen. Tiene que ser el mismo en todas las mediciones que se comparen, o las cifras no significan nada juntas |
+| <a id="g-reference-front"></a>Frente de referencia | Aquello contra lo que se mide la calidad: el óptimo publicado (`.PO`) cuando existe y, si no, el mejor frente que conoce la campaña |
+| <a id="g-coverage"></a>Cobertura | Fracción de los puntos del frente de referencia que una ejecución llegó a encontrar. Separa configuraciones que el hipervolumen muestra casi iguales |
+| <a id="g-gamma"></a>Distancia gama | Distancia media de cada solución encontrada al punto más cercano del frente publicado; es la métrica que calculan los scripts originales de `mQAPMetrics` |
 
 ---
 
