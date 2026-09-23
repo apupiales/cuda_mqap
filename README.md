@@ -496,8 +496,21 @@ after it, no run found anything new.
 | KC30-3fl-1uni | 1998 | > 5000 | > 10000 |
 | KC30-3fl-1rl | 1999 | > 5000 | > 10000 |
 
-**Quality reached**, as a share of the reference front. The first number is the hypervolume; the second,
-the share of the points of that front that the run actually found.
+**Quality reached.** Each cell holds two numbers measured against the same reference front, so the
+three columns can be read next to each other:
+
+- The **first one is the [hypervolume](#g-hypervolume)** of the front the run ended with, as a share of
+  the one the reference front dominates. It answers "how much of the interesting region of the objective
+  space does this front cover", and it saturates quickly: a handful of well placed solutions already
+  capture most of the volume.
+- The **second one is the [coverage](#g-coverage)**: how many points of the reference front the run
+  actually found, as a share. It answers "how many distinct trade-offs does this front offer", and it is
+  what separates the configurations.
+
+KC30-3fl-2uni makes the difference concrete. Its reference front has 751 points: with P = 1024 the run
+dominates 88.06 % of its volume having found 5.8 % of its points, about 44 of 751, and with P = 65536 it
+dominates 98.00 % having found 61.6 %, about 463. Almost the same volume, ten times the solutions to
+choose from.
 
 | Instance | P = 1024 | P = 16384 | P = 65536 |
 |---|---|---|---|
@@ -539,9 +552,30 @@ What the campaign says:
   Doubling from 5000 to 10000 generations added 0.67 and 2.55 points. There the number of generations is
   a decision about the budget, not a measurement.
 
-The reference front of KC20 and KC30 is the best one **known**, not the optimum: it holds 14,029 points
-on KC30-3fl-1rl and 3,112 on KC30-3fl-1uni. A longer run could improve it, and every percentage here
-would drop. The `.PO` fronts of KC10 have no such caveat.
+**The reference fronts are in the repository**, so the percentages can be checked and the fronts plotted
+or compared. On KC10 it is the published optimum; on KC20 and KC30 it is the best front this campaign
+knows, written as a `.KBP` file with the same format as a `.PO`: a 1-based permutation and its costs per
+line.
+
+| Instance | Reference front | Points | File |
+|---|---|---|---|
+| KC10-2fl-* | published optimum | 1 to 130 | [`mQAPData/KC10-2fl-*.PO`](mQAPData/) |
+| KC20-2fl-1rl | best known | 88 | [`KC20-2fl-1rl.KBP`](mQAPData/KC20-2fl-1rl.KBP) |
+| KC20-2fl-1uni | best known | 71 | [`KC20-2fl-1uni.KBP`](mQAPData/KC20-2fl-1uni.KBP) |
+| KC20-2fl-2uni | best known | 8 | [`KC20-2fl-2uni.KBP`](mQAPData/KC20-2fl-2uni.KBP) |
+| KC20-2fl-3uni | best known | 233 | [`KC20-2fl-3uni.KBP`](mQAPData/KC20-2fl-3uni.KBP) |
+| KC30-3fl-1rl | best known | 14,029 | [`KC30-3fl-1rl.KBP`](mQAPData/KC30-3fl-1rl.KBP) |
+| KC30-3fl-1uni | best known | 3,112 | [`KC30-3fl-1uni.KBP`](mQAPData/KC30-3fl-1uni.KBP) |
+| KC30-3fl-2uni | best known | 751 | [`KC30-3fl-2uni.KBP`](mQAPData/KC30-3fl-2uni.KBP) |
+
+The points are those that survive the dominance filter over the union of the final fronts of every run
+and every population: 751 of 4,727 on KC30-3fl-2uni, 14,029 of 37,029 on KC30-3fl-1rl. Every line was
+verified by recomputing the cost of its permutation against the instance.
+
+A `.KBP` is a lower bound, not an optimum: a longer or luckier run can improve it, and then every
+percentage measured against it drops. The `.PO` fronts of KC10 have no such caveat. Any of the two can
+be passed to the analysis with `--reference-front`, and
+`python scripts/analyze_convergence.py <traces> --write-reference <file>` rebuilds one.
 
 Two practical notes for repeating this. Record every trace with the same `--trace-every`, chosen for the
 most expensive instance, so any window that is a multiple of it is available in every file without

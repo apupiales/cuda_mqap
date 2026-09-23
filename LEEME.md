@@ -496,8 +496,21 @@ Todo está medido en la misma escala, y llegar a eso exigió dos correcciones qu
 | KC30-3fl-1uni | 1998 | > 5000 | > 10000 |
 | KC30-3fl-1rl | 1999 | > 5000 | > 10000 |
 
-**Calidad alcanzada**, como fracción del frente de referencia. El primer número es el hipervolumen; el
-segundo, la fracción de los puntos de ese frente que la ejecución llegó a encontrar.
+**Calidad alcanzada.** Cada celda tiene dos números medidos contra el mismo frente de referencia, de modo
+que las tres columnas se pueden leer una al lado de otra:
+
+- El **primero es el [hipervolumen](#g-hypervolume)** del frente con el que terminó la ejecución, como
+  fracción del que domina el frente de referencia. Responde a "cuánto de la región interesante del
+  espacio de objetivos cubre este frente", y se satura enseguida: un puñado de soluciones bien situadas
+  ya captura la mayor parte del volumen.
+- El **segundo es la [cobertura](#g-coverage)**: cuántos puntos del frente de referencia encontró
+  realmente la ejecución, en fracción. Responde a "cuántos compromisos distintos ofrece este frente", y
+  es lo que separa a las configuraciones.
+
+KC30-3fl-2uni lo hace evidente. Su frente de referencia tiene 751 puntos: con P = 1024 la ejecución
+domina el 88,06 % de su volumen habiendo encontrado el 5,8 % de sus puntos, unos 44 de 751, y con
+P = 65536 domina el 98,00 % habiendo encontrado el 61,6 %, unos 463. Casi el mismo volumen, diez veces
+más soluciones entre las que elegir.
 
 | Instancia | P = 1024 | P = 16384 | P = 65536 |
 |---|---|---|---|
@@ -540,9 +553,30 @@ Lo que dice la campaña:
   referencia. Pasar de 5000 a 10 000 generaciones añadió 0,67 y 2,55 puntos. Ahí el número de
   generaciones es una decisión de presupuesto, no una medición.
 
-El frente de referencia de KC20 y KC30 es el mejor **conocido**, no el óptimo: tiene 14 029 puntos en
-KC30-3fl-1rl y 3112 en KC30-3fl-1uni. Una ejecución más larga podría mejorarlo, y entonces todos estos
-porcentajes bajarían. Los frentes `.PO` de KC10 no tienen esa salvedad.
+**Los frentes de referencia están en el repositorio**, para poder comprobar los porcentajes y graficar o
+comparar los frentes. En KC10 es el óptimo publicado; en KC20 y KC30 es el mejor frente que conoce esta
+campaña, escrito como fichero `.KBP` con el mismo formato que un `.PO`: una permutación en base 1 y sus
+costes por línea.
+
+| Instancia | Frente de referencia | Puntos | Fichero |
+|---|---|---|---|
+| KC10-2fl-* | óptimo publicado | 1 a 130 | [`mQAPData/KC10-2fl-*.PO`](mQAPData/) |
+| KC20-2fl-1rl | mejor conocido | 88 | [`KC20-2fl-1rl.KBP`](mQAPData/KC20-2fl-1rl.KBP) |
+| KC20-2fl-1uni | mejor conocido | 71 | [`KC20-2fl-1uni.KBP`](mQAPData/KC20-2fl-1uni.KBP) |
+| KC20-2fl-2uni | mejor conocido | 8 | [`KC20-2fl-2uni.KBP`](mQAPData/KC20-2fl-2uni.KBP) |
+| KC20-2fl-3uni | mejor conocido | 233 | [`KC20-2fl-3uni.KBP`](mQAPData/KC20-2fl-3uni.KBP) |
+| KC30-3fl-1rl | mejor conocido | 14 029 | [`KC30-3fl-1rl.KBP`](mQAPData/KC30-3fl-1rl.KBP) |
+| KC30-3fl-1uni | mejor conocido | 3112 | [`KC30-3fl-1uni.KBP`](mQAPData/KC30-3fl-1uni.KBP) |
+| KC30-3fl-2uni | mejor conocido | 751 | [`KC30-3fl-2uni.KBP`](mQAPData/KC30-3fl-2uni.KBP) |
+
+Los puntos son los que sobreviven al filtro de dominancia sobre la unión de los frentes finales de todas
+las ejecuciones y todas las poblaciones: 751 de 4727 en KC30-3fl-2uni, y 14 029 de 37 029 en
+KC30-3fl-1rl. Cada línea se verificó recalculando el coste de su permutación contra la instancia.
+
+Un `.KBP` es una cota inferior, no un óptimo: una ejecución más larga o más afortunada puede mejorarlo, y
+entonces todos los porcentajes medidos contra él bajan. Los frentes `.PO` de KC10 no tienen esa salvedad.
+Cualquiera de los dos se le puede pasar al análisis con `--reference-front`, y
+`python scripts/analyze_convergence.py <trazas> --write-reference <fichero>` reconstruye uno.
 
 Dos notas prácticas para repetirlo. Graba todas las trazas con el mismo `--trace-every`, elegido por la
 instancia más cara, para que cualquier ventana múltiplo de él esté disponible en todos los ficheros sin

@@ -246,13 +246,23 @@ def minimal(points):
 
 
 def read_front_csv(path):
-    """Reference front: a CSV with f1,f2[,f3], or a .PO file of the instance."""
-    if path.lower().endswith('.po'):
+    """Reference front: a CSV with f1,f2[,f3], or a .PO / .KBP file of the instance.
+
+    Those hold a 1-based permutation followed by its costs, so the split is the longest prefix that is a
+    permutation of 1..k; the costs are far larger than any gene, so the rule is not ambiguous.
+    """
+    if path.lower().endswith(('.po', '.kbp')):
         points = []
         for line in open(path, encoding='utf-8'):
             values = [int(v) for v in line.split()]
-            if values:
-                points.append(tuple(values[-2:]))
+            if not values:
+                continue
+            size = 0
+            for k in range(len(values) - 1, 0, -1):
+                if sorted(values[:k]) == list(range(1, k + 1)):
+                    size = k
+                    break
+            points.append(tuple(values[size:]))
         return points
     with open(path, encoding='utf-8-sig', newline='') as f:
         reader = csv.DictReader(f)

@@ -5,6 +5,9 @@ The *.dat and *.PO files in this folder are NOT part of the cuda_mqap source cod
 covered by its GPL v3 license. They are third-party benchmark data, redistributed here unmodified
 for academic and research use, with attribution to their authors.
 
+The *.KBP files are different: they are results produced by this project, not third-party data.
+See "Best known fronts" below.
+
 
 Origin
 ------
@@ -70,3 +73,30 @@ KC<n>-<k>fl-<type>.dat
 KC10-2fl-<type>.PO
     One Pareto optimal solution per line: a 1-based permutation (location of each facility)
     followed by its k objective values.
+
+KC<n>-<k>fl-<type>.KBP
+    Same format as the .PO files, for the instances that have no published optimum. See below.
+
+
+Best known fronts (*.KBP)
+-------------------------
+
+The instances with 20 and 30 facilities have no published Pareto optimal front, so the quality of a
+run cannot be stated as a share of the optimum. These files hold the best front this project knows
+for each of them: the non-dominated union of the final fronts of every run of the convergence
+campaign, across the three population sizes that were measured (P = 1024, 16384 and 65536). They are
+what the reported percentages are measured against, and they can be plotted or compared like a .PO.
+
+    KC20-2fl-1rl      88 points        KC30-3fl-1rl   14029 points
+    KC20-2fl-1uni     71 points        KC30-3fl-1uni   3112 points
+    KC20-2fl-2uni      8 points        KC30-3fl-2uni    751 points
+    KC20-2fl-3uni    233 points
+
+They are a lower bound, not an optimum: a longer or luckier run can improve them, and then every
+percentage measured against them drops. Every line was verified against its instance, recomputing
+the cost of the permutation, and no point of a file is dominated by another one of the same file.
+
+These files are produced by this project and are covered by its GPL v3 license, like the rest of the
+source. They are placed here to sit next to the instances they belong to. Reproducing them:
+scripts/run_convergence.ps1 records the runs and
+"python scripts/analyze_convergence.py <traces> --write-reference <file>" builds the union.
