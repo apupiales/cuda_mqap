@@ -47,7 +47,11 @@ se ejecutan **varias ejecuciones independientes de forma concurrente** en una so
 - Selección por torneo binario, mutación por intercambio y mutación por transposición (inversión de un segmento).
 - Greedy 2-opt adaptado a varios objetivos: en cada generación se elige al azar si el criterio de mejora
   es la suma de todos los objetivos o un único objetivo.
-- Instancias de 2 y 3 objetivos (flujos) y hasta 64 instalaciones.
+- Instancias de 2 y 3 objetivos (flujos) y hasta 64 instalaciones. El cargador rechaza cualquier
+  instancia mayor (`kMaxFacilities` en `include/config.h`), y con 3 objetivos el límite efectivo es
+  63 en GPU con 64 KB de *shared memory*, porque con n = 64 las matrices de flujo y distancia de un
+  bloque ya ocupan 64 KB. La supervivencia multibloque no cambia esto: solo afecta a la
+  supervivencia, que no depende de n.
 
 **Rendimiento en GPU**
 - Fitness en **O(n²)** por cromosoma (un [*warp*](#g-warp) por cromosoma, con las matrices en
@@ -157,7 +161,7 @@ cuda_mqap/
 │   ├── config.h            Límites (n, P, objetivos) y parámetros de los operadores
 │   ├── cuda_check.cuh      CUDA_CHECK / CUDA_CHECK_KERNEL
 │   ├── device_buffer.cuh   DeviceBuffer<T>: memoria de GPU con RAII
-│   ├── device_common.cuh   Funciones __device__ compartidas (coste por warp, delta 2-opt, bitonic sort)
+│   ├── device_common.cuh   Funciones __device__ compartidas (coste por warp, delta del greedy 2-opt, bitonic sort)
 │   ├── instance.h          Struct Instance, loadInstance(), cost() de referencia en CPU
 │   ├── kernels.cuh         Declaración de los lanzadores de kernels y del layout de memoria
 │   ├── solver.h            SolverOptions, Solution, RunResult, solve()
@@ -228,13 +232,15 @@ generaciones solo se intercambian los punteros del doble búfer.
 | Supervivencia multibloque (P > 256) | `(⌈2P/256⌉, R)` × 256, más un lanzamiento cooperativo | 1 hilo por individuo en toda la malla | Conteo de dominadores con teselas de fitness en *shared memory*, pelado de frentes con `grid.sync()`, crowding y selección con ordenaciones por segmentos (CUB) |
 
 *Shared memory* por bloque:
-- **Fitness y 2-opt:** `(OBJ + 1)·n²·4 + 4·n·2` bytes, por ejemplo 14,6 KB para n = 30 y 3 objetivos.
+- **Fitness y greedy 2-opt:** `(OBJ + 1)·n²·4 + 4·n·2` bytes, por ejemplo 14,6 KB para n = 30 y 3 objetivos.
   Si hace falta más de 48 KB se solicita automáticamente el máximo *opt-in* del dispositivo
-  (`cudaFuncAttributeMaxDynamicSharedMemorySize`), lo que permite n = 60 con 3 objetivos en Turing.
+  (`cudaFuncAttributeMaxDynamicSharedMemorySize`), lo que permite n = 63 con 3 objetivos en Turing,
+  cuyo máximo *opt-in* es de 64 KB: n = 63 necesita 64.008 bytes y n = 64 necesita 66.048, que el
+  cargador rechaza.
 - **Supervivencia:** hasta ~46 KB con P = 256 (camino de un bloque). El camino multibloque (P > 256) solo usa
   teselas de fitness de unos 3 KB; ver [Límites del tamaño de población](#límites-del-tamaño-de-población-y-recursos-de-la-gpu).
 
-### Evaluación incremental del 2-opt
+### Evaluación incremental del greedy 2-opt
 
 Intercambiar las posiciones `r` y `s` de `p` solo modifica los términos del coste en los que aparecen `r` o `s`:
 
@@ -253,7 +259,7 @@ Los acumuladores son de 64 bits.
   usa `cudaDeviceSynchronize` durante la ejecución.
 - El host solo espera al final (`cudaEventSynchronize`), para medir el tiempo y copiar los resultados.
 - Dentro de los kernels, `__syncthreads()` solo separa fases que comparten *shared memory*, y `__syncwarp()`
-  hace visible a todo el warp el intercambio aplicado en el 2-opt.
+  hace visible a todo el warp el intercambio aplicado en el greedy 2-opt.
 - La supervivencia multibloque (P > 256) pela los frentes de Pareto con un **lanzamiento cooperativo**:
   toda la malla se sincroniza con `grid.sync()` entre las fases de cada frente, dentro del kernel, sin
   volver al host.
@@ -283,7 +289,7 @@ Los acumuladores son de 64 bits.
 ```
 git clone https://github.com/apupiales/cuda_mqap.git
 cd cuda_mqap
-git checkout develop_with_claude_opus_5
+git checkout develop_large_population_multiblock
 start cuda_mqap.slnx
 ```
 
@@ -970,8 +976,10 @@ muy por encima de lo que permite el tiempo: con P = 4096, cada ejecución de KC3
 **Posibles mejoras:**
 - Modelo de islas con migración entre las ejecuciones concurrentes.
 - CUDA Graphs para capturar la generación; con 3 kernels por generación, el beneficio esperado es pequeño.
-- Análisis con Nsight Compute del `survivalKernel`, que al ser un solo bloque está limitado por la latencia.
-- Más operadores de cruce y variantes del criterio del 2-opt.
+- Análisis con Nsight Compute de la supervivencia: el camino de un bloque (P ≤ 256) está limitado por la
+  latencia, y en el camino multibloque lo interesante es el coste de `grid.sync()` y de las ordenaciones
+  por segmentos de CUB.
+- Más operadores de cruce y variantes del criterio del greedy 2-opt.
 
 ---
 

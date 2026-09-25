@@ -49,7 +49,11 @@ the program.
 - Binary tournament selection, exchange mutation and transposition mutation (reversal of a segment).
 - Greedy 2-opt adapted to several objectives: in each generation the improvement criterion is chosen at
   random, either the sum of all objectives or a single objective.
-- Instances with 2 or 3 objectives (flow matrices) and up to 64 facilities.
+- Instances with 2 or 3 objectives (flow matrices) and up to 64 facilities. The loader rejects
+  anything larger (`kMaxFacilities` in `include/config.h`), and with 3 objectives the effective
+  limit is 63 on GPUs with 64 KB of *shared memory*, because the flow and distance matrices of a
+  block already need 64 KB at n = 64. The multi-block survival does not change this: it only
+  touches the survival, which does not depend on n.
 
 **GPU performance**
 - **O(n²)** fitness per chromosome (one [*warp*](#g-warp) per chromosome, with the matrices in
@@ -158,7 +162,7 @@ cuda_mqap/
 │   ├── config.h            Limits (n, P, objectives) and operator parameters
 │   ├── cuda_check.cuh      CUDA_CHECK / CUDA_CHECK_KERNEL
 │   ├── device_buffer.cuh   DeviceBuffer<T>: GPU memory with RAII
-│   ├── device_common.cuh   Shared __device__ functions (per-warp cost, 2-opt delta, bitonic sort)
+│   ├── device_common.cuh   Shared __device__ functions (per-warp cost, greedy 2-opt delta, bitonic sort)
 │   ├── instance.h          Instance struct, loadInstance(), reference CPU cost()
 │   ├── kernels.cuh         Declaration of the kernel launchers and of the memory layout
 │   ├── solver.h            SolverOptions, Solution, RunResult, solve()
@@ -229,13 +233,15 @@ generations only the pointers of the double buffer are swapped.
 | Multi-block survival (P > 256) | `(⌈2P/256⌉, R)` × 256, plus a cooperative launch | 1 thread per individual across the whole grid | Dominator counts with fitness tiles in *shared memory*, front peeling with `grid.sync()`, crowding and selection with segmented sorts (CUB) |
 
 *Shared memory* per block:
-- **Fitness and 2-opt:** `(OBJ + 1)·n²·4 + 4·n·2` bytes, e.g. 14.6 KB for n = 30 and 3 objectives.
+- **Fitness and greedy 2-opt:** `(OBJ + 1)·n²·4 + 4·n·2` bytes, e.g. 14.6 KB for n = 30 and 3 objectives.
   When more than 48 KB are needed, the device's maximum *opt-in* is requested automatically
-  (`cudaFuncAttributeMaxDynamicSharedMemorySize`), which allows n = 60 with 3 objectives on Turing.
+  (`cudaFuncAttributeMaxDynamicSharedMemorySize`), which allows n = 63 with 3 objectives on Turing,
+  whose opt-in maximum is 64 KB: n = 63 needs 64,008 bytes and n = 64 needs 66,048, which the loader
+  rejects.
 - **Survival:** up to ~46 KB with P = 256 (single-block path). The multi-block path (P > 256) only uses
   fitness tiles of about 3 KB; see [Population size limits](#population-size-limits-and-gpu-resources).
 
-### Incremental 2-opt evaluation
+### Incremental evaluation of the greedy 2-opt
 
 Swapping positions `r` and `s` of `p` only changes the cost terms in which `r` or `s` appear:
 
@@ -254,7 +260,7 @@ The accumulators are 64-bit.
   `cudaDeviceSynchronize` is not used during the run.
 - The host only waits at the end (`cudaEventSynchronize`), to measure the time and copy the results.
 - Inside the kernels, `__syncthreads()` only separates phases that share *shared memory*, and
-  `__syncwarp()` makes the swap applied by the 2-opt visible to the whole warp.
+  `__syncwarp()` makes the swap applied by the greedy 2-opt visible to the whole warp.
 - The multi-block survival (P > 256) peels the Pareto fronts with a **cooperative launch**: the whole
   grid synchronizes with `grid.sync()` between the phases of each front, inside the kernel, without going
   back to the host.
@@ -284,7 +290,7 @@ The accumulators are 64-bit.
 ```
 git clone https://github.com/apupiales/cuda_mqap.git
 cd cuda_mqap
-git checkout develop_with_claude_opus_5
+git checkout develop_large_population_multiblock
 start cuda_mqap.slnx
 ```
 
@@ -964,8 +970,9 @@ above what the time allows: with P = 4096 each run of KC30 costs about 0.7 s of 
 **Possible improvements:**
 - Island model with migration between the concurrent runs.
 - CUDA Graphs to capture a generation; with 3 kernels per generation, the expected benefit is small.
-- Nsight Compute analysis of the `survivalKernel`, which is latency bound because it is a single block.
-- More crossover operators and variants of the 2-opt criterion.
+- Nsight Compute analysis of the survival: the single-block path (P ≤ 256) is latency bound, and in the
+  multi-block path the interesting costs are `grid.sync()` and the segmented sorts of CUB.
+- More crossover operators and variants of the greedy 2-opt criterion.
 
 ---
 
