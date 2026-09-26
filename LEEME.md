@@ -179,6 +179,9 @@ cuda_mqap/
 ├── scripts/run_experiments.ps1   Campaña de experimentos con los parámetros de cada instancia
 ├── scripts/run_convergence.ps1   Trazas de cada generación y su análisis (ver más abajo)
 ├── scripts/analyze_convergence.py   Hipervolumen, estancamiento y cobertura del frente óptimo
+├── scripts/run_original_comparison.ps1   Comparación con la versión original, varias ejecuciones
+├── scripts/prepare_original.py   Árbol de compilación de la versión original para una instancia
+├── scripts/compare_versions.py   Hipervolumen, cobertura y Mann-Whitney entre dos versiones
 ├── mQAPData/               Instancias (.dat) y frentes óptimos (.PO)
 ├── mQAPMetrics/            Scripts Node.js de métricas y gráficos 3D
 ├── comparative_results_kcX_datasets.xlsx   Resultados comparativos
@@ -685,7 +688,9 @@ las cifras de la tabla. Una semilla tomada del reloj no añadiría independencia
 tienen— y sí se perdería eso. Lo que tampoco responde un timestamp es si el resultado depende de la
 semilla concreta; eso se comprueba repitiendo el lote con una segunda semilla fija y comparando las medias.
 
-**Calidad frente al Greedy 2-opt original.** Los resultados son mixtos:
+**Calidad frente al Greedy 2-opt original.** En KC10 hay frente óptimo publicado, así que su
+comparación usa la [distancia gama](#g-gamma) sobre 100 ejecuciones de cada versión, y los
+resultados son mixtos:
 
 | Instancia | Métrica | Original | Esta versión |
 |---|---|---|---|
@@ -697,12 +702,96 @@ semilla concreta; eso se comprueba repitiendo el lote con una segunda semilla fi
 | KC10-2fl-1uni | ídem | **79,32** | 192,02 |
 | KC10-2fl-2rl | ídem | **4.451,70** | 10.941,55 |
 | KC10-2fl-2uni | ídem (P distinto, no comparable) | 1.346,43 | 532,56 |
-| KC20-2fl-1uni | hipervolumen, 1 ejecución (mayor es mejor) | 3,5249·10¹⁰ | 3,5253·10¹⁰ |
-| KC20-2fl-1rl | ídem | **6,3518·10¹³** | 6,3061·10¹³ (−0,7 %) |
-| KC20-2fl-2uni | ídem | **8,4911·10⁹** | 7,8799·10⁹ (−7,2 %) |
-| KC20-2fl-3uni | ídem | **7,6649·10¹⁰** | 7,4938·10¹⁰ (−2,2 %) |
 
-Las cifras de las KC20 salen de una sola ejecución por versión, así que no permiten conclusiones estadísticas.
+En las KC20 no hay óptimo publicado, así que su comparación usa el mejor frente conocido de cada
+instancia (su fichero `.KBP`) y los dos indicadores de la campaña: el [hipervolumen](#g-hypervolume)
+que domina cada ejecución, como fracción del que domina el [frente de
+referencia](#g-reference-front), y la [cobertura](#g-coverage), la fracción de sus puntos que
+encuentra. Son **30 ejecuciones por configuración** en lugar de una, y la diferencia se contrasta
+con la prueba U de Mann-Whitney bilateral, que compara distribuciones sin suponer normalidad, lo
+habitual al comparar optimizadores estocásticos. El experimento y el cálculo están versionados:
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\run_original_comparison.ps1
+```
+
+`scripts/prepare_original.py` construye la versión original instancia por instancia desde la rama
+`master`, generando su fichero de *settings* a partir del propio `.dat` y aplicando los arreglos de
+memoria B1 y B2; `scripts/compare_versions.py` mide las dos versiones contra el mismo frente de
+referencia y aplica la prueba.
+
+Con la configuración con la que se distribuye la versión original, P = 64 y 300 generaciones, la
+única en la que ambas son directamente comparables, **la original gana en las cuatro instancias**, y
+la diferencia es significativa en todas:
+
+| Instancia | Hipervolumen original | Hipervolumen esta versión | p | Cobertura original | Cobertura esta versión | p |
+|---|---|---|---|---|---|---|
+| KC20-2fl-1rl | **99,28 % ± 0,19** | 98,31 % ± 0,81 | 2,4·10⁻¹⁰ | **39,7 % ± 3,9** | 28,1 % ± 4,0 | 1,9·10⁻¹⁰ |
+| KC20-2fl-1uni | **96,25 % ± 0,71** | 93,72 % ± 1,14 | 5,6·10⁻¹⁰ | **8,6 % ± 3,2** | 3,8 % ± 2,6 | 3,4·10⁻⁷ |
+| KC20-2fl-2uni | **90,95 % ± 8,91** | 77,91 % ± 13,13 | 1,1·10⁻⁵ | **32,9 % ± 15,2** | 14,6 % ± 12,7 | 3,8·10⁻⁵ |
+| KC20-2fl-3uni | **95,72 % ± 0,51** | 94,72 % ± 0,66 | 4,4·10⁻⁷ | **2,8 % ± 1,7** | 1,2 % ± 1,1 | 1,7·10⁻⁴ |
+
+**De dónde viene la diferencia.** No de la reescritura de NSGA-II, sino de dos diferencias en los
+operadores, que se aíslan recompilando esta versión:
+
+- **Mutación por intercambio.** La original aplica un intercambio por hijo; esta versión aplica dos
+  (`kExchangeMutations` en `include/config.h`).
+- **Pares que recorre el greedy 2-opt.** La original recorre `i` en `[0, n−2]` y `j` en `[1, n−1]`
+  saltando `i == j`, es decir cada par en los dos órdenes: 343 intentos de intercambio con n = 20.
+  Esta versión recorre los pares `r < s` una sola vez: 190 intentos. La búsqueda local de la original
+  es casi el doble de exhaustiva en cada generación, y cuesta casi el doble de tiempo de GPU: 2,2 s
+  frente a 1,2 s para las 30 ejecuciones de 300 generaciones.
+
+Hipervolumen medio de 30 ejecuciones, con P = 64 y 300 generaciones:
+
+| Configuración | KC20-2fl-1rl | KC20-2fl-1uni | KC20-2fl-2uni | KC20-2fl-3uni |
+|---|---|---|---|---|
+| Original | 99,28 % | 96,25 % | 90,95 % | 95,72 % |
+| Esta versión | 98,31 % (p = 2,4·10⁻¹⁰) | 93,72 % (p = 5,6·10⁻¹⁰) | 77,91 % (p = 1,1·10⁻⁵) | 94,72 % (p = 4,4·10⁻⁷) |
+| con un intercambio | 98,90 % (p = 3,1·10⁻⁶) | 93,96 % (p = 1,4·10⁻⁸) | 76,45 % (p = 2,9·10⁻⁶) | 95,26 % (p = 0,011) |
+| con los 343 pares de la original | 99,22 % (p = 0,98) | 95,91 % (p = 0,17) | 87,77 % (p = 0,021) | 95,78 % (p = 0,62) |
+| con las dos | 99,34 % (p = 0,23) | 96,17 % (p = 0,98) | 81,71 % (p = 8,0·10⁻⁴) | 96,10 % (p = 0,022) |
+
+El recorrido de pares explica casi toda la diferencia. Con él, esta versión iguala a la original en
+KC20-2fl-1rl, KC20-2fl-1uni y KC20-2fl-3uni, donde la prueba ya no distingue las distribuciones, y
+con las dos diferencias restauradas la supera en KC20-2fl-3uni. KC20-2fl-2uni se queda por detrás
+incluso así, pero es la menos concluyente de las cuatro: su frente de referencia tiene 8 puntos y la
+desviación típica entre ejecuciones ronda los 12,3 puntos porcentuales, un orden de magnitud más que
+en las otras tres.
+
+No se cambian los valores por defecto de esta rama: todas las mediciones de este documento se
+tomaron con dos intercambios y 190 pares, y cambiarlos invalidaría la campaña. Igualar el recorrido
+de pares queda como trabajo futuro.
+
+**Lo que aporta la población.** La comparación anterior usa P = 64 porque es lo que admite la
+versión original. Manteniendo las mismas 300 generaciones y subiendo solo la población, esta versión
+adelanta a la original mucho antes de llegar a su máximo (hipervolumen · cobertura, media de 30
+ejecuciones):
+
+| Configuración | KC20-2fl-1rl | KC20-2fl-1uni | KC20-2fl-2uni | KC20-2fl-3uni |
+|---|---|---|---|---|
+| Original, P = 64 | 99,28 % · 39,7 % | 96,25 % · 8,6 % | 90,95 % · 32,9 % | 95,72 % · 2,8 % |
+| Esta versión, P = 64 | 98,31 % · 28,1 % | 93,72 % · 3,8 % | 77,91 % · 14,6 % | 94,72 % · 1,2 % |
+| Esta versión, P = 256 | 99,43 % · 53,1 % | 96,70 % · 13,6 % | 89,33 % · 33,3 % | 96,94 % · 7,7 % |
+| Esta versión, P = 1024 | 99,72 % · 69,9 % | 98,81 % · 34,2 % | 98,17 % · 58,8 % | 98,32 % · 20,3 % |
+| Esta versión, P = 4096 | 99,85 % · 80,2 % | 99,64 % · 62,7 % | 99,40 % · 74,6 % | 99,05 % · 40,8 % |
+| Esta versión, P = 16384 | 99,94 % · 87,7 % | 99,91 % · 85,3 % | 99,69 % · 87,5 % | 99,46 % · 61,1 % |
+| Esta versión, P = 65536 | 99,98 % · 92,3 % | 99,98 % · 95,6 % | 99,95 % · 97,5 % | 99,75 % · 77,1 % |
+
+Con P = 256 ya iguala o supera a la original en los dos indicadores de las cuatro instancias, salvo
+el hipervolumen de KC20-2fl-2uni; con P = 1024 la supera en las cuatro y en los dos indicadores. Es
+el argumento de esta rama: no gana con la población de la original, donde la búsqueda local hace
+casi todo el trabajo, sino con poblaciones que la original no puede ejecutar. Y la fila P = 65536
+reproduce las cifras de cobertura de la campaña (92,3 %, 95,8 %, 97,5 % y 77,4 %) con menos de tres
+décimas de diferencia, con otras semillas y solo 300 generaciones: una comprobación independiente de
+esa tabla.
+
+Todo se mide contra los ficheros `.KBP` del repositorio, los mismos contra los que se publicó la
+campaña, para que las dos tablas sean comparables. Esas diez configuraciones encontraron 28
+soluciones que esos frentes no dominan, 4 en KC20-2fl-1rl y 24 en KC20-2fl-3uni, así que los frentes
+del repositorio son una cota inferior: `scripts/compare_versions.py --update-reference` los
+reconstruye, pero eso cambiaría las cifras ya publicadas contra ellos (en KC20-2fl-3uni retiraría
+además 13 puntos dominados), así que se dejan como están.
 
 **Correcciones del libro (2026-09-19)**
 - **KC20-2fl-3uni:** las series NSGA-II, Greedy 2opt y la serie oculta del óptimo de Pareto del gráfico
@@ -979,7 +1068,9 @@ muy por encima de lo que permite el tiempo: con P = 4096, cada ejecución de KC3
 - Análisis con Nsight Compute de la supervivencia: el camino de un bloque (P ≤ 256) está limitado por la
   latencia, y en el camino multibloque lo interesante es el coste de `grid.sync()` y de las ordenaciones
   por segmentos de CUB.
-- Más operadores de cruce y variantes del criterio del greedy 2-opt.
+- Más operadores de cruce y variantes del criterio del greedy 2-opt, empezando por el recorrido
+  de pares de la versión original (343 intentos con n = 20 en lugar de 190), que explica casi
+  toda la diferencia de calidad en las KC20 con P = 64.
 
 ---
 

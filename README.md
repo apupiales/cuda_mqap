@@ -180,6 +180,9 @@ cuda_mqap/
 ├── scripts/run_experiments.ps1   Experiment campaign with the parameters of each instance
 ├── scripts/run_convergence.ps1   Traces of every generation and their analysis (see below)
 ├── scripts/analyze_convergence.py   Hypervolume, stagnation and coverage of the optimal front
+├── scripts/run_original_comparison.ps1   Comparison against the original version, many runs each
+├── scripts/prepare_original.py   Build tree of the original version for one instance
+├── scripts/compare_versions.py   Hypervolume, coverage and Mann-Whitney between two versions
 ├── mQAPData/               Instances (.dat) and optimal fronts (.PO)
 ├── mQAPMetrics/            Node.js metric and 3D plot scripts
 ├── comparative_results_kcX_datasets.xlsx   Comparative results
@@ -685,7 +688,8 @@ have it — and would lose that. What a timestamp does not answer either is whet
 the particular seed; that is checked by repeating the batch with a second fixed seed and comparing the
 means.
 
-**Quality versus the original Greedy 2-opt.** The results are mixed:
+**Quality versus the original Greedy 2-opt.** KC10 has a published optimal front, so its comparison
+uses the [gamma distance](#g-gamma) over 100 runs of each version, and the results are mixed:
 
 | Instance | Metric | Original | This version |
 |---|---|---|---|
@@ -697,12 +701,95 @@ means.
 | KC10-2fl-1uni | same | **79.32** | 192.02 |
 | KC10-2fl-2rl | same | **4,451.70** | 10,941.55 |
 | KC10-2fl-2uni | same (different P, not comparable) | 1,346.43 | 532.56 |
-| KC20-2fl-1uni | hypervolume, 1 run (higher is better) | 3.5249·10¹⁰ | 3.5253·10¹⁰ |
-| KC20-2fl-1rl | same | **6.3518·10¹³** | 6.3061·10¹³ (−0.7 %) |
-| KC20-2fl-2uni | same | **8.4911·10⁹** | 7.8799·10⁹ (−7.2 %) |
-| KC20-2fl-3uni | same | **7.6649·10¹⁰** | 7.4938·10¹⁰ (−2.2 %) |
 
-The KC20 figures come from a single run of each version, so they do not support statistical conclusions.
+The KC20 instances have no published optimum, so their comparison uses the best known front of each
+instance (its `.KBP` file) and the two indicators of the campaign: the [hypervolume](#g-hypervolume)
+each run dominates, as a share of the one the [reference front](#g-reference-front) dominates, and
+the [coverage](#g-coverage), the share of its points the run finds. There are **30 runs per
+configuration** instead of one, and the difference is tested with the two-sided Mann-Whitney U test,
+which compares distributions without assuming normality, as is usual when comparing stochastic
+optimizers. The experiment and the computation are versioned:
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\run_original_comparison.ps1
+```
+
+`scripts/prepare_original.py` builds the original version instance by instance from the `master`
+branch, generating its settings file from the instance's own `.dat` and applying the memory fixes B1
+and B2; `scripts/compare_versions.py` measures both versions against the same reference front and
+runs the test.
+
+With the configuration the original version ships with, P = 64 and 300 generations, the only one
+where the two are directly comparable, **the original wins on all four instances**, and the
+difference is significant on every one of them:
+
+| Instance | Hypervolume, original | Hypervolume, this version | p | Coverage, original | Coverage, this version | p |
+|---|---|---|---|---|---|---|
+| KC20-2fl-1rl | **99.28 % ± 0.19** | 98.31 % ± 0.81 | 2.4·10⁻¹⁰ | **39.7 % ± 3.9** | 28.1 % ± 4.0 | 1.9·10⁻¹⁰ |
+| KC20-2fl-1uni | **96.25 % ± 0.71** | 93.72 % ± 1.14 | 5.6·10⁻¹⁰ | **8.6 % ± 3.2** | 3.8 % ± 2.6 | 3.4·10⁻⁷ |
+| KC20-2fl-2uni | **90.95 % ± 8.91** | 77.91 % ± 13.13 | 1.1·10⁻⁵ | **32.9 % ± 15.2** | 14.6 % ± 12.7 | 3.8·10⁻⁵ |
+| KC20-2fl-3uni | **95.72 % ± 0.51** | 94.72 % ± 0.66 | 4.4·10⁻⁷ | **2.8 % ± 1.7** | 1.2 % ± 1.1 | 1.7·10⁻⁴ |
+
+**Where the difference comes from.** Not from the NSGA-II rewrite, but from two differences in the
+operators, which can be isolated by rebuilding this version:
+
+- **Exchange mutation.** The original applies one exchange per child; this version applies two
+  (`kExchangeMutations` in `include/config.h`).
+- **Pairs the greedy 2-opt visits.** The original runs `i` over `[0, n−2]` and `j` over `[1, n−1]`
+  skipping `i == j`, that is, each pair in both orders: 343 swap trials at n = 20. This version
+  visits the pairs `r < s` once: 190 trials. The local search of the original is nearly twice as
+  thorough per generation, and costs nearly twice the GPU time: 2.2 s against 1.2 s for the 30 runs
+  of 300 generations.
+
+Mean hypervolume over 30 runs, with P = 64 and 300 generations:
+
+| Configuration | KC20-2fl-1rl | KC20-2fl-1uni | KC20-2fl-2uni | KC20-2fl-3uni |
+|---|---|---|---|---|
+| Original | 99.28 % | 96.25 % | 90.95 % | 95.72 % |
+| This version | 98.31 % (p = 2.4·10⁻¹⁰) | 93.72 % (p = 5.6·10⁻¹⁰) | 77.91 % (p = 1.1·10⁻⁵) | 94.72 % (p = 4.4·10⁻⁷) |
+| with one exchange mutation | 98.90 % (p = 3.1·10⁻⁶) | 93.96 % (p = 1.4·10⁻⁸) | 76.45 % (p = 2.9·10⁻⁶) | 95.26 % (p = 0.011) |
+| with the 343 pairs of the original | 99.22 % (p = 0.98) | 95.91 % (p = 0.17) | 87.77 % (p = 0.021) | 95.78 % (p = 0.62) |
+| with both | 99.34 % (p = 0.23) | 96.17 % (p = 0.98) | 81.71 % (p = 8.0·10⁻⁴) | 96.10 % (p = 0.022) |
+
+The pair loop accounts for almost all of the difference. With it, this version matches the original
+on KC20-2fl-1rl, KC20-2fl-1uni and KC20-2fl-3uni, where the test no longer separates the
+distributions, and with both differences restored it beats the original on KC20-2fl-3uni.
+KC20-2fl-2uni stays behind even so, but it is the least conclusive of the four: its reference front
+has 8 points and the standard deviation between runs is around 12.3 percentage points, an order of
+magnitude more than on the other three.
+
+The defaults of this branch are not changed: every measurement in this document was taken with two
+exchanges and 190 pairs, and changing them would invalidate the campaign. Matching the pair loop is
+left as future work.
+
+**What the population adds.** The comparison above uses P = 64 because that is what the original
+version admits. Keeping the same 300 generations and raising only the population, this version
+overtakes the original well before reaching its own maximum (hypervolume · coverage, mean of 30
+runs):
+
+| Configuration | KC20-2fl-1rl | KC20-2fl-1uni | KC20-2fl-2uni | KC20-2fl-3uni |
+|---|---|---|---|---|
+| Original, P = 64 | 99.28 % · 39.7 % | 96.25 % · 8.6 % | 90.95 % · 32.9 % | 95.72 % · 2.8 % |
+| This version, P = 64 | 98.31 % · 28.1 % | 93.72 % · 3.8 % | 77.91 % · 14.6 % | 94.72 % · 1.2 % |
+| This version, P = 256 | 99.43 % · 53.1 % | 96.70 % · 13.6 % | 89.33 % · 33.3 % | 96.94 % · 7.7 % |
+| This version, P = 1024 | 99.72 % · 69.9 % | 98.81 % · 34.2 % | 98.17 % · 58.8 % | 98.32 % · 20.3 % |
+| This version, P = 4096 | 99.85 % · 80.2 % | 99.64 % · 62.7 % | 99.40 % · 74.6 % | 99.05 % · 40.8 % |
+| This version, P = 16384 | 99.94 % · 87.7 % | 99.91 % · 85.3 % | 99.69 % · 87.5 % | 99.46 % · 61.1 % |
+| This version, P = 65536 | 99.98 % · 92.3 % | 99.98 % · 95.6 % | 99.95 % · 97.5 % | 99.75 % · 77.1 % |
+
+At P = 256 it already matches or beats the original on both indicators of all four instances, except
+the hypervolume of KC20-2fl-2uni; at P = 1024 it beats it on all four and on both indicators. That
+is the argument of this branch: it does not win at the population of the original, where the local
+search does almost all of the work, but at populations the original cannot run. And the P = 65536
+row reproduces the coverage figures of the campaign (92.3 %, 95.8 %, 97.5 % and 77.4 %) to within
+three tenths, with different seeds and only 300 generations: an independent check of that table.
+
+Everything is measured against the `.KBP` files in the repository, the same ones the campaign was
+published against, so the two tables stay comparable. Those ten configurations found 28 solutions
+those fronts do not dominate, 4 on KC20-2fl-1rl and 24 on KC20-2fl-3uni, so the fronts in the
+repository are a lower bound: `scripts/compare_versions.py --update-reference` rebuilds them, but
+that would change the figures already published against them (on KC20-2fl-3uni it would also drop 13
+dominated points), so they are left as they are.
 
 **Workbook corrections (2026-09-19)**
 - **KC20-2fl-3uni:** the NSGA-II, Greedy 2opt and hidden Pareto optimal chart series pointed to the
@@ -972,7 +1059,9 @@ above what the time allows: with P = 4096 each run of KC30 costs about 0.7 s of 
 - CUDA Graphs to capture a generation; with 3 kernels per generation, the expected benefit is small.
 - Nsight Compute analysis of the survival: the single-block path (P ≤ 256) is latency bound, and in the
   multi-block path the interesting costs are `grid.sync()` and the segmented sorts of CUB.
-- More crossover operators and variants of the greedy 2-opt criterion.
+- More crossover operators and variants of the greedy 2-opt criterion, starting with the pair
+  loop of the original version (343 trials at n = 20 instead of 190), which accounts for almost
+  all of the quality difference on the KC20 instances with P = 64.
 
 ---
 
