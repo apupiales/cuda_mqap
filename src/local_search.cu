@@ -2,8 +2,9 @@
  * local_search.cu
  *
  * Adapted greedy 2-opt for the mQAP (see https://arxiv.org/ftp/arxiv/papers/1109/1109.1276.pdf).
- * Each warp improves one offspring: every pair of positions (r < s) is visited once in order and
- * the swap is kept when it does not worsen the criterion of the generation (sum of all objectives
+ * Each warp improves one offspring: the pairs of positions are visited in the order of the original
+ * version (r in [0, n-2], s in [1, n-1], skipping r == s, so most pairs are visited in both orders)
+ * and the swap is kept when it does not worsen the criterion of the generation (sum of all objectives
  * or a single objective). The effect of a swap is evaluated in O(n) with warpSwapDelta, so the
  * whole local search of all offspring of all runs is a single kernel launch.
  *
@@ -69,8 +70,13 @@ __global__ void greedy2OptKernel(short* __restrict__ genes, unsigned int* __rest
         cost[o] = warpCost(sFlow + o * n * n, sDist, p, n, lane);
     }
 
+    // kGreedyFullPairs selects the pair traversal; both bounds are compile-time constants, so the
+    // unused branch costs nothing. See its comment in config.h and the README.
     for (int r = 0; r < n - 1; r++) {
-        for (int s = r + 1; s < n; s++) {
+        for (int s = kGreedyFullPairs ? 1 : r + 1; s < n; s++) {
+            if (kGreedyFullPairs && r == s) {
+                continue;
+            }
             long long delta[OBJ];
             long long sum = 0;
 #pragma unroll

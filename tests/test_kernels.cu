@@ -366,13 +366,15 @@ void testTrace(const Instance& instance, int population, int iterations, int run
     }
 }
 
-// CPU greedy 2-opt with full cost recomputation (no delta formula).
+// CPU greedy 2-opt with full cost recomputation (no delta formula). Same pair traversal as the kernel,
+// selected by kGreedyFullPairs, so the test checks whichever one is configured.
 std::vector<short> cpuGreedy(const Instance& instance, std::vector<short> p, int type) {
     const int n = instance.n;
     std::vector<long long> current(instance.objectives);
     for (int o = 0; o < instance.objectives; o++) current[o] = cost(instance, p.data(), o);
     for (int r = 0; r < n - 1; r++) {
-        for (int s = r + 1; s < n; s++) {
+        for (int s = kGreedyFullPairs ? 1 : r + 1; s < n; s++) {
+            if (kGreedyFullPairs && r == s) continue;
             std::swap(p[r], p[s]);
             std::vector<long long> candidate(instance.objectives);
             long long sum = 0;

@@ -52,4 +52,11 @@ constexpr int kExchangeMutations = 2;
 constexpr float kExchangeMutationProbability = 1.0f;
 constexpr float kTranspositionMutationProbability = 1.0f;
 
+// Pair traversal of the greedy 2-opt. true is the traversal of the original version: r over [0, n-2],
+// s over [1, n-1] skipping r == s, so most pairs are visited in both orders, (n-1) + (n-2)^2 swap
+// trials (343 at n = 20). false visits each pair r < s once, n(n-1)/2 trials (190 at n = 20).
+// The choice is a trade-off measured in the README, not a defect either way: the full traversal is what
+// makes the KC20 quality match the original version, and it costs 1.4 to 1.8 times the GPU time.
+constexpr bool kGreedyFullPairs = true;
+
 } // namespace mqap

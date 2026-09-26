@@ -135,10 +135,14 @@ Cada generación hace lo siguiente:
    El ganador se copia y se muta:
    - **Mutación por intercambio**: se intercambian dos genes al azar; se aplica 2 veces.
    - **Mutación por transposición**: se invierte el segmento comprendido entre dos posiciones aleatorias.
-3. **[Greedy 2-opt](#g-greedy-2opt) adaptado** sobre cada descendiente. Se recorren en orden todos los pares de posiciones
-   `(r < s)` y se conserva el intercambio si no empeora el criterio de la generación, elegido al azar para
-   cada ejecución y generación: la suma de todos los objetivos o un único objetivo `k`. La idea de adaptar
-   el criterio proviene de <https://arxiv.org/ftp/arxiv/papers/1109/1109.1276.pdf>.
+3. **[Greedy 2-opt](#g-greedy-2opt) adaptado** sobre cada descendiente. Los pares de posiciones se recorren en el orden
+   de la versión original —`r` en `[0, n−2]`, `s` en `[1, n−1]`, saltando `r == s`, así que casi todos los
+   pares se visitan en los dos órdenes— y se conserva el intercambio si no empeora el criterio de la
+   generación, elegido al azar para cada ejecución y generación: la suma de todos los objetivos o un
+   único objetivo `k`. Volver a visitar un par después de aceptar un intercambio puede mejorarlo otra
+   vez, y eso es lo que hace que la calidad iguale a la de la versión original; ver [Calidad frente al
+   Greedy 2-opt original](#quality-vs-original). La idea de adaptar el criterio proviene de
+   <https://arxiv.org/ftp/arxiv/papers/1109/1109.1276.pdf>.
 
 Parámetros:
 
@@ -150,6 +154,7 @@ Parámetros:
 | Semilla | `--seed` | aleatoria (se imprime) |
 | Mutaciones por intercambio por hijo | `include/config.h` (`kExchangeMutations`) | 2 |
 | Probabilidad de intercambio / transposición | `include/config.h` | 1.0 / 1.0 |
+| Recorrido de pares del greedy 2-opt | `include/config.h` (`kGreedyFullPairs`) | `true`: el de la versión original, `(n−1) + (n−2)²` intentos |
 
 ---
 
@@ -253,7 +258,8 @@ Intercambiar las posiciones `r` y `s` de `p` solo modifica los términos del cos
 ```
 
 Cada carril del warp calcula una parte del sumatorio y el resultado se reduce con `__shfl_down_sync`.
-Así, cada una de las `n(n−1)/2` evaluaciones cuesta O(n) en lugar de recalcular el fitness completo.
+Así, cada una de las `(n−1) + (n−2)²` evaluaciones del recorrido (343 con n = 20) cuesta O(n) en lugar
+de recalcular el fitness completo.
 Los acumuladores son de 64 bits.
 
 ### Sincronización
@@ -427,6 +433,18 @@ población y las iteraciones que usaba cada instancia en la versión original:
 ```
 
 ### Cuántas generaciones necesita cada instancia (`--trace`)
+
+> **Las cifras de esta sección y las del libro de Excel se midieron con el recorrido de pares
+> anterior**, el de una sola pasada `r < s`, antes de que el de la versión original pasara a ser el
+> comportamiento por defecto (ver [B8 retirado](#errores-corregidos)). El recorrido nuevo mejora el
+> frente por generación y cuesta entre 1,4 y 1,8 veces más tiempo de GPU, así que cabe esperar que
+> las generaciones de estancamiento bajen y que las fracciones de calidad suban; los frentes de
+> referencia `.KBP` salen de esas mismas ejecuciones, y por lo tanto también son una cota inferior
+> más holgada de lo que serían ahora. Volver a lanzar la campaña completa es un trabajo de horas y
+> está pendiente. Lo que sí se volvió a medir con el recorrido nuevo es la comparación con la versión
+> original y el barrido de poblaciones de
+> [Calidad frente al Greedy 2-opt original](#quality-vs-original), y las tablas de
+> [Rendimiento](#rendimiento).
 
 `--trace FICHERO` escribe un CSV con `run,generation,f1,f2[,f3]`: las soluciones no dominadas distintas
 de **cada** generación de cada ejecución, desde la supervivencia de la población inicial (generación 0)
@@ -688,20 +706,31 @@ las cifras de la tabla. Una semilla tomada del reloj no añadiría independencia
 tienen— y sí se perdería eso. Lo que tampoco responde un timestamp es si el resultado depende de la
 semilla concreta; eso se comprueba repitiendo el lote con una segunda semilla fija y comparando las medias.
 
+<a id="quality-vs-original"></a>
 **Calidad frente al Greedy 2-opt original.** En KC10 hay frente óptimo publicado, así que su
-comparación usa la [distancia gama](#g-gamma) sobre 100 ejecuciones de cada versión, y los
-resultados son mixtos:
+comparación usa la [distancia gama](#g-gamma) sobre 100 ejecuciones y los parámetros de cada
+instancia. Los resultados son mixtos:
 
-| Instancia | Métrica | Original | Esta versión |
+| Instancia | Original | Esta versión | Recorrido anterior (190 pares) |
 |---|---|---|---|
-| KC10-2fl-1rl | distancia gama (menor es mejor), 100 ejecuciones | 1.484,66 | **850,56** |
-| KC10-2fl-3rl | ídem | 22.541,34 | **20.531,69** |
-| KC10-2fl-4rl | ídem | 12.399,20 | **7.515,98** |
-| KC10-2fl-5rl | ídem | 32.418,89 | **26.891,28** |
-| KC10-2fl-3uni | ídem | 381,15 | 376,23 |
-| KC10-2fl-1uni | ídem | **79,32** | 192,02 |
-| KC10-2fl-2rl | ídem | **4.451,70** | 10.941,55 |
-| KC10-2fl-2uni | ídem (P distinto, no comparable) | 1.346,43 | 532,56 |
+| KC10-2fl-1rl | 1.484,66 | **1.297,82** | 910,62 |
+| KC10-2fl-3rl | **22.541,34** | 22.790,46 | 20.854,50 |
+| KC10-2fl-4rl | 12.399,20 | **12.324,67** | 7.590,60 |
+| KC10-2fl-5rl | 32.418,89 | **30.353,31** | 26.775,80 |
+| KC10-2fl-3uni | **381,15** | 382,38 | 384,86 |
+| KC10-2fl-1uni | 79,32 | **57,10** | 133,05 |
+| KC10-2fl-2rl | 4.451,70 | **3.318,46** | 12.322,12 |
+| KC10-2fl-2uni (P distinto, no comparable) | 1.346,43 | **0,00** | 136,45 |
+
+Esta versión tiene mejor distancia gama en 6 de las ocho instancias y la original en 2. Lo que
+cambió al adoptar el recorrido de pares de la original es *cuáles*: con el recorrido anterior, la
+tercera columna, esta versión perdía en KC10-2fl-1uni y KC10-2fl-2rl, y con el actual gana en las
+dos; en KC10-2fl-2uni encuentra el frente óptimo completo en todas las ejecuciones, de ahí el 0. La
+fracción de puntos del frente óptimo encontrada no acompaña siempre: baja en KC10-2fl-4rl (del 53,4
+% al 36,5 %) y en KC10-2fl-5rl (del 50,3 % al 39,2 %), y sube en KC10-2fl-2rl (del 71,9 % al 82,5 %)
+y en KC10-2fl-1uni (del 67,2 % al 71,2 %). Una búsqueda local más exhaustiva acerca el frente pero
+deja menos soluciones distintas cuando la población es grande; ver [Efecto del tamaño de población
+en la calidad](#efecto-del-tamaño-de-población-en-la-calidad).
 
 En las KC20 no hay óptimo publicado, así que su comparación usa el mejor frente conocido de cada
 instancia (su fichero `.KBP`) y los dos indicadores de la campaña: el [hipervolumen](#g-hypervolume)
@@ -721,47 +750,46 @@ memoria B1 y B2; `scripts/compare_versions.py` mide las dos versiones contra el 
 referencia y aplica la prueba.
 
 Con la configuración con la que se distribuye la versión original, P = 64 y 300 generaciones, la
-única en la que ambas son directamente comparables, **la original gana en las cuatro instancias**, y
-la diferencia es significativa en todas:
+única en la que ambas son directamente comparables, **la prueba no distingue las dos versiones en
+tres de las cuatro instancias**. La original sigue por delante en KC20-2fl-2uni:
 
 | Instancia | Hipervolumen original | Hipervolumen esta versión | p | Cobertura original | Cobertura esta versión | p |
 |---|---|---|---|---|---|---|
-| KC20-2fl-1rl | **99,28 % ± 0,19** | 98,31 % ± 0,81 | 2,4·10⁻¹⁰ | **39,7 % ± 3,9** | 28,1 % ± 4,0 | 1,9·10⁻¹⁰ |
-| KC20-2fl-1uni | **96,25 % ± 0,71** | 93,72 % ± 1,14 | 5,6·10⁻¹⁰ | **8,6 % ± 3,2** | 3,8 % ± 2,6 | 3,4·10⁻⁷ |
-| KC20-2fl-2uni | **90,95 % ± 8,91** | 77,91 % ± 13,13 | 1,1·10⁻⁵ | **32,9 % ± 15,2** | 14,6 % ± 12,7 | 3,8·10⁻⁵ |
-| KC20-2fl-3uni | **95,72 % ± 0,51** | 94,72 % ± 0,66 | 4,4·10⁻⁷ | **2,8 % ± 1,7** | 1,2 % ± 1,1 | 1,7·10⁻⁴ |
+| KC20-2fl-1rl | 99,28 % ± 0,19 | 99,22 % ± 0,32 | 0,98 | 39,7 % ± 3,9 | 40,2 % ± 4,4 | 0,81 |
+| KC20-2fl-1uni | 96,25 % ± 0,71 | 95,91 % ± 0,98 | 0,17 | 8,6 % ± 3,2 | 8,1 % ± 4,1 | 0,64 |
+| KC20-2fl-2uni | **90,95 % ± 8,91** | 87,77 % ± 10,10 | 0,021 | **32,9 % ± 15,2** | 25,0 % ± 13,1 | 0,048 |
+| KC20-2fl-3uni | 95,72 % ± 0,51 | 95,78 % ± 0,53 | 0,62 | 2,8 % ± 1,7 | 3,0 % ± 1,4 | 0,59 |
 
-**De dónde viene la diferencia.** No de la reescritura de NSGA-II, sino de dos diferencias en los
-operadores, que se aíslan recompilando esta versión:
+**Cómo se llegó aquí.** No siempre fue así. Con el recorrido de pares anterior, una sola pasada `r <
+s`, esta versión perdía en las cuatro instancias con p ≤ 1,1·10⁻⁵. La causa no estaba en la
+reescritura de NSGA-II, sino en dos diferencias de operador, que se aíslan recompilando:
 
 - **Mutación por intercambio.** La original aplica un intercambio por hijo; esta versión aplica dos
   (`kExchangeMutations` en `include/config.h`).
-- **Pares que recorre el greedy 2-opt.** La original recorre `i` en `[0, n−2]` y `j` en `[1, n−1]`
-  saltando `i == j`, es decir cada par en los dos órdenes: 343 intentos de intercambio con n = 20.
-  Esta versión recorre los pares `r < s` una sola vez: 190 intentos. La búsqueda local de la original
-  es casi el doble de exhaustiva en cada generación, y cuesta casi el doble de tiempo de GPU: 2,2 s
-  frente a 1,2 s para las 30 ejecuciones de 300 generaciones.
+- **Pares que recorre el greedy 2-opt.** La original recorre `r` en `[0, n−2]` y `s` en `[1, n−1]`
+  saltando `r == s`, es decir casi todos los pares en los dos órdenes: 343 intentos de intercambio
+  con n = 20, frente a los 190 de una pasada `r < s`. Volver a visitar un par después de aceptar un
+  intercambio puede mejorarlo otra vez, así que es una búsqueda local más exhaustiva, no redundante.
 
 Hipervolumen medio de 30 ejecuciones, con P = 64 y 300 generaciones:
 
 | Configuración | KC20-2fl-1rl | KC20-2fl-1uni | KC20-2fl-2uni | KC20-2fl-3uni |
 |---|---|---|---|---|
 | Original | 99,28 % | 96,25 % | 90,95 % | 95,72 % |
-| Esta versión | 98,31 % (p = 2,4·10⁻¹⁰) | 93,72 % (p = 5,6·10⁻¹⁰) | 77,91 % (p = 1,1·10⁻⁵) | 94,72 % (p = 4,4·10⁻⁷) |
-| con un intercambio | 98,90 % (p = 3,1·10⁻⁶) | 93,96 % (p = 1,4·10⁻⁸) | 76,45 % (p = 2,9·10⁻⁶) | 95,26 % (p = 0,011) |
-| con los 343 pares de la original | 99,22 % (p = 0,98) | 95,91 % (p = 0,17) | 87,77 % (p = 0,021) | 95,78 % (p = 0,62) |
-| con las dos | 99,34 % (p = 0,23) | 96,17 % (p = 0,98) | 81,71 % (p = 8,0·10⁻⁴) | 96,10 % (p = 0,022) |
+| 190 pares, dos intercambios (antes del cambio) | 98,31 % (p = 2,4·10⁻¹⁰) | 93,72 % (p = 5,6·10⁻¹⁰) | 77,91 % (p = 1,1·10⁻⁵) | 94,72 % (p = 4,4·10⁻⁷) |
+| 190 pares, un intercambio | 98,90 % (p = 3,1·10⁻⁶) | 93,96 % (p = 1,4·10⁻⁸) | 76,45 % (p = 2,9·10⁻⁶) | 95,26 % (p = 0,011) |
+| **343 pares, dos intercambios (ahora por defecto)** | 99,22 % (p = 0,98) | 95,91 % (p = 0,17) | 87,77 % (p = 0,021) | 95,78 % (p = 0,62) |
+| 343 pares, un intercambio | 99,34 % (p = 0,23) | 96,17 % (p = 0,98) | 81,71 % (p = 8,0·10⁻⁴) | 96,10 % (p = 0,022) |
 
-El recorrido de pares explica casi toda la diferencia. Con él, esta versión iguala a la original en
-KC20-2fl-1rl, KC20-2fl-1uni y KC20-2fl-3uni, donde la prueba ya no distingue las distribuciones, y
-con las dos diferencias restauradas la supera en KC20-2fl-3uni. KC20-2fl-2uni se queda por detrás
-incluso así, pero es la menos concluyente de las cuatro: su frente de referencia tiene 8 puntos y la
-desviación típica entre ejecuciones ronda los 12,3 puntos porcentuales, un orden de magnitud más que
-en las otras tres.
+El recorrido de pares explica casi toda la diferencia, y por eso **es el comportamiento por
+defecto** de la rama. Cuesta entre 1,4 y 1,8 veces el tiempo de GPU, según cuánto pese la búsqueda
+local en la instancia. La mutación por intercambio no se cambió: por sí sola no cierra la
+diferencia, y con el recorrido nuevo su efecto ya no es significativo en tres de las cuatro
+instancias.
 
-No se cambian los valores por defecto de esta rama: todas las mediciones de este documento se
-tomaron con dos intercambios y 190 pares, y cambiarlos invalidaría la campaña. Igualar el recorrido
-de pares queda como trabajo futuro.
+KC20-2fl-2uni se queda por detrás incluso con las dos diferencias restauradas, pero es la menos
+concluyente de las cuatro: su frente de referencia tiene 8 puntos y la desviación típica entre
+ejecuciones ronda los 12,3 puntos porcentuales, un orden de magnitud más que en las otras tres.
 
 **Lo que aporta la población.** La comparación anterior usa P = 64 porque es lo que admite la
 versión original. Manteniendo las mismas 300 generaciones y subiendo solo la población, esta versión
@@ -771,27 +799,22 @@ ejecuciones):
 | Configuración | KC20-2fl-1rl | KC20-2fl-1uni | KC20-2fl-2uni | KC20-2fl-3uni |
 |---|---|---|---|---|
 | Original, P = 64 | 99,28 % · 39,7 % | 96,25 % · 8,6 % | 90,95 % · 32,9 % | 95,72 % · 2,8 % |
-| Esta versión, P = 64 | 98,31 % · 28,1 % | 93,72 % · 3,8 % | 77,91 % · 14,6 % | 94,72 % · 1,2 % |
-| Esta versión, P = 256 | 99,43 % · 53,1 % | 96,70 % · 13,6 % | 89,33 % · 33,3 % | 96,94 % · 7,7 % |
-| Esta versión, P = 1024 | 99,72 % · 69,9 % | 98,81 % · 34,2 % | 98,17 % · 58,8 % | 98,32 % · 20,3 % |
-| Esta versión, P = 4096 | 99,85 % · 80,2 % | 99,64 % · 62,7 % | 99,40 % · 74,6 % | 99,05 % · 40,8 % |
-| Esta versión, P = 16384 | 99,94 % · 87,7 % | 99,91 % · 85,3 % | 99,69 % · 87,5 % | 99,46 % · 61,1 % |
-| Esta versión, P = 65536 | 99,98 % · 92,3 % | 99,98 % · 95,6 % | 99,95 % · 97,5 % | 99,75 % · 77,1 % |
+| Esta versión, P = 64 | 99,22 % · 40,2 % | 95,91 % · 8,1 % | 87,77 % · 25,0 % | 95,78 % · 3,0 % |
+| Esta versión, P = 256 | 99,71 % · 65,0 % | 98,04 % · 20,4 % | 93,55 % · 43,8 % | 97,77 % · 13,7 % |
+| Esta versión, P = 1024 | 99,81 % · 76,9 % | 99,41 % · 49,7 % | 99,12 % · 67,5 % | 98,73 % · 31,4 % |
+| Esta versión, P = 4096 | 99,87 % · 83,6 % | 99,84 % · 77,7 % | 99,59 % · 82,1 % | 99,25 % · 50,0 % |
+| Esta versión, P = 16384 | 99,91 % · 87,2 % | 99,94 % · 90,0 % | 99,74 % · 92,5 % | 99,55 % · 67,0 % |
+| Esta versión, P = 65536 | 99,96 % · 90,6 % | 99,99 % · 96,4 % | 100 % · 100 % | 99,73 % · 77,7 % |
 
-Con P = 256 ya iguala o supera a la original en los dos indicadores de las cuatro instancias, salvo
-el hipervolumen de KC20-2fl-2uni; con P = 1024 la supera en las cuatro y en los dos indicadores. Es
-el argumento de esta rama: no gana con la población de la original, donde la búsqueda local hace
-casi todo el trabajo, sino con poblaciones que la original no puede ejecutar. Y la fila P = 65536
-reproduce las cifras de cobertura de la campaña (92,3 %, 95,8 %, 97,5 % y 77,4 %) con menos de tres
-décimas de diferencia, con otras semillas y solo 300 generaciones: una comprobación independiente de
-esa tabla.
+Es el argumento de esta rama: la población de la original es el punto donde la búsqueda local hace
+casi todo el trabajo y las dos versiones empatan; lo que la separa son las poblaciones que la
+original no puede ejecutar.
 
 Todo se mide contra los ficheros `.KBP` del repositorio, los mismos contra los que se publicó la
-campaña, para que las dos tablas sean comparables. Esas diez configuraciones encontraron 28
-soluciones que esos frentes no dominan, 4 en KC20-2fl-1rl y 24 en KC20-2fl-3uni, así que los frentes
-del repositorio son una cota inferior: `scripts/compare_versions.py --update-reference` los
-reconstruye, pero eso cambiaría las cifras ya publicadas contra ellos (en KC20-2fl-3uni retiraría
-además 13 puntos dominados), así que se dejan como están.
+campaña, para que las dos tablas sean comparables. Esas configuraciones encontraron 38 soluciones
+que esos frentes no dominan, 6 en KC20-2fl-1rl y 32 en KC20-2fl-3uni, así que los frentes del
+repositorio son una cota inferior: `scripts/compare_versions.py --update-reference` los reconstruye,
+pero eso cambiaría las cifras ya publicadas contra ellos, así que se dejan como están.
 
 **Correcciones del libro (2026-09-19)**
 - **KC20-2fl-3uni:** las series NSGA-II, Greedy 2opt y la serie oculta del óptimo de Pareto del gráfico
@@ -866,11 +889,11 @@ monolítico anterior (`kernel.cu`, commit `3f3a187`) con sus errores de memoria 
 
 | Caso | Original corregida | Esta versión | Aceleración (tiempo de pared) |
 |---|---|---|---|
-| KC10-2fl-1rl, P=64, 70 gen., 1 ejecución | 2,2 s | 0,15 s (15 ms de GPU) | ~15× |
-| KC10-2fl-1rl, P=64, 70 gen., 10 ejecuciones | 23,7 s | 0,12 s (21 ms de GPU) | ~200× |
-| KC20-2fl-1rl, P=64, 300 gen., 1 ejecución | 48,8 s | 0,15 s (55 ms de GPU) | ~325× |
-| KC30-3fl-1rl, P=32, 70 gen., 1 ejecución | 42,4 s | 0,14 s (40 ms de GPU) | ~300× |
-| KC30-3fl-1rl, P=32, 70 gen., 30 ejecuciones | ~21 min (estimado) | 0,23 s (135 ms de GPU) | ~5 500× |
+| KC10-2fl-1rl, P=64, 70 gen., 1 ejecución | 2,2 s | 0,13 s (16 ms de GPU) | ~17× |
+| KC10-2fl-1rl, P=64, 70 gen., 10 ejecuciones | 23,7 s | 0,13 s (29 ms de GPU) | ~180× |
+| KC20-2fl-1rl, P=64, 300 gen., 1 ejecución | 48,8 s | 0,23 s (123 ms de GPU) | ~210× |
+| KC30-3fl-1rl, P=32, 70 gen., 1 ejecución | 42,4 s | 0,17 s (65 ms de GPU) | ~250× |
+| KC30-3fl-1rl, P=32, 70 gen., 30 ejecuciones | ~21 min (estimado) | 0,34 s (250 ms de GPU) | ~3 700× |
 
 En esta versión, el tiempo de pared está dominado por la creación del contexto CUDA (~0,1 s), así
 que el tiempo de GPU refleja mejor el coste del algoritmo.
@@ -879,23 +902,19 @@ Perfil con Nsight Systems (KC10-2fl-1rl, 70 generaciones, 1 ejecución):
 
 | Métrica | Original (`ec882da`) | Esta versión |
 |---|---|---|
-| Tiempo total | 3,64 s | 0,15 s |
+| Tiempo total | 3,64 s | 0,13 s |
 | Lanzamientos de kernel | 87 510 | 214 |
 | `cudaMemcpy` | 80 558 | 6 |
 | `cudaDeviceSynchronize` | 68 335 | 0 |
 | `cudaMalloc` / `cudaFree` | 21 507 / 20 724 (783 fugas) | 11 / 11 |
-| Tiempo total en kernels | ~340 ms | ~6,4 ms |
+| Tiempo total en kernels | ~340 ms | ~8,3 ms, el 73 % en el greedy 2-opt |
 
-**Calidad de las soluciones.** Se mide como la fracción de puntos del frente óptimo `.PO` encontrados
-exactamente y como IGD normalizado, con los mismos parámetros en ambas versiones:
-
-| Instancia | Original corregida | Esta versión |
-|---|---|---|
-| KC10-2fl-1rl (P=64, 70 gen.) | 68,4 % · IGD 0,0053 | 68,4 % · IGD 0,0054 |
-| KC10-2fl-3uni (P=128, 25 gen.) | 44,2 % · IGD 0,0057 | 45,0 % · IGD 0,0055 |
-
-En estas dos instancias la calidad es equivalente. En la campaña completa del libro de Excel los resultados
-son mixtos: ver [Resultados en el libro de Excel](#resultados-en-el-libro-de-excel).
+**Calidad de las soluciones.** La comparación de calidad con la versión original está en [Calidad
+frente al Greedy 2-opt original](#quality-vs-original), con 30 ejecuciones de cada versión en cada
+instancia, medida como la distancia gama al frente óptimo publicado y la fracción de sus puntos
+encontrada exactamente; sustituye a la única ejecución por versión que se publicaba aquí. En la
+campaña completa del libro de Excel los resultados son mixtos: ver [Resultados en el libro de
+Excel](#resultados-en-el-libro-de-excel).
 
 ---
 
@@ -912,11 +931,18 @@ son mixtos: ver [Resultados en el libro de Excel](#resultados-en-el-libro-de-exc
 | B5 | El barajado inicial usaba estados curand compartidos entre bloques y estaba sesgado | Fisher-Yates con un estado por cromosoma |
 | B6 | En el crowding, `(unsigned)HUGE_VALF` (comportamiento indefinido), un extremo de frente mal detectado y posible división por cero | Crowding reescrito con ∞ real y comprobación del rango |
 | B7 | 11 reservas de GPU por generación sin liberar | `DeviceBuffer<T>` RAII; todas las reservas se hacen una vez |
-| B8 | El greedy evaluaba cada par dos veces ((i,j) y (j,i)) | Cada par `r < s` se evalúa una sola vez |
 | B9 | ~0,9 MB de arrays de depuración en la pila del host (1 MB en Windows) | Eliminados |
 | B10 | `DEV_MODE \|\| PRINT_*` en lugar de `&&`, y `sizeof` incorrecto | Eliminados junto con el código de depuración |
 | B11 | La última iteración sacaba solo el primer frente mezclado con filas obsoletas | La salida es exactamente el frente no dominado de la población final |
 | B12 | Soluciones fuera del frente podían ganar la ordenación por crowding | Selección por clave compuesta (rango, −crowding) |
+
+> **B8 queda retirado.** Decía «el greedy evaluaba cada par dos veces ((i,j) y (j,i))», y la corrección
+> era visitar cada par `r < s` una sola vez. No era un defecto. Volver a visitar un par después de
+> aceptar un intercambio puede mejorarlo otra vez, así que el recorrido de la versión original es una
+> búsqueda local más exhaustiva, no una redundante: con 30 ejecuciones por configuración, reducirlo a la
+> mitad costaba calidad en las cuatro instancias KC20. El recorrido de la versión original vuelve a ser
+> el comportamiento por defecto, a cambio de entre 1,4 y 1,8 veces el tiempo de GPU; ver
+> [Calidad frente al Greedy 2-opt original](#quality-vs-original).
 
 ### Optimizaciones
 
@@ -1002,13 +1028,28 @@ porcentaje es la fracción media del frente óptimo encontrada por ejecución.
 
 | Instancia | P = 256 | P = 512 | P = 1024 | P = 2048 | P = 4096 |
 |---|---|---|---|---|---|
-| KC10-2fl-1rl | 782,85 / 75 % | 692,33 / 77 % | 651,89 / 79 % | 573,58 / 79 % | 557,29 / 79 % |
-| KC10-2fl-5rl | 16.866,45 / 62 % | 13.451,29 / 66 % | 10.487,07 / 70 % | 7.567,27 / 72 % | 6.224,17 / 74 % |
-| KC10-2fl-3uni | 160,14 / 68 % | 119,95 / 72 % | 75,45 / 76 % | 54,64 / 80 % | 29,96 / 82 % |
+| KC10-2fl-1rl | 436,89 / 68,3 % | 264,91 / 70,6 % | 122,18 / 72,5 % | 45,63 / 73,3 % | 13,93 / 73,8 % |
+| KC10-2fl-5rl | 19.982,94 / 46,7 % | 18.587,26 / 49,1 % | 18.153,32 / 50,4 % | 17.938,56 / 51,1 % | 17.995,81 / 51,2 % |
+| KC10-2fl-3uni | 238,82 / 59,8 % | 206,96 / 63,3 % | 191,45 / 65,2 % | 176,75 / 67,0 % | 162,48 / 68,4 % |
 
-La fracción del frente óptimo encontrada crece con P en todas las instancias, y la distancia gama baja. El
-tiempo de GPU del lote completo (100 ejecuciones) crece aproximadamente de forma lineal con P: 0,6 s con
-P = 512 y 6,1 s con P = 4096 en KC10-2fl-1rl.
+La fracción del frente óptimo encontrada crece con P en las tres instancias, y la distancia gama
+baja, salvo en KC10-2fl-5rl, donde entre P = 1024 y P = 4096 ya no se mueve. El tiempo de GPU del
+lote completo (100 ejecuciones) crece aproximadamente de forma lineal con P: 0,82 s con P = 512 y
+8,2 s con P = 4096 en KC10-2fl-1rl.
+
+Estas celdas están medidas con el recorrido de pares por defecto (`kGreedyFullPairs = true`). Con el
+anterior, una sola pasada `r < s`, y la misma semilla, se ve el compromiso que introduce: en
+KC10-2fl-1rl con P = 1024 la distancia gama era 629,04 en lugar de 122,18, pero se encontraba el
+78,5 % de los puntos óptimos en lugar del 72,5 %; y en KC10-2fl-5rl y KC10-2fl-3uni el recorrido
+anterior es mejor en las dos métricas. Una búsqueda local más exhaustiva acerca el frente pero
+colapsa cada descendiente a su óptimo local, así que en instancias pequeñas con población grande la
+población pierde diversidad y encuentra menos puntos óptimos distintos.
+
+En KC20 ocurre lo contrario, y es el caso que decidió el valor por defecto: el recorrido completo
+mejora la cobertura en las cinco poblaciones medidas de KC20-2fl-1uni, KC20-2fl-2uni y KC20-2fl-3uni
+—por ejemplo 100 % frente al 97,5 % con P = 65536 en KC20-2fl-2uni—, y en KC20-2fl-1rl gana hasta P
+= 4096 y se queda algo por detrás a partir de P = 16384. Ver [Calidad frente al Greedy 2-opt
+original](#quality-vs-original).
 
 La serie roja de `comparative_results_kcX_datasets.xlsx` muestra el mismo efecto con el tope de la rama,
 P = 65536, en las doce instancias del libro: ver

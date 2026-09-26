@@ -136,10 +136,14 @@ Each generation does the following:
    The winner is copied and mutated:
    - **Exchange mutation**: two random genes are swapped; it is applied twice.
    - **Transposition mutation**: the segment between two random positions is reversed.
-3. **Adapted [Greedy 2-opt](#g-greedy-2opt)** on each offspring. All pairs of positions `(r < s)` are visited in order and
-   a swap is kept if it does not worsen the criterion of the generation, chosen at random for each run and
-   generation: the sum of all objectives or a single objective `k`. The idea of adapting the criterion
-   comes from <https://arxiv.org/ftp/arxiv/papers/1109/1109.1276.pdf>.
+3. **Adapted [Greedy 2-opt](#g-greedy-2opt)** on each offspring. The pairs of positions are visited in the order of
+   the original version — `r` over `[0, n−2]`, `s` over `[1, n−1]`, skipping `r == s`, so most pairs are
+   visited in both orders — and a swap is kept if it does not worsen the criterion of the generation,
+   chosen at random for each run and generation: the sum of all objectives or a single objective `k`.
+   Revisiting a pair after an accepted swap can improve it again, and that is what makes the quality
+   match the original version; see [Quality versus the original Greedy
+   2-opt](#quality-vs-original). The idea of adapting the criterion comes from
+   <https://arxiv.org/ftp/arxiv/papers/1109/1109.1276.pdf>.
 
 Parameters:
 
@@ -151,6 +155,7 @@ Parameters:
 | Seed | `--seed` | random (printed) |
 | Exchange mutations per child | `include/config.h` (`kExchangeMutations`) | 2 |
 | Exchange / transposition probability | `include/config.h` | 1.0 / 1.0 |
+| Pair traversal of the greedy 2-opt | `include/config.h` (`kGreedyFullPairs`) | `true`: the one of the original version, `(n−1) + (n−2)²` trials |
 
 ---
 
@@ -254,7 +259,8 @@ Swapping positions `r` and `s` of `p` only changes the cost terms in which `r` o
 ```
 
 Each lane of the warp computes part of the sum and the result is reduced with `__shfl_down_sync`.
-Each of the `n(n−1)/2` evaluations therefore costs O(n) instead of recomputing the full fitness.
+Each of the `(n−1) + (n−2)²` evaluations of the traversal (343 at n = 20) therefore costs O(n) instead
+of recomputing the full fitness.
 The accumulators are 64-bit.
 
 ### Synchronization
@@ -428,6 +434,16 @@ population and iterations each instance used in the original version:
 ```
 
 ### How many generations each instance needs (`--trace`)
+
+> **The figures in this section and those of the Excel workbook were measured with the previous pair
+> traversal**, the single `r < s` pass, before the one of the original version became the default
+> (see [B8 withdrawn](#fixed-bugs)). The new traversal improves the front per generation and costs 1.4
+> to 1.8 times the GPU time, so the stall generations are expected to fall and the quality shares to
+> rise; the `.KBP` reference fronts come from those same runs, and are therefore a looser lower bound
+> than they would be now. Re-running the whole campaign takes hours and is pending. What was measured
+> again with the new traversal is the comparison against the original version and the population sweep
+> of [Quality versus the original Greedy 2-opt](#quality-vs-original), and the tables of
+> [Performance](#performance).
 
 `--trace FILE` writes a CSV with `run,generation,f1,f2[,f3]`: the distinct non-dominated solutions of
 **every** generation of every run, from the survival of the initial population (generation 0) to the
@@ -688,19 +704,31 @@ have it — and would lose that. What a timestamp does not answer either is whet
 the particular seed; that is checked by repeating the batch with a second fixed seed and comparing the
 means.
 
+<a id="quality-vs-original"></a>
 **Quality versus the original Greedy 2-opt.** KC10 has a published optimal front, so its comparison
-uses the [gamma distance](#g-gamma) over 100 runs of each version, and the results are mixed:
+uses the [gamma distance](#g-gamma) over 100 runs and the parameters of each instance. The results
+are mixed:
 
-| Instance | Metric | Original | This version |
+| Instance | Original | This version | Previous traversal (190 pairs) |
 |---|---|---|---|
-| KC10-2fl-1rl | gamma distance (lower is better), 100 runs | 1,484.66 | **850.56** |
-| KC10-2fl-3rl | same | 22,541.34 | **20,531.69** |
-| KC10-2fl-4rl | same | 12,399.20 | **7,515.98** |
-| KC10-2fl-5rl | same | 32,418.89 | **26,891.28** |
-| KC10-2fl-3uni | same | 381.15 | 376.23 |
-| KC10-2fl-1uni | same | **79.32** | 192.02 |
-| KC10-2fl-2rl | same | **4,451.70** | 10,941.55 |
-| KC10-2fl-2uni | same (different P, not comparable) | 1,346.43 | 532.56 |
+| KC10-2fl-1rl | 1,484.66 | **1,297.82** | 910.62 |
+| KC10-2fl-3rl | **22,541.34** | 22,790.46 | 20,854.50 |
+| KC10-2fl-4rl | 12,399.20 | **12,324.67** | 7,590.60 |
+| KC10-2fl-5rl | 32,418.89 | **30,353.31** | 26,775.80 |
+| KC10-2fl-3uni | **381.15** | 382.38 | 384.86 |
+| KC10-2fl-1uni | 79.32 | **57.10** | 133.05 |
+| KC10-2fl-2rl | 4,451.70 | **3,318.46** | 12,322.12 |
+| KC10-2fl-2uni (different P, not comparable) | 1,346.43 | **0.00** | 136.45 |
+
+This version has the better gamma distance on 6 of the eight instances and the original on 2. What
+changed when the pair traversal of the original was adopted is *which* ones: with the previous
+traversal, the third column, this version lost on KC10-2fl-1uni and KC10-2fl-2rl, and with the
+current one it wins on both; on KC10-2fl-2uni it finds the whole optimal front in every run, hence
+the 0. The share of the optimal front found does not always follow: it falls on KC10-2fl-4rl (from
+53.4 % to 36.5 %) and on KC10-2fl-5rl (from 50.3 % to 39.2 %), and rises on KC10-2fl-2rl (from 71.9
+% to 82.5 %) and on KC10-2fl-1uni (from 67.2 % to 71.2 %). A more thorough local search brings the
+front closer but leaves fewer distinct solutions once the population is large; see [Effect of the
+population size on quality](#effect-of-the-population-size-on-quality).
 
 The KC20 instances have no published optimum, so their comparison uses the best known front of each
 instance (its `.KBP` file) and the two indicators of the campaign: the [hypervolume](#g-hypervolume)
@@ -720,47 +748,45 @@ and B2; `scripts/compare_versions.py` measures both versions against the same re
 runs the test.
 
 With the configuration the original version ships with, P = 64 and 300 generations, the only one
-where the two are directly comparable, **the original wins on all four instances**, and the
-difference is significant on every one of them:
+where the two are directly comparable, **the test does not separate the two versions on three of the
+four instances**. The original is still ahead on KC20-2fl-2uni:
 
 | Instance | Hypervolume, original | Hypervolume, this version | p | Coverage, original | Coverage, this version | p |
 |---|---|---|---|---|---|---|
-| KC20-2fl-1rl | **99.28 % ± 0.19** | 98.31 % ± 0.81 | 2.4·10⁻¹⁰ | **39.7 % ± 3.9** | 28.1 % ± 4.0 | 1.9·10⁻¹⁰ |
-| KC20-2fl-1uni | **96.25 % ± 0.71** | 93.72 % ± 1.14 | 5.6·10⁻¹⁰ | **8.6 % ± 3.2** | 3.8 % ± 2.6 | 3.4·10⁻⁷ |
-| KC20-2fl-2uni | **90.95 % ± 8.91** | 77.91 % ± 13.13 | 1.1·10⁻⁵ | **32.9 % ± 15.2** | 14.6 % ± 12.7 | 3.8·10⁻⁵ |
-| KC20-2fl-3uni | **95.72 % ± 0.51** | 94.72 % ± 0.66 | 4.4·10⁻⁷ | **2.8 % ± 1.7** | 1.2 % ± 1.1 | 1.7·10⁻⁴ |
+| KC20-2fl-1rl | 99.28 % ± 0.19 | 99.22 % ± 0.32 | 0.98 | 39.7 % ± 3.9 | 40.2 % ± 4.4 | 0.81 |
+| KC20-2fl-1uni | 96.25 % ± 0.71 | 95.91 % ± 0.98 | 0.17 | 8.6 % ± 3.2 | 8.1 % ± 4.1 | 0.64 |
+| KC20-2fl-2uni | **90.95 % ± 8.91** | 87.77 % ± 10.10 | 0.021 | **32.9 % ± 15.2** | 25.0 % ± 13.1 | 0.048 |
+| KC20-2fl-3uni | 95.72 % ± 0.51 | 95.78 % ± 0.53 | 0.62 | 2.8 % ± 1.7 | 3.0 % ± 1.4 | 0.59 |
 
-**Where the difference comes from.** Not from the NSGA-II rewrite, but from two differences in the
-operators, which can be isolated by rebuilding this version:
+**How it got here.** It was not always so. With the previous pair traversal, a single `r < s` pass,
+this version lost on all four instances with p ≤ 1.1·10⁻⁵. The cause was not the NSGA-II rewrite but
+two operator differences, which can be isolated by rebuilding:
 
 - **Exchange mutation.** The original applies one exchange per child; this version applies two
   (`kExchangeMutations` in `include/config.h`).
-- **Pairs the greedy 2-opt visits.** The original runs `i` over `[0, n−2]` and `j` over `[1, n−1]`
-  skipping `i == j`, that is, each pair in both orders: 343 swap trials at n = 20. This version
-  visits the pairs `r < s` once: 190 trials. The local search of the original is nearly twice as
-  thorough per generation, and costs nearly twice the GPU time: 2.2 s against 1.2 s for the 30 runs
-  of 300 generations.
+- **Pairs the greedy 2-opt visits.** The original runs `r` over `[0, n−2]` and `s` over `[1, n−1]`
+  skipping `r == s`, that is, most pairs in both orders: 343 swap trials at n = 20 against the 190 of
+  a single `r < s` pass. Revisiting a pair after an accepted swap can improve it again, so it is a
+  more thorough local search, not a redundant one.
 
 Mean hypervolume over 30 runs, with P = 64 and 300 generations:
 
 | Configuration | KC20-2fl-1rl | KC20-2fl-1uni | KC20-2fl-2uni | KC20-2fl-3uni |
 |---|---|---|---|---|
 | Original | 99.28 % | 96.25 % | 90.95 % | 95.72 % |
-| This version | 98.31 % (p = 2.4·10⁻¹⁰) | 93.72 % (p = 5.6·10⁻¹⁰) | 77.91 % (p = 1.1·10⁻⁵) | 94.72 % (p = 4.4·10⁻⁷) |
-| with one exchange mutation | 98.90 % (p = 3.1·10⁻⁶) | 93.96 % (p = 1.4·10⁻⁸) | 76.45 % (p = 2.9·10⁻⁶) | 95.26 % (p = 0.011) |
-| with the 343 pairs of the original | 99.22 % (p = 0.98) | 95.91 % (p = 0.17) | 87.77 % (p = 0.021) | 95.78 % (p = 0.62) |
-| with both | 99.34 % (p = 0.23) | 96.17 % (p = 0.98) | 81.71 % (p = 8.0·10⁻⁴) | 96.10 % (p = 0.022) |
+| 190 pairs, two exchanges (before the change) | 98.31 % (p = 2.4·10⁻¹⁰) | 93.72 % (p = 5.6·10⁻¹⁰) | 77.91 % (p = 1.1·10⁻⁵) | 94.72 % (p = 4.4·10⁻⁷) |
+| 190 pairs, one exchange | 98.90 % (p = 3.1·10⁻⁶) | 93.96 % (p = 1.4·10⁻⁸) | 76.45 % (p = 2.9·10⁻⁶) | 95.26 % (p = 0.011) |
+| **343 pairs, two exchanges (the default now)** | 99.22 % (p = 0.98) | 95.91 % (p = 0.17) | 87.77 % (p = 0.021) | 95.78 % (p = 0.62) |
+| 343 pairs, one exchange | 99.34 % (p = 0.23) | 96.17 % (p = 0.98) | 81.71 % (p = 8.0·10⁻⁴) | 96.10 % (p = 0.022) |
 
-The pair loop accounts for almost all of the difference. With it, this version matches the original
-on KC20-2fl-1rl, KC20-2fl-1uni and KC20-2fl-3uni, where the test no longer separates the
-distributions, and with both differences restored it beats the original on KC20-2fl-3uni.
-KC20-2fl-2uni stays behind even so, but it is the least conclusive of the four: its reference front
-has 8 points and the standard deviation between runs is around 12.3 percentage points, an order of
-magnitude more than on the other three.
+The pair traversal accounts for almost all of the difference, which is why **it is the default** of
+the branch. It costs 1.4 to 1.8 times the GPU time, depending on how much the local search weighs on
+the instance. The exchange mutation was left alone: on its own it does not close the gap, and with
+the new traversal its effect is no longer significant on three of the four instances.
 
-The defaults of this branch are not changed: every measurement in this document was taken with two
-exchanges and 190 pairs, and changing them would invalidate the campaign. Matching the pair loop is
-left as future work.
+KC20-2fl-2uni stays behind even with both differences restored, but it is the least conclusive of
+the four: its reference front has 8 points and the standard deviation between runs is around 12.3
+percentage points, an order of magnitude more than on the other three.
 
 **What the population adds.** The comparison above uses P = 64 because that is what the original
 version admits. Keeping the same 300 generations and raising only the population, this version
@@ -770,26 +796,22 @@ runs):
 | Configuration | KC20-2fl-1rl | KC20-2fl-1uni | KC20-2fl-2uni | KC20-2fl-3uni |
 |---|---|---|---|---|
 | Original, P = 64 | 99.28 % · 39.7 % | 96.25 % · 8.6 % | 90.95 % · 32.9 % | 95.72 % · 2.8 % |
-| This version, P = 64 | 98.31 % · 28.1 % | 93.72 % · 3.8 % | 77.91 % · 14.6 % | 94.72 % · 1.2 % |
-| This version, P = 256 | 99.43 % · 53.1 % | 96.70 % · 13.6 % | 89.33 % · 33.3 % | 96.94 % · 7.7 % |
-| This version, P = 1024 | 99.72 % · 69.9 % | 98.81 % · 34.2 % | 98.17 % · 58.8 % | 98.32 % · 20.3 % |
-| This version, P = 4096 | 99.85 % · 80.2 % | 99.64 % · 62.7 % | 99.40 % · 74.6 % | 99.05 % · 40.8 % |
-| This version, P = 16384 | 99.94 % · 87.7 % | 99.91 % · 85.3 % | 99.69 % · 87.5 % | 99.46 % · 61.1 % |
-| This version, P = 65536 | 99.98 % · 92.3 % | 99.98 % · 95.6 % | 99.95 % · 97.5 % | 99.75 % · 77.1 % |
+| This version, P = 64 | 99.22 % · 40.2 % | 95.91 % · 8.1 % | 87.77 % · 25.0 % | 95.78 % · 3.0 % |
+| This version, P = 256 | 99.71 % · 65.0 % | 98.04 % · 20.4 % | 93.55 % · 43.8 % | 97.77 % · 13.7 % |
+| This version, P = 1024 | 99.81 % · 76.9 % | 99.41 % · 49.7 % | 99.12 % · 67.5 % | 98.73 % · 31.4 % |
+| This version, P = 4096 | 99.87 % · 83.6 % | 99.84 % · 77.7 % | 99.59 % · 82.1 % | 99.25 % · 50.0 % |
+| This version, P = 16384 | 99.91 % · 87.2 % | 99.94 % · 90.0 % | 99.74 % · 92.5 % | 99.55 % · 67.0 % |
+| This version, P = 65536 | 99.96 % · 90.6 % | 99.99 % · 96.4 % | 100 % · 100 % | 99.73 % · 77.7 % |
 
-At P = 256 it already matches or beats the original on both indicators of all four instances, except
-the hypervolume of KC20-2fl-2uni; at P = 1024 it beats it on all four and on both indicators. That
-is the argument of this branch: it does not win at the population of the original, where the local
-search does almost all of the work, but at populations the original cannot run. And the P = 65536
-row reproduces the coverage figures of the campaign (92.3 %, 95.8 %, 97.5 % and 77.4 %) to within
-three tenths, with different seeds and only 300 generations: an independent check of that table.
+That is the argument of this branch: the population of the original is the point where the local
+search does almost all of the work and the two versions tie; what separates them are the populations
+the original cannot run.
 
 Everything is measured against the `.KBP` files in the repository, the same ones the campaign was
-published against, so the two tables stay comparable. Those ten configurations found 28 solutions
-those fronts do not dominate, 4 on KC20-2fl-1rl and 24 on KC20-2fl-3uni, so the fronts in the
-repository are a lower bound: `scripts/compare_versions.py --update-reference` rebuilds them, but
-that would change the figures already published against them (on KC20-2fl-3uni it would also drop 13
-dominated points), so they are left as they are.
+published against, so the two tables stay comparable. Those configurations found 38 solutions those
+fronts do not dominate, 6 on KC20-2fl-1rl and 32 on KC20-2fl-3uni, so the fronts in the repository
+are a lower bound: `scripts/compare_versions.py --update-reference` rebuilds them, but that would
+change the figures already published against them, so they are left as they are.
 
 **Workbook corrections (2026-09-19)**
 - **KC20-2fl-3uni:** the NSGA-II, Greedy 2opt and hidden Pareto optimal chart series pointed to the
@@ -861,11 +883,11 @@ previous monolithic code (`kernel.cu`, commit `3f3a187`) with its memory errors 
 
 | Case | Fixed original | This version | Speedup (wall time) |
 |---|---|---|---|
-| KC10-2fl-1rl, P=64, 70 gen., 1 run | 2.2 s | 0.15 s (15 ms GPU) | ~15× |
-| KC10-2fl-1rl, P=64, 70 gen., 10 runs | 23.7 s | 0.12 s (21 ms GPU) | ~200× |
-| KC20-2fl-1rl, P=64, 300 gen., 1 run | 48.8 s | 0.15 s (55 ms GPU) | ~325× |
-| KC30-3fl-1rl, P=32, 70 gen., 1 run | 42.4 s | 0.14 s (40 ms GPU) | ~300× |
-| KC30-3fl-1rl, P=32, 70 gen., 30 runs | ~21 min (estimated) | 0.23 s (135 ms GPU) | ~5,500× |
+| KC10-2fl-1rl, P=64, 70 gen., 1 run | 2.2 s | 0.13 s (16 ms GPU) | ~17× |
+| KC10-2fl-1rl, P=64, 70 gen., 10 runs | 23.7 s | 0.13 s (29 ms GPU) | ~180× |
+| KC20-2fl-1rl, P=64, 300 gen., 1 run | 48.8 s | 0.23 s (123 ms GPU) | ~210× |
+| KC30-3fl-1rl, P=32, 70 gen., 1 run | 42.4 s | 0.17 s (65 ms GPU) | ~250× |
+| KC30-3fl-1rl, P=32, 70 gen., 30 runs | ~21 min (estimated) | 0.34 s (250 ms GPU) | ~3,700× |
 
 In this version the wall time is dominated by the creation of the CUDA context (~0.1 s), so the GPU
 time better reflects the cost of the algorithm.
@@ -874,23 +896,19 @@ Nsight Systems profile (KC10-2fl-1rl, 70 generations, 1 run):
 
 | Metric | Original (`ec882da`) | This version |
 |---|---|---|
-| Total time | 3.64 s | 0.15 s |
+| Total time | 3.64 s | 0.13 s |
 | Kernel launches | 87,510 | 214 |
 | `cudaMemcpy` | 80,558 | 6 |
 | `cudaDeviceSynchronize` | 68,335 | 0 |
 | `cudaMalloc` / `cudaFree` | 21,507 / 20,724 (783 leaks) | 11 / 11 |
-| Total kernel time | ~340 ms | ~6.4 ms |
+| Total kernel time | ~340 ms | ~8.3 ms, 73 % of it in the greedy 2-opt |
 
-**Solution quality.** Measured as the fraction of the optimal `.PO` front points found exactly and as
-normalized IGD, with the same parameters in both versions:
-
-| Instance | Fixed original | This version |
-|---|---|---|
-| KC10-2fl-1rl (P=64, 70 gen.) | 68.4 % · IGD 0.0053 | 68.4 % · IGD 0.0054 |
-| KC10-2fl-3uni (P=128, 25 gen.) | 44.2 % · IGD 0.0057 | 45.0 % · IGD 0.0055 |
-
-On these two instances the quality is equivalent. Over the whole campaign of the Excel workbook the results
-are mixed: see [Results in the Excel workbook](#results-in-the-excel-workbook).
+**Solution quality.** The quality comparison against the original version is in [Quality versus the
+original Greedy 2-opt](#quality-vs-original), with 30 runs of each version on each instance,
+measured as the gamma distance to the published optimal front and the share of its points found
+exactly; it replaces the single run per version that used to be reported here. Over the whole
+campaign of the Excel workbook the results are mixed: see [Results in the Excel
+workbook](#results-in-the-excel-workbook).
 
 ---
 
@@ -907,11 +925,17 @@ are mixed: see [Results in the Excel workbook](#results-in-the-excel-workbook).
 | B5 | The initial shuffle used curand states shared between blocks and was biased | Fisher-Yates with one state per chromosome |
 | B6 | In the crowding distance, `(unsigned)HUGE_VALF` (undefined behavior), a mis-detected front end and a possible division by zero | Crowding rewritten with a real ∞ and a range check |
 | B7 | 11 GPU allocations per generation never released | RAII `DeviceBuffer<T>`; all allocations are made once |
-| B8 | The greedy evaluated every pair twice ((i,j) and (j,i)) | Each pair `r < s` is evaluated once |
 | B9 | ~0.9 MB of debug arrays on the host stack (1 MB on Windows) | Removed |
 | B10 | `DEV_MODE \|\| PRINT_*` instead of `&&`, and a wrong `sizeof` | Removed together with the debug code |
 | B11 | The last iteration output only the first front mixed with stale rows | The output is exactly the non-dominated front of the final population |
 | B12 | Solutions outside the front could win the crowding sort | Selection by a composite key (rank, −crowding) |
+
+> **B8 was withdrawn.** It read "the greedy evaluated every pair twice ((i,j) and (j,i))", and the fix
+> was to visit each pair `r < s` once. That was not a defect. Visiting a pair again after an accepted
+> swap can improve it again, so the traversal of the original version is a more thorough local search,
+> not a redundant one: with 30 runs per configuration, halving it cost quality on all four KC20
+> instances. The traversal of the original version is the default again, at 1.4 to 1.8 times the GPU
+> time; see [Quality versus the original Greedy 2-opt](#quality-vs-original).
 
 ### Optimizations
 
@@ -995,13 +1019,28 @@ the average share of the optimal front found per run.
 
 | Instance | P = 256 | P = 512 | P = 1024 | P = 2048 | P = 4096 |
 |---|---|---|---|---|---|
-| KC10-2fl-1rl | 782.85 / 75 % | 692.33 / 77 % | 651.89 / 79 % | 573.58 / 79 % | 557.29 / 79 % |
-| KC10-2fl-5rl | 16,866.45 / 62 % | 13,451.29 / 66 % | 10,487.07 / 70 % | 7,567.27 / 72 % | 6,224.17 / 74 % |
-| KC10-2fl-3uni | 160.14 / 68 % | 119.95 / 72 % | 75.45 / 76 % | 54.64 / 80 % | 29.96 / 82 % |
+| KC10-2fl-1rl | 436.89 / 68.3 % | 264.91 / 70.6 % | 122.18 / 72.5 % | 45.63 / 73.3 % | 13.93 / 73.8 % |
+| KC10-2fl-5rl | 19,982.94 / 46.7 % | 18,587.26 / 49.1 % | 18,153.32 / 50.4 % | 17,938.56 / 51.1 % | 17,995.81 / 51.2 % |
+| KC10-2fl-3uni | 238.82 / 59.8 % | 206.96 / 63.3 % | 191.45 / 65.2 % | 176.75 / 67.0 % | 162.48 / 68.4 % |
 
-The share of the optimal front found grows with P on every instance, and the gamma distance drops. The GPU
-time of the whole batch (100 runs) grows roughly linearly with P: 0.6 s with P = 512 and 6.1 s with
-P = 4096 on KC10-2fl-1rl.
+The share of the optimal front found grows with P on the three instances, and the gamma distance
+falls, except on KC10-2fl-5rl, where between P = 1024 and P = 4096 it stops moving. The GPU time of
+the whole batch (100 runs) grows roughly linearly with P: 0.82 s with P = 512 and 8.2 s with P =
+4096 on KC10-2fl-1rl.
+
+These cells were measured with the default pair traversal (`kGreedyFullPairs = true`). With the
+previous one, a single `r < s` pass, and the same seed, the trade-off it introduces shows: on
+KC10-2fl-1rl with P = 1024 the gamma distance was 629.04 instead of 122.18, but 78.5 % of the
+optimal points were found instead of 72.5 %; and on KC10-2fl-5rl and KC10-2fl-3uni the previous
+traversal is better on both metrics. A more thorough local search brings the front closer but
+collapses each offspring to its local optimum, so on small instances with a large population the
+population loses diversity and finds fewer distinct optimal points.
+
+On KC20 the opposite happens, and that is the case that settled the default: the full traversal
+improves the coverage at all five measured populations of KC20-2fl-1uni, KC20-2fl-2uni and
+KC20-2fl-3uni — for instance 100 % against 97.5 % with P = 65536 on KC20-2fl-2uni — and on
+KC20-2fl-1rl it wins up to P = 4096 and falls slightly behind from P = 16384 on. See [Quality versus
+the original Greedy 2-opt](#quality-vs-original).
 
 The red series of `comparative_results_kcX_datasets.xlsx` shows the same effect at the cap of the branch,
 P = 65536, on the twelve instances of the workbook: see
