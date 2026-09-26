@@ -1098,9 +1098,9 @@ above what the time allows: with P = 4096 each run of KC30 costs about 0.7 s of 
 - CUDA Graphs to capture a generation; with 3 kernels per generation, the expected benefit is small.
 - Nsight Compute analysis of the survival: the single-block path (P ≤ 256) is latency bound, and in the
   multi-block path the interesting costs are `grid.sync()` and the segmented sorts of CUB.
-- More crossover operators and variants of the greedy 2-opt criterion, starting with the pair
-  loop of the original version (343 trials at n = 20 instead of 190), which accounts for almost
-  all of the quality difference on the KC20 instances with P = 64.
+- More crossover operators and variants of the greedy 2-opt criterion. The pair traversal is already
+  the one of the original version; what is open is whether a cheaper criterion recovers the diversity it
+  costs on small instances with a large population.
 
 ---
 

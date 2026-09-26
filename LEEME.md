@@ -1109,9 +1109,9 @@ muy por encima de lo que permite el tiempo: con P = 4096, cada ejecución de KC3
 - Análisis con Nsight Compute de la supervivencia: el camino de un bloque (P ≤ 256) está limitado por la
   latencia, y en el camino multibloque lo interesante es el coste de `grid.sync()` y de las ordenaciones
   por segmentos de CUB.
-- Más operadores de cruce y variantes del criterio del greedy 2-opt, empezando por el recorrido
-  de pares de la versión original (343 intentos con n = 20 en lugar de 190), que explica casi
-  toda la diferencia de calidad en las KC20 con P = 64.
+- Más operadores de cruce y variantes del criterio del greedy 2-opt. El recorrido de pares ya es el de
+  la versión original; queda abierto si algún criterio más barato recupera la diversidad que cuesta en
+  instancias pequeñas con población grande.
 
 ---
 
