@@ -9,13 +9,11 @@ combined with an **adapted Greedy 2-opt** local search, to solve instances of th
 The whole algorithm runs on the GPU: fitness evaluation, non-dominated sorting,
 [crowding distance](#g-crowding),
 selection, mutation and local search. The host only copies the instance in before the loop and the
-results out after it, so **it does not synchronize with the device inside the loop**. A generation takes
-**3 [kernel](#g-kernel) launches up to P = 256**, where the survival of each run fits in one block; above that the
-multi-block survival adds a [cooperative launch](#g-cooperative-launch) and the segmented sorts of
-[CUB](#g-cub) (NVIDIA's library of
-parallel primitives), about 37 launches per
-generation measured at P = 4096. **Several independent runs execute concurrently** in a single call to
-the program.
+results out after it, so **it does not synchronize with the device inside the loop**. A generation takes **3 [kernel](#g-kernel) launches up to P = 256**, where the survival of each run
+fits in one block; above that the multi-block survival adds a [cooperative
+launch](#g-cooperative-launch) and the segmented sorts of [CUB](#g-cub) (NVIDIA's library of
+parallel primitives), and it is 36 launches per generation from P = 512 to P = 4096 and 38 with P =
+65536. **Several independent runs execute concurrently** in a single call to the program.
 
 ---
 

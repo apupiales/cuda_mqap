@@ -9,11 +9,12 @@ combinado con una búsqueda local **Greedy 2-opt adaptada**, para resolver insta
 Todo el algoritmo se ejecuta en la GPU: la evaluación del fitness, la ordenación no dominada, el
 [crowding distance](#g-crowding), la selección, la mutación y la búsqueda local. El host solo copia la instancia antes
 del bucle y los resultados al terminar, de modo que **no sincroniza con el dispositivo dentro del
-bucle**. Una generación son **3 lanzamientos de [kernel](#g-kernel) hasta P = 256**, donde la supervivencia de cada
-ejecución cabe en un bloque; por encima, la supervivencia multibloque añade un
-[lanzamiento cooperativo](#g-cooperative-launch) y las ordenaciones por segmentos de [CUB](#g-cub) (la biblioteca de primitivas paralelas de NVIDIA), unos 37
-lanzamientos por generación medidos con P = 4096. Además,
-se ejecutan **varias ejecuciones independientes de forma concurrente** en una sola llamada al programa.
+bucle**. Una generación son **3 lanzamientos de [kernel](#g-kernel) hasta P = 256**, donde la supervivencia
+de cada ejecución cabe en un bloque; por encima, la supervivencia multibloque añade un [lanzamiento
+cooperativo](#g-cooperative-launch) y las ordenaciones por segmentos de [CUB](#g-cub) (la biblioteca
+de primitivas paralelas de NVIDIA), y son 36 lanzamientos por generación desde P = 512 hasta P =
+4096 y 38 con P = 65536. Además, se ejecutan **varias ejecuciones independientes de forma
+concurrente** en una sola llamada al programa.
 
 ---
 
