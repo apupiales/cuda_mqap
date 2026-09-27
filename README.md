@@ -479,7 +479,7 @@ time of a generation is known for each P (see [Performance](#performance)), so
 
 Three populations per instance: P = 1024 capped at 2000 generations (30 runs on the 2-objective
 instances, 10 on the 3-objective ones), and P = 16384 and P = 65536 with the cap each instance
-needed, from 300 generations on KC10 to 10,000 on KC30-3fl-1rl and KC30-3fl-1uni.
+needed, from 300 generations on KC10 to 10,000 on KC20-2fl-3uni, KC30-3fl-1rl and KC30-3fl-1uni.
 
 Everything is measured on the same scale, and getting there took two decisions worth stating:
 
@@ -512,7 +512,7 @@ stopped being so wherever that was affordable.
 | KC10-2fl-3uni | 1333 | 131.5 | 50 |
 | KC20-2fl-1rl | 1552.5 | 2157 | 1325 |
 | KC20-2fl-1uni | 1851 | 2302 | 700 |
-| KC20-2fl-3uni | > 2000 | > 6000 | > 4000 |
+| KC20-2fl-3uni | > 2000 | > 6000 | 8950 |
 | KC30-3fl-2uni | > 2000 | > 5000 | > 5000 |
 | KC30-3fl-1uni | > 2000 | > 5000 | > 10,000 |
 | KC30-3fl-1rl | > 2000 | > 5000 | > 10,000 |
@@ -542,7 +542,7 @@ KC30-3fl-2uni makes it obvious. Its reference front has 790 points: with P = 102
 | KC10-2fl-3uni | 99.80 % · 71.3 % | 99.80 % · 72.0 % | 99.80 % · 72.8 % |
 | KC10-2fl-5rl | 99.80 % · 52.6 % | 99.80 % · 53.5 % | 99.81 % · 54.7 % |
 | KC20-2fl-1uni | 99.79 % · 75.8 % | 99.99 % · 97.5 % | 99.98 % · 98.0 % |
-| KC20-2fl-3uni | 99.49 % · 54.4 % | 99.92 % · 86.3 % | 99.94 % · 90.2 % |
+| KC20-2fl-3uni | 99.49 % · 53.9 % | 99.92 % · 85.6 % | 99.99 % · 94.6 % |
 | KC10-2fl-4rl | 99.36 % · 45.6 % | 99.36 % · 46.2 % | 99.38 % · 49.1 % |
 | KC20-2fl-2uni | 99.31 % · 70.4 % | 99.93 % · 92.5 % | 100 % · 100 % |
 | KC10-2fl-3rl | 99.15 % · 54.5 % | 99.15 % · 55.1 % | 99.19 % · 57.1 % |
@@ -556,13 +556,13 @@ What the campaign says:
   lands between 99.15 % and 100 % of its reference, and on KC10 that reference is the published
   optimum: the front found dominates practically the same volume as the optimum even with P = 1024.
 - **What does separate them is how many solutions of that front they find.** On KC20-2fl-3uni it
-  goes from 54.4 % of the reference points with P = 1024 to 90.2 % with P = 65536, and on
+  goes from 53.9 % of the reference points with P = 1024 to 94.6 % with P = 65536, and on
   KC30-3fl-1rl from 1.7 % to 67.6 %. A small population returns a front worth almost the same in
   volume with far fewer distinct solutions.
 - **More population needs fewer generations**: KC10-2fl-4rl goes from 1301.5 generations to 35. A
   generation is not a fixed amount of work — with P = 65536 it evaluates 64 times more offspring
   than with P = 1024 — so this says nothing about total time: on KC10-2fl-1rl a generation costs
-  0.83 ms per run with P = 1024 and 105 ms with P = 65536.
+  0.83 ms per run with P = 1024 and 106 ms with P = 65536.
 - **On KC10 there is a ceiling that neither the population nor the generations break**:
   KC10-2fl-1uni stays at 84.6 % of the published optimal points with all three populations. What is
   left is the algorithm: this combination of NSGA-II with the greedy 2-opt converges to a subset of
@@ -583,7 +583,7 @@ its costs per line.
 | KC20-2fl-1rl | best known | 91 | [`KC20-2fl-1rl.KBP`](mQAPData/KC20-2fl-1rl.KBP) |
 | KC20-2fl-1uni | best known | 71 | [`KC20-2fl-1uni.KBP`](mQAPData/KC20-2fl-1uni.KBP) |
 | KC20-2fl-2uni | best known | 8 | [`KC20-2fl-2uni.KBP`](mQAPData/KC20-2fl-2uni.KBP) |
-| KC20-2fl-3uni | best known | 242 | [`KC20-2fl-3uni.KBP`](mQAPData/KC20-2fl-3uni.KBP) |
+| KC20-2fl-3uni | best known | 244 | [`KC20-2fl-3uni.KBP`](mQAPData/KC20-2fl-3uni.KBP) |
 | KC30-3fl-1rl | best known | 13,563 | [`KC30-3fl-1rl.KBP`](mQAPData/KC30-3fl-1rl.KBP) |
 | KC30-3fl-1uni | best known | 3200 | [`KC30-3fl-1uni.KBP`](mQAPData/KC30-3fl-1uni.KBP) |
 | KC30-3fl-2uni | best known | 790 | [`KC30-3fl-2uni.KBP`](mQAPData/KC30-3fl-2uni.KBP) |
@@ -740,7 +740,7 @@ four instances**. The original is still ahead on KC20-2fl-2uni:
 | KC20-2fl-1rl | 99.27 % ± 0.19 | 99.22 % ± 0.32 | 0.98 | 39.0 % ± 3.8 | 39.4 % ± 4.5 | 0.86 |
 | KC20-2fl-1uni | 96.25 % ± 0.71 | 95.91 % ± 0.98 | 0.17 | 8.6 % ± 3.2 | 8.1 % ± 4.1 | 0.64 |
 | KC20-2fl-2uni | **90.95 % ± 8.91** | 87.77 % ± 10.10 | 0.021 | **32.9 % ± 15.2** | 25.0 % ± 13.1 | 0.048 |
-| KC20-2fl-3uni | 95.70 % ± 0.51 | 95.76 % ± 0.53 | 0.62 | 2.9 % ± 1.7 | 3.0 % ± 1.3 | 0.76 |
+| KC20-2fl-3uni | 95.70 % ± 0.51 | 95.76 % ± 0.53 | 0.62 | 2.8 % ± 1.7 | 2.9 % ± 1.3 | 0.76 |
 
 **How it got here.** It was not always so. With the previous pair traversal, a single `r < s` pass,
 this version lost on all four instances with p ≤ 1.1·10⁻⁵. The cause was not the NSGA-II rewrite but
@@ -759,7 +759,7 @@ Mean hypervolume over 30 runs, with P = 64 and 300 generations:
 |---|---|---|---|---|
 | Original | 99.27 % | 96.25 % | 90.95 % | 95.70 % |
 | 190 pairs, two exchanges (before the change) | 98.30 % (p = 2.4·10⁻¹⁰) | 93.72 % (p = 5.6·10⁻¹⁰) | 77.91 % (p = 1.1·10⁻⁵) | 94.70 % (p = 4.4·10⁻⁷) |
-| 190 pairs, one exchange | 98.89 % (p = 3.1·10⁻⁶) | 93.96 % (p = 1.4·10⁻⁸) | 76.45 % (p = 2.9·10⁻⁶) | 95.24 % (p = 0.011) |
+| 190 pairs, one exchange | 98.89 % (p = 3.1·10⁻⁶) | 93.96 % (p = 1.4·10⁻⁸) | 76.45 % (p = 2.9·10⁻⁶) | 95.23 % (p = 0.011) |
 | **343 pairs, two exchanges (the default now)** | 99.22 % (p = 0.98) | 95.91 % (p = 0.17) | 87.77 % (p = 0.021) | 95.76 % (p = 0.62) |
 | 343 pairs, one exchange | 99.33 % (p = 0.23) | 96.17 % (p = 0.98) | 81.71 % (p = 8.0·10⁻⁴) | 96.08 % (p = 0.022) |
 
@@ -779,21 +779,21 @@ runs):
 
 | Configuration | KC20-2fl-1rl | KC20-2fl-1uni | KC20-2fl-2uni | KC20-2fl-3uni |
 |---|---|---|---|---|
-| Original, P = 64 | 99.27 % · 39.0 % | 96.25 % · 8.6 % | 90.95 % · 32.9 % | 95.70 % · 2.9 % |
-| This version, P = 64 | 99.22 % · 39.4 % | 95.91 % · 8.1 % | 87.77 % · 25.0 % | 95.76 % · 3.0 % |
-| This version, P = 256 | 99.70 % · 64.7 % | 98.04 % · 20.4 % | 93.55 % · 43.8 % | 97.75 % · 13.7 % |
-| This version, P = 1024 | 99.80 % · 77.3 % | 99.41 % · 49.7 % | 99.12 % · 67.5 % | 98.71 % · 31.4 % |
-| This version, P = 4096 | 99.86 % · 83.9 % | 99.84 % · 77.7 % | 99.59 % · 82.1 % | 99.23 % · 49.6 % |
-| This version, P = 16384 | 99.90 % · 88.1 % | 99.94 % · 90.0 % | 99.74 % · 92.5 % | 99.52 % · 66.0 % |
-| This version, P = 65536 | 99.95 % · 91.6 % | 99.99 % · 96.4 % | 100 % · 100 % | 99.71 % · 75.8 % |
+| Original, P = 64 | 99.27 % · 39.0 % | 96.25 % · 8.6 % | 90.95 % · 32.9 % | 95.70 % · 2.8 % |
+| This version, P = 64 | 99.22 % · 39.4 % | 95.91 % · 8.1 % | 87.77 % · 25.0 % | 95.76 % · 2.9 % |
+| This version, P = 256 | 99.70 % · 64.7 % | 98.04 % · 20.4 % | 93.55 % · 43.8 % | 97.75 % · 13.6 % |
+| This version, P = 1024 | 99.80 % · 77.3 % | 99.41 % · 49.7 % | 99.12 % · 67.5 % | 98.71 % · 31.1 % |
+| This version, P = 4096 | 99.86 % · 83.9 % | 99.84 % · 77.7 % | 99.59 % · 82.1 % | 99.23 % · 49.2 % |
+| This version, P = 16384 | 99.90 % · 88.1 % | 99.94 % · 90.0 % | 99.74 % · 92.5 % | 99.52 % · 65.5 % |
+| This version, P = 65536 | 99.95 % · 91.6 % | 99.99 % · 96.4 % | 100 % · 100 % | 99.71 % · 75.2 % |
 
 That is the argument of this branch: the population of the original is the point where the local
 search does almost all of the work and the two versions tie; what separates them are the populations
 the original cannot run.
 
 Everything is measured against the `.KBP` files in the repository, the same ones the campaign was
-published against, so the two tables stay comparable. Those configurations found 3 solutions those
-fronts do not dominate, 1 on KC20-2fl-1rl and 2 on KC20-2fl-3uni, so the fronts in the repository
+published against, so the two tables stay comparable. Those configurations found 2 solutions those
+fronts do not dominate, 1 on KC20-2fl-1rl and 1 on KC20-2fl-3uni, so the fronts in the repository
 are a lower bound: `scripts/compare_versions.py --update-reference` rebuilds them, but that would
 change the figures already published against them, so they are left as they are.
 
