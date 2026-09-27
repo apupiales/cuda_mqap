@@ -498,24 +498,26 @@ Todo está medido en la misma escala, y llegar a eso exigió dos decisiones que 
   parte de esa diferencia era la ventana, no el algoritmo.
 
 **Generaciones hasta que el frente deja de cambiar.** Es el número que hay que usar para elegir
-`--iterations`: a partir de ahí ninguna ejecución encontró nada nuevo. Un «> N» quiere decir que con
-un tope de N generaciones el frente seguía cambiando, de modo que ahí la cifra es el presupuesto y
-no la medición; el tope se subió hasta que dejó de serlo donde fue asequible.
+`--iterations`. Cada celda da la mediana y el percentil 90 entre las ejecuciones, porque lo que un
+presupuesto tiene que cubrir es la ejecución más lenta. Un «> N» quiere decir que con un tope de N
+generaciones el frente seguía cambiando, de modo que ahí la cifra es el presupuesto y no la
+medición; el tope se subió hasta que dejó de serlo donde fue asequible. Una «†» marca que el
+percentil 90 llegó al tope aunque la mediana no: ahí la ejecución más lenta seguía cambiando.
 
 | Instancia | P = 1024 | P = 16 384 | P = 65 536 |
 |---|---|---|---|
 | KC10-2fl-2uni | 1 | 1 | 5 |
-| KC10-2fl-1uni | 19 | 4,5 | 10 |
-| KC20-2fl-2uni | 80,5 | 23,5 | 15 |
-| KC10-2fl-2rl | 86 | 5,5 | 10 |
-| KC10-2fl-1rl | 148 | 6 | 10 |
-| KC10-2fl-5rl | 495 | 12,5 | 20 |
-| KC10-2fl-3rl | 816,5 | 70 | 65 |
-| KC10-2fl-4rl | 1301,5 | 98,5 | 35 |
-| KC10-2fl-3uni | 1333 | 131,5 | 50 |
-| KC20-2fl-1rl | 1552,5 | 2157 | 1325 |
-| KC20-2fl-1uni | 1851 | 2302 | 700 |
-| KC20-2fl-3uni | > 2000 | > 20 000 | 8950 |
+| KC10-2fl-1uni | 19 · 42 | 4,5 · 6,1 | 10 · 13 |
+| KC20-2fl-2uni | 80,5 · 1030,8 | 23,5 · 414,4 | 15 · 23 |
+| KC10-2fl-2rl | 86 · 283,5 | 5,5 · 14,2 | 10 · 15 |
+| KC10-2fl-1rl | 148 · 256,8 | 6 · 11,6 | 10 · 15 |
+| KC10-2fl-5rl | 495 · 1471,5 | 12,5 · 159,4 | 20 · 83 |
+| KC10-2fl-3rl | 816,5 · 1582,1 | 70 · 121,0 | 65 · 217 |
+| KC10-2fl-4rl | 1301,5 · 1794,4 | 98,5 · 257,7 | 35 · 268 |
+| KC10-2fl-3uni | 1333 · 1765,7 | 131,5 · 194,6 | 50 · 147 |
+| KC20-2fl-1rl | 1552,5 · 1919,3 † | 2157 · 2870 † | 1325 · 1859 |
+| KC20-2fl-1uni | 1851 · 1940,3 † | 2302 · 2731,4 | 700 · 900 |
+| KC20-2fl-3uni | > 2000 | 93 050 · 98 045 † | 8950 · 9388 |
 | KC30-3fl-2uni | > 2000 | > 5000 | > 5000 |
 | KC30-3fl-1uni | > 2000 | > 5000 | > 10 000 |
 | KC30-3fl-1rl | > 2000 | > 5000 | > 10 000 |
@@ -546,7 +548,7 @@ más soluciones entre las que elegir.
 | KC10-2fl-3uni | 99,80 % · 71,3 % | 99,80 % · 72,0 % | 99,80 % · 72,8 % |
 | KC10-2fl-5rl | 99,80 % · 52,6 % | 99,80 % · 53,5 % | 99,81 % · 54,7 % |
 | KC20-2fl-1uni | 99,79 % · 75,8 % | 99,99 % · 97,5 % | 99,98 % · 98,0 % |
-| KC20-2fl-3uni | 99,49 % · 54,2 % | 99,97 % · 91,8 % | 99,98 % · 94,2 % |
+| KC20-2fl-3uni | 99,49 % · 54,2 % | 99,99 % · 97,2 % | 99,98 % · 94,2 % |
 | KC10-2fl-4rl | 99,36 % · 45,6 % | 99,36 % · 46,2 % | 99,38 % · 49,1 % |
 | KC20-2fl-2uni | 99,31 % · 70,4 % | 99,93 % · 92,5 % | 100 % · 100 % |
 | KC10-2fl-3rl | 99,15 % · 54,5 % | 99,15 % · 55,1 % | 99,19 % · 57,1 % |
@@ -564,10 +566,10 @@ Lo que dice la campaña:
   del 54,2 % de los puntos de referencia con P = 1024 al 94,2 % con P = 65536, y en KC30-3fl-1rl del
   1,7 % al 67,6 %. Una población pequeña devuelve un frente que vale casi lo mismo en volumen con
   muchas menos soluciones distintas.
-- **Más población necesita menos generaciones**: KC10-2fl-4rl pasa de 1301,5 generaciones a 35. Una
-  generación no es una cantidad fija de trabajo —con P = 65536 evalúa 64 veces más descendientes que
-  con P = 1024—, así que esto no dice nada del tiempo total: en KC10-2fl-1rl una generación cuesta
-  0,81 ms por ejecución con P = 1024 y 106 ms con P = 65536.
+- **Más población necesita menos generaciones**: la mediana de KC10-2fl-4rl pasa de 1301,5
+  generaciones a 35. Una generación no es una cantidad fija de trabajo —con P = 65536 evalúa 64
+  veces más descendientes que con P = 1024—, así que esto no dice nada del tiempo total: en
+  KC10-2fl-1rl una generación cuesta 0,81 ms por ejecución con P = 1024 y 105 ms con P = 65536.
 - **En KC10 hay un techo que no rompe ni la población ni las generaciones**: KC10-2fl-1uni se queda
   en el 84,6 % de los puntos óptimos publicados con las tres poblaciones. Lo que queda es el
   algoritmo: esta combinación de NSGA-II con el greedy 2-opt converge a un subconjunto del frente

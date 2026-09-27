@@ -495,24 +495,26 @@ Everything is measured on the same scale, and getting there took two decisions w
   difference was the window, not the algorithm.
 
 **Generations until the front stops changing.** This is the number to use for `--iterations`: past
-it, no run found anything new. A "> N" means that with a cap of N generations the front was still
+it. Each cell gives the median and the 90th percentile over the runs, because what a budget has to
+cover is the slowest run. A "> N" means that with a cap of N generations the front was still
 changing, so there the figure is the budget and not the measurement; the cap was raised until it
-stopped being so wherever that was affordable.
+stopped being so wherever that was affordable. A "†" marks that the 90th percentile reached the cap
+although the median did not: there the slowest run was still changing.
 
 | Instance | P = 1024 | P = 16,384 | P = 65,536 |
 |---|---|---|---|
 | KC10-2fl-2uni | 1 | 1 | 5 |
-| KC10-2fl-1uni | 19 | 4.5 | 10 |
-| KC20-2fl-2uni | 80.5 | 23.5 | 15 |
-| KC10-2fl-2rl | 86 | 5.5 | 10 |
-| KC10-2fl-1rl | 148 | 6 | 10 |
-| KC10-2fl-5rl | 495 | 12.5 | 20 |
-| KC10-2fl-3rl | 816.5 | 70 | 65 |
-| KC10-2fl-4rl | 1301.5 | 98.5 | 35 |
-| KC10-2fl-3uni | 1333 | 131.5 | 50 |
-| KC20-2fl-1rl | 1552.5 | 2157 | 1325 |
-| KC20-2fl-1uni | 1851 | 2302 | 700 |
-| KC20-2fl-3uni | > 2000 | > 20,000 | 8950 |
+| KC10-2fl-1uni | 19 · 42 | 4.5 · 6.1 | 10 · 13 |
+| KC20-2fl-2uni | 80.5 · 1030.8 | 23.5 · 414.4 | 15 · 23 |
+| KC10-2fl-2rl | 86 · 283.5 | 5.5 · 14.2 | 10 · 15 |
+| KC10-2fl-1rl | 148 · 256.8 | 6 · 11.6 | 10 · 15 |
+| KC10-2fl-5rl | 495 · 1471.5 | 12.5 · 159.4 | 20 · 83 |
+| KC10-2fl-3rl | 816.5 · 1582.1 | 70 · 121.0 | 65 · 217 |
+| KC10-2fl-4rl | 1301.5 · 1794.4 | 98.5 · 257.7 | 35 · 268 |
+| KC10-2fl-3uni | 1333 · 1765.7 | 131.5 · 194.6 | 50 · 147 |
+| KC20-2fl-1rl | 1552.5 · 1919.3 † | 2157 · 2870 † | 1325 · 1859 |
+| KC20-2fl-1uni | 1851 · 1940.3 † | 2302 · 2731.4 | 700 · 900 |
+| KC20-2fl-3uni | > 2000 | 93,050 · 98,045 † | 8950 · 9388 |
 | KC30-3fl-2uni | > 2000 | > 5000 | > 5000 |
 | KC30-3fl-1uni | > 2000 | > 5000 | > 10,000 |
 | KC30-3fl-1rl | > 2000 | > 5000 | > 10,000 |
@@ -542,7 +544,7 @@ KC30-3fl-2uni makes it obvious. Its reference front has 790 points: with P = 102
 | KC10-2fl-3uni | 99.80 % · 71.3 % | 99.80 % · 72.0 % | 99.80 % · 72.8 % |
 | KC10-2fl-5rl | 99.80 % · 52.6 % | 99.80 % · 53.5 % | 99.81 % · 54.7 % |
 | KC20-2fl-1uni | 99.79 % · 75.8 % | 99.99 % · 97.5 % | 99.98 % · 98.0 % |
-| KC20-2fl-3uni | 99.49 % · 54.2 % | 99.97 % · 91.8 % | 99.98 % · 94.2 % |
+| KC20-2fl-3uni | 99.49 % · 54.2 % | 99.99 % · 97.2 % | 99.98 % · 94.2 % |
 | KC10-2fl-4rl | 99.36 % · 45.6 % | 99.36 % · 46.2 % | 99.38 % · 49.1 % |
 | KC20-2fl-2uni | 99.31 % · 70.4 % | 99.93 % · 92.5 % | 100 % · 100 % |
 | KC10-2fl-3rl | 99.15 % · 54.5 % | 99.15 % · 55.1 % | 99.19 % · 57.1 % |
@@ -559,10 +561,10 @@ What the campaign says:
   goes from 54.2 % of the reference points with P = 1024 to 94.2 % with P = 65536, and on
   KC30-3fl-1rl from 1.7 % to 67.6 %. A small population returns a front worth almost the same in
   volume with far fewer distinct solutions.
-- **More population needs fewer generations**: KC10-2fl-4rl goes from 1301.5 generations to 35. A
-  generation is not a fixed amount of work — with P = 65536 it evaluates 64 times more offspring
-  than with P = 1024 — so this says nothing about total time: on KC10-2fl-1rl a generation costs
-  0.81 ms per run with P = 1024 and 106 ms with P = 65536.
+- **More population needs fewer generations**: the median of KC10-2fl-4rl goes from 1301.5
+  generations to 35. A generation is not a fixed amount of work — with P = 65536 it evaluates 64
+  times more offspring than with P = 1024 — so this says nothing about total time: on KC10-2fl-1rl a
+  generation costs 0.81 ms per run with P = 1024 and 105 ms with P = 65536.
 - **On KC10 there is a ceiling that neither the population nor the generations break**:
   KC10-2fl-1uni stays at 84.6 % of the published optimal points with all three populations. What is
   left is the algorithm: this combination of NSGA-II with the greedy 2-opt converges to a subset of
