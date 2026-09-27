@@ -434,17 +434,11 @@ población y las iteraciones que usaba cada instancia en la versión original:
 
 ### Cuántas generaciones necesita cada instancia (`--trace`)
 
-> **Las cifras de esta sección y las del libro de Excel se midieron con el recorrido de pares
-> anterior**, el de una sola pasada `r < s`, antes de que el de la versión original pasara a ser el
-> comportamiento por defecto (ver [B8 retirado](#errores-corregidos)). El recorrido nuevo mejora el
-> frente por generación y cuesta entre 1,4 y 1,8 veces más tiempo de GPU, así que cabe esperar que
-> las generaciones de estancamiento bajen y que las fracciones de calidad suban; los frentes de
-> referencia `.KBP` salen de esas mismas ejecuciones, y por lo tanto también son una cota inferior
-> más holgada de lo que serían ahora. Volver a lanzar la campaña completa es un trabajo de horas y
-> está pendiente. Lo que sí se volvió a medir con el recorrido nuevo es la comparación con la versión
-> original y el barrido de poblaciones de
-> [Calidad frente al Greedy 2-opt original](#quality-vs-original), y las tablas de
-> [Rendimiento](#rendimiento).
+> **Las series del libro de Excel siguen medidas con el recorrido de pares anterior**, el de una
+> sola pasada `r < s`, anterior a que el de la versión original pasara a ser el comportamiento por
+> defecto (ver [B8 retirado](#errores-corregidos)). Todo lo demás de esta sección —la campaña de
+> convergencia, los frentes de referencia `.KBP` y las tablas de [Rendimiento](#rendimiento)— se
+> volvió a medir con el recorrido actual.
 
 `--trace FICHERO` escribe un CSV con `run,generation,f1,f2[,f3]`: las soluciones no dominadas distintas
 de **cada** generación de cada ejecución, desde la supervivencia de la población inicial (generación 0)
@@ -482,134 +476,124 @@ El número de generaciones depende mucho de la población, así que la respuesta
 tiempo de una generación se conoce para cada P (ver [Rendimiento](#rendimiento)), de modo que
 `generaciones × tiempo por generación` indica qué pareja (P, generaciones) alcanza antes el objetivo.
 
-#### Resultados de la campaña (RTX 2060, 2026-09-22)
+#### Resultados de la campaña (RTX 2060, 2026-09-26)
 
-Tres poblaciones por instancia: P = 1024 con tope de 2000 generaciones (30 ejecuciones en las instancias
-de 2 objetivos, 10 en las de 3), y P = 16384 y P = 65536 con el tope que cada instancia necesitó, desde
-300 generaciones en KC10 hasta 10 000 en KC30-3fl-1rl y KC30-3fl-1uni.
+Tres poblaciones por instancia: P = 1024 con tope de 2000 generaciones (30 ejecuciones en las
+instancias de 2 objetivos, 10 en las de 3), y P = 16384 y P = 65536 con el tope que cada instancia
+necesitó, desde 300 generaciones en KC10 hasta 10 000 en KC30-3fl-1rl y KC30-3fl-1uni.
 
-Todo está medido en la misma escala, y llegar a eso exigió dos correcciones que conviene declarar:
+Todo está medido en la misma escala, y llegar a eso exigió dos decisiones que conviene declarar:
 
 - **La calidad es una fracción de un [frente de referencia](#g-reference-front), no de la propia
-  ejecución.** En KC10 ese frente
-  es el óptimo publicado, así que la cifra es la fracción del hipervolumen óptimo. En KC20 y KC30 no hay
-  óptimo publicado, de modo que la referencia es el mejor frente que conoce la campaña: la unión no
-  dominada de los frentes finales de todas las ejecuciones y todas las poblaciones. Normalizar cada
-  ejecución contra su propia última generación, como hacía una versión anterior de esta sección, hace
+  ejecución.** En KC10 ese frente es el óptimo publicado, así que la cifra es la fracción del
+  hipervolumen óptimo. En KC20 y KC30 no hay óptimo publicado, de modo que la referencia es el mejor
+  frente que conoce la campaña: la unión no dominada de los frentes finales de todas las ejecuciones
+  y todas las poblaciones. Normalizar cada ejecución contra su propia última generación hace
   aparecer un 100 % por construcción y esconde la diferencia entre poblaciones.
-- **La prueba de estancamiento usa la misma ventana en todas partes** (`--hv-window`): 20 generaciones en
-  KC10 y KC20, 50 en KC30. Con cada fichero eligiendo su ventana, KC30-3fl-1rl parecía estancarse en la
-  generación 612 con P = 1024 y en la 4875 con P = 65536; con ventana común las mismas trazas dan 1200 y
-  1450. La mayor parte de esa diferencia era la ventana.
+- **La prueba de estancamiento usa la misma ventana en todas partes** (`--hv-window`): 20
+  generaciones en KC10 y KC20, 50 en KC30. Con cada fichero eligiendo su ventana según el coste, las
+  instancias de 3 objetivos parecían estancarse mucho antes de lo que dicen sus trazas, y la mayor
+  parte de esa diferencia era la ventana, no el algoritmo.
 
 **Generaciones hasta que el frente deja de cambiar.** Es el número que hay que usar para elegir
-`--iterations`: a partir de ahí ninguna ejecución encontró nada nuevo.
+`--iterations`: a partir de ahí ninguna ejecución encontró nada nuevo. Un «> N» quiere decir que con
+un tope de N generaciones el frente seguía cambiando, de modo que ahí la cifra es el presupuesto y
+no la medición; el tope se subió hasta que dejó de serlo donde fue asequible.
 
-| Instancia | P = 1024 | P = 16384 | P = 65536 |
+| Instancia | P = 1024 | P = 16 384 | P = 65 536 |
 |---|---|---|---|
-| KC10-2fl-2uni | 1 | 1 | ≤ 5 |
-| KC10-2fl-1uni | 6,5 | 5,5 | 10 |
-| KC10-2fl-2rl | 9 | 4,5 | 5 |
-| KC10-2fl-1rl | 53 | 6,5 | 10 |
-| KC10-2fl-4rl | 320 | 20 | 10 |
-| KC10-2fl-3rl | 845 | 143 | 30 |
-| KC10-2fl-5rl | 1054 | 104 | 10 |
-| KC10-2fl-3uni | 1182 | 149 | 55 |
-| KC20-2fl-2uni | 65 | 31,5 | 40 |
-| KC20-2fl-1rl | 1817 | 236 | 230 |
-| KC20-2fl-1uni | 1892 | 230 | 200 |
-| KC20-2fl-3uni | 1987 | 294 | 285 |
-| KC30-3fl-2uni | 1997 | 1490 | 4975 |
-| KC30-3fl-1uni | 1998 | > 5000 | > 10000 |
-| KC30-3fl-1rl | 1999 | > 5000 | > 10000 |
+| KC10-2fl-2uni | 1 | 1 | 5 |
+| KC10-2fl-1uni | 19 | 4,5 | 10 |
+| KC20-2fl-2uni | 80,5 | 23,5 | 15 |
+| KC10-2fl-2rl | 86 | 5,5 | 10 |
+| KC10-2fl-1rl | 148 | 6 | 10 |
+| KC10-2fl-5rl | 495 | 12,5 | 20 |
+| KC10-2fl-3rl | 816,5 | 70 | 65 |
+| KC10-2fl-4rl | 1301,5 | 98,5 | 35 |
+| KC10-2fl-3uni | 1333 | 131,5 | 50 |
+| KC20-2fl-1rl | 1552,5 | 2157 | 1325 |
+| KC20-2fl-1uni | 1851 | 2302 | 700 |
+| KC20-2fl-3uni | > 2000 | > 6000 | > 4000 |
+| KC30-3fl-2uni | > 2000 | > 5000 | > 5000 |
+| KC30-3fl-1uni | > 2000 | > 5000 | > 10 000 |
+| KC30-3fl-1rl | > 2000 | > 5000 | > 10 000 |
 
-**Calidad alcanzada.** Cada celda tiene dos números medidos contra el mismo frente de referencia, de modo
-que las tres columnas se pueden leer una al lado de otra:
+**Calidad alcanzada.** Cada celda tiene dos números medidos contra el mismo frente de referencia, de
+modo que las tres columnas se pueden leer una al lado de otra:
 
-- El **primero es el [hipervolumen](#g-hypervolume)** del frente con el que terminó la ejecución, como
-  fracción del que domina el frente de referencia. Responde a "cuánto de la región interesante del
-  espacio de objetivos cubre este frente", y se satura enseguida: un puñado de soluciones bien situadas
-  ya captura la mayor parte del volumen.
+- El **primero es el [hipervolumen](#g-hypervolume)** del frente con el que terminó la ejecución,
+  como fracción del que domina el frente de referencia. Responde a "cuánto de la región interesante
+  del espacio de objetivos cubre este frente", y se satura enseguida: un puñado de soluciones bien
+  situadas ya captura la mayor parte del volumen.
 - El **segundo es la [cobertura](#g-coverage)**: cuántos puntos del frente de referencia encontró
-  realmente la ejecución, en fracción. Responde a "cuántos compromisos distintos ofrece este frente", y
-  es lo que separa a las configuraciones.
+  realmente la ejecución, en fracción. Responde a "cuántos compromisos distintos ofrece este
+  frente", y es lo que separa a las configuraciones.
 
-KC30-3fl-2uni lo hace evidente. Su frente de referencia tiene 751 puntos: con P = 1024 la ejecución
-domina el 88,06 % de su volumen habiendo encontrado el 5,8 % de sus puntos, unos 44 de 751, y con
-P = 65536 domina el 98,00 % habiendo encontrado el 61,6 %, unos 463. Casi el mismo volumen, diez veces
+KC30-3fl-2uni lo hace evidente. Su frente de referencia tiene 790 puntos: con P = 1024 la ejecución
+domina el 92,63 % de su volumen habiendo encontrado el 10,2 % de sus puntos, unos 80, y con
+P = 65536 domina el 99,03 % habiendo encontrado el 67,4 %, unos 532. Casi el mismo volumen, muchas
 más soluciones entre las que elegir.
 
-| Instancia | P = 1024 | P = 16384 | P = 65536 |
+| Instancia | P = 1024 | P = 16 384 | P = 65 536 |
 |---|---|---|---|
-| KC10-2fl-2uni | 100 % · 100 % | 100 % · 100 % | 100 % · 100 % |
 | KC10-2fl-2rl | 100 % · 100 % | 100 % · 100 % | 100 % · 100 % |
-| KC10-2fl-1uni | 99,99 % · 92,3 % | 99,99 % · 92,3 % | 99,99 % · 92,3 % |
-| KC10-2fl-5rl | 99,97 % · 78,6 % | 99,97 % · 79,6 % | 99,98 % · 81,2 % |
-| KC10-2fl-3uni | 99,96 % · 86,3 % | 99,96 % · 87,1 % | 99,96 % · 87,4 % |
-| KC10-2fl-1rl | 99,94 % · 79,3 % | 99,94 % · 79,3 % | 99,94 % · 79,3 % |
-| KC10-2fl-4rl | 99,49 % · 73,6 % | 99,49 % · 73,8 % | 99,49 % · 74,3 % |
-| KC10-2fl-3rl | 99,25 % · 72,7 % | 99,25 % · 72,9 % | 99,30 % · 73,8 % |
-| KC20-2fl-1rl | 99,94 % · 87,4 % | 99,96 % · 88,1 % | 99,98 % · 92,3 % |
-| KC20-2fl-1uni | 99,44 % · 52,0 % | 99,88 % · 84,5 % | 99,99 % · 95,8 % |
-| KC20-2fl-2uni | 99,31 % · 60,4 % | 99,93 % · 91,3 % | 100 % · 97,5 % |
-| KC20-2fl-3uni | 99,30 % · 43,1 % | 99,51 % · 60,9 % | 99,68 % · 77,4 % |
-| KC30-3fl-1rl | 95,52 % · 1,4 % | 98,64 % · 32,8 % | 99,31 % · 61,6 % |
-| KC30-3fl-1uni | 88,88 % · 1,5 % | 96,38 % · 20,0 % | 98,93 % · 48,1 % |
-| KC30-3fl-2uni | 88,06 % · 5,8 % | 96,17 % · 28,3 % | 98,00 % · 61,6 % |
+| KC10-2fl-2uni | 100 % · 100 % | 100 % · 100 % | 100 % · 100 % |
+| KC10-2fl-1rl | 99,90 % · 74,1 % | 99,90 % · 74,3 % | 99,90 % · 76,2 % |
+| KC20-2fl-1rl | 99,88 % · 87,6 % | 99,95 % · 95,0 % | 99,99 % · 95,8 % |
+| KC10-2fl-1uni | 99,84 % · 84,6 % | 99,84 % · 84,6 % | 99,84 % · 84,6 % |
+| KC10-2fl-3uni | 99,80 % · 71,3 % | 99,80 % · 72,0 % | 99,80 % · 72,8 % |
+| KC10-2fl-5rl | 99,80 % · 52,6 % | 99,80 % · 53,5 % | 99,81 % · 54,7 % |
+| KC20-2fl-1uni | 99,79 % · 75,8 % | 99,99 % · 97,5 % | 99,98 % · 98,0 % |
+| KC20-2fl-3uni | 99,49 % · 54,4 % | 99,92 % · 86,3 % | 99,94 % · 90,2 % |
+| KC10-2fl-4rl | 99,36 % · 45,6 % | 99,36 % · 46,2 % | 99,38 % · 49,1 % |
+| KC20-2fl-2uni | 99,31 % · 70,4 % | 99,93 % · 92,5 % | 100 % · 100 % |
+| KC10-2fl-3rl | 99,15 % · 54,5 % | 99,15 % · 55,1 % | 99,19 % · 57,1 % |
+| KC30-3fl-1rl | 96,17 % · 1,7 % | 98,91 % · 40,0 % | 99,57 % · 67,6 % |
+| KC30-3fl-2uni | 92,63 % · 10,2 % | 97,65 % · 46,4 % | 99,03 % · 67,4 % |
+| KC30-3fl-1uni | 91,36 % · 2,2 % | 97,04 % · 26,7 % | 98,59 % · 51,1 % |
 
 Lo que dice la campaña:
 
-- **El hipervolumen apenas separa las instancias de 2 objetivos.** Todas las configuraciones de KC10 y
-  KC20 quedan entre el 99,25 % y el 100 % de su referencia, y en KC10 esa referencia es el óptimo
+- **El hipervolumen apenas separa las instancias de 2 objetivos.** Todas las configuraciones de KC10
+  y KC20 quedan entre el 99,15 % y el 100 % de su referencia, y en KC10 esa referencia es el óptimo
   publicado: el frente encontrado domina prácticamente el mismo volumen que el óptimo incluso con
   P = 1024.
-- **Lo que sí las separa es cuántas soluciones de ese frente encuentran.** En KC20-2fl-1uni se pasa del
-  52 % de los puntos de referencia con P = 1024 al 95,8 % con P = 65536, y en KC30-3fl-2uni del 5,8 % al
-  61,6 %. Una población pequeña devuelve un frente que vale casi lo mismo en volumen con muchas menos
-  soluciones distintas.
-- **Más población necesita menos generaciones**, y ahora el patrón es limpio: KC10-2fl-5rl pasa de 1054
-  generaciones a 10, y KC20-2fl-1rl de 1817 a 230. Una generación no es una cantidad fija de trabajo —con
-  P = 65536 evalúa 64 veces más descendientes que con P = 1024—, así que esto no dice nada del tiempo
-  total: en KC10-2fl-1rl una generación cuesta 0,25 ms por ejecución con P = 1024 y 86 ms con P = 65536.
-- **En KC10 hay un techo que no rompe ni la población ni las generaciones**: KC10-2fl-1rl se queda en el
-  79,3 % de los puntos óptimos publicados con las tres poblaciones, y KC10-2fl-3rl en torno al 73 %. Lo
-  que queda es el algoritmo: esta combinación de NSGA-II con el greedy 2-opt converge a un subconjunto
-  del frente óptimo.
-- **Las instancias de 3 objetivos no paran nunca**: KC30-3fl-1rl y KC30-3fl-1uni seguían mejorando en la
-  generación 10 000 con P = 65536, habiendo alcanzado el 99,31 % y el 98,93 % del hipervolumen de
-  referencia. Pasar de 5000 a 10 000 generaciones añadió 0,67 y 2,55 puntos. Ahí el número de
-  generaciones es una decisión de presupuesto, no una medición.
+- **Lo que sí las separa es cuántas soluciones de ese frente encuentran.** En KC20-2fl-3uni se pasa
+  del 54,4 % de los puntos de referencia con P = 1024 al 90,2 % con P = 65536, y en KC30-3fl-1rl del
+  1,7 % al 67,6 %. Una población pequeña devuelve un frente que vale casi lo mismo en volumen con
+  muchas menos soluciones distintas.
+- **Más población necesita menos generaciones**: KC10-2fl-4rl pasa de 1301,5 generaciones a 35. Una
+  generación no es una cantidad fija de trabajo —con P = 65536 evalúa 64 veces más descendientes que
+  con P = 1024—, así que esto no dice nada del tiempo total: en KC10-2fl-1rl una generación cuesta
+  0,83 ms por ejecución con P = 1024 y 105 ms con P = 65536.
+- **En KC10 hay un techo que no rompe ni la población ni las generaciones**: KC10-2fl-1uni se queda
+  en el 84,6 % de los puntos óptimos publicados con las tres poblaciones. Lo que queda es el
+  algoritmo: esta combinación de NSGA-II con el greedy 2-opt converge a un subconjunto del frente
+  óptimo.
+- **Las instancias de 3 objetivos no paran nunca**: KC30-3fl-1rl y KC30-3fl-1uni seguían mejorando
+  en la generación 10 000 con P = 65536, habiendo alcanzado el 99,57 % y 98,59 % del hipervolumen de
+  referencia. Pasar de 5000 a 10 000 generaciones añadió 0,24 y 0,24 puntos, medidos sobre las
+  curvas de la traza. Ahí el número de generaciones es una decisión de presupuesto, no una medición.
 
-**Los frentes de referencia están en el repositorio**, para poder comprobar los porcentajes y graficar o
-comparar los frentes. En KC10 es el óptimo publicado; en KC20 y KC30 es el mejor frente que conoce esta
-campaña, escrito como fichero `.KBP` con el mismo formato que un `.PO`: una permutación en base 1 y sus
-costes por línea.
+**Los frentes de referencia están en el repositorio**, para poder comprobar los porcentajes y
+graficar o comparar los frentes. En KC10 es el óptimo publicado; en KC20 y KC30 es el mejor frente
+que conoce esta campaña, escrito como fichero `.KBP` con el mismo formato que un `.PO`: una
+permutación en base 1 y sus costes por línea.
 
 | Instancia | Frente de referencia | Puntos | Fichero |
 |---|---|---|---|
 | KC10-2fl-* | óptimo publicado | 1 a 130 | [`mQAPData/KC10-2fl-*.PO`](mQAPData/) |
-| KC20-2fl-1rl | mejor conocido | 88 | [`KC20-2fl-1rl.KBP`](mQAPData/KC20-2fl-1rl.KBP) |
+| KC20-2fl-1rl | mejor conocido | 91 | [`KC20-2fl-1rl.KBP`](mQAPData/KC20-2fl-1rl.KBP) |
 | KC20-2fl-1uni | mejor conocido | 71 | [`KC20-2fl-1uni.KBP`](mQAPData/KC20-2fl-1uni.KBP) |
 | KC20-2fl-2uni | mejor conocido | 8 | [`KC20-2fl-2uni.KBP`](mQAPData/KC20-2fl-2uni.KBP) |
-| KC20-2fl-3uni | mejor conocido | 233 | [`KC20-2fl-3uni.KBP`](mQAPData/KC20-2fl-3uni.KBP) |
-| KC30-3fl-1rl | mejor conocido | 14 029 | [`KC30-3fl-1rl.KBP`](mQAPData/KC30-3fl-1rl.KBP) |
-| KC30-3fl-1uni | mejor conocido | 3112 | [`KC30-3fl-1uni.KBP`](mQAPData/KC30-3fl-1uni.KBP) |
-| KC30-3fl-2uni | mejor conocido | 751 | [`KC30-3fl-2uni.KBP`](mQAPData/KC30-3fl-2uni.KBP) |
+| KC20-2fl-3uni | mejor conocido | 242 | [`KC20-2fl-3uni.KBP`](mQAPData/KC20-2fl-3uni.KBP) |
+| KC30-3fl-1rl | mejor conocido | 13 563 | [`KC30-3fl-1rl.KBP`](mQAPData/KC30-3fl-1rl.KBP) |
+| KC30-3fl-1uni | mejor conocido | 3200 | [`KC30-3fl-1uni.KBP`](mQAPData/KC30-3fl-1uni.KBP) |
+| KC30-3fl-2uni | mejor conocido | 790 | [`KC30-3fl-2uni.KBP`](mQAPData/KC30-3fl-2uni.KBP) |
 
-Los puntos son los que sobreviven al filtro de dominancia sobre la unión de los frentes finales de todas
-las ejecuciones y todas las poblaciones: 751 de 4727 en KC30-3fl-2uni, y 14 029 de 37 029 en
+Los puntos son los que sobreviven al filtro de dominancia sobre la unión de los frentes finales de
+todas las ejecuciones y todas las poblaciones: 790 de 4333 en KC30-3fl-2uni, y 13 563 de 30 096 en
 KC30-3fl-1rl. Cada línea se verificó recalculando el coste de su permutación contra la instancia.
-
-Un `.KBP` es una cota inferior, no un óptimo: una ejecución más larga o más afortunada puede mejorarlo, y
-entonces todos los porcentajes medidos contra él bajan. Los frentes `.PO` de KC10 no tienen esa salvedad.
-Cualquiera de los dos se le puede pasar al análisis con `--reference-front`, y
-`python scripts/analyze_convergence.py <trazas> --write-reference <fichero>` reconstruye uno.
-
-Dos notas prácticas para repetirlo. Graba todas las trazas con el mismo `--trace-every`, elegido por la
-instancia más cara, para que cualquier ventana múltiplo de él esté disponible en todos los ficheros sin
-volver a usar la GPU; eso es lo que obligó a las correcciones anteriores. Y en las instancias de 3
-objetivos el hipervolumen de frentes de diez mil puntos es lo que limita la resolución de las curvas:
-`--hv-runs 1` da cinco veces más resolución al mismo coste, y las cifras de KC30 de arriba lo usan.
 
 ### Resultados en el libro de Excel
 
@@ -755,10 +739,10 @@ tres de las cuatro instancias**. La original sigue por delante en KC20-2fl-2uni:
 
 | Instancia | Hipervolumen original | Hipervolumen esta versión | p | Cobertura original | Cobertura esta versión | p |
 |---|---|---|---|---|---|---|
-| KC20-2fl-1rl | 99,28 % ± 0,19 | 99,22 % ± 0,32 | 0,98 | 39,7 % ± 3,9 | 40,2 % ± 4,4 | 0,81 |
+| KC20-2fl-1rl | 99,27 % ± 0,19 | 99,22 % ± 0,32 | 0,98 | 39,0 % ± 3,8 | 39,4 % ± 4,5 | 0,86 |
 | KC20-2fl-1uni | 96,25 % ± 0,71 | 95,91 % ± 0,98 | 0,17 | 8,6 % ± 3,2 | 8,1 % ± 4,1 | 0,64 |
 | KC20-2fl-2uni | **90,95 % ± 8,91** | 87,77 % ± 10,10 | 0,021 | **32,9 % ± 15,2** | 25,0 % ± 13,1 | 0,048 |
-| KC20-2fl-3uni | 95,72 % ± 0,51 | 95,78 % ± 0,53 | 0,62 | 2,8 % ± 1,7 | 3,0 % ± 1,4 | 0,59 |
+| KC20-2fl-3uni | 95,70 % ± 0,51 | 95,76 % ± 0,53 | 0,62 | 2,9 % ± 1,7 | 3,0 % ± 1,3 | 0,76 |
 
 **Cómo se llegó aquí.** No siempre fue así. Con el recorrido de pares anterior, una sola pasada `r <
 s`, esta versión perdía en las cuatro instancias con p ≤ 1,1·10⁻⁵. La causa no estaba en la
@@ -775,11 +759,11 @@ Hipervolumen medio de 30 ejecuciones, con P = 64 y 300 generaciones:
 
 | Configuración | KC20-2fl-1rl | KC20-2fl-1uni | KC20-2fl-2uni | KC20-2fl-3uni |
 |---|---|---|---|---|
-| Original | 99,28 % | 96,25 % | 90,95 % | 95,72 % |
-| 190 pares, dos intercambios (antes del cambio) | 98,31 % (p = 2,4·10⁻¹⁰) | 93,72 % (p = 5,6·10⁻¹⁰) | 77,91 % (p = 1,1·10⁻⁵) | 94,72 % (p = 4,4·10⁻⁷) |
-| 190 pares, un intercambio | 98,90 % (p = 3,1·10⁻⁶) | 93,96 % (p = 1,4·10⁻⁸) | 76,45 % (p = 2,9·10⁻⁶) | 95,26 % (p = 0,011) |
-| **343 pares, dos intercambios (ahora por defecto)** | 99,22 % (p = 0,98) | 95,91 % (p = 0,17) | 87,77 % (p = 0,021) | 95,78 % (p = 0,62) |
-| 343 pares, un intercambio | 99,34 % (p = 0,23) | 96,17 % (p = 0,98) | 81,71 % (p = 8,0·10⁻⁴) | 96,10 % (p = 0,022) |
+| Original | 99,27 % | 96,25 % | 90,95 % | 95,70 % |
+| 190 pares, dos intercambios (antes del cambio) | 98,30 % (p = 2,4·10⁻¹⁰) | 93,72 % (p = 5,6·10⁻¹⁰) | 77,91 % (p = 1,1·10⁻⁵) | 94,70 % (p = 4,4·10⁻⁷) |
+| 190 pares, un intercambio | 98,89 % (p = 3,1·10⁻⁶) | 93,96 % (p = 1,4·10⁻⁸) | 76,45 % (p = 2,9·10⁻⁶) | 95,24 % (p = 0,011) |
+| **343 pares, dos intercambios (ahora por defecto)** | 99,22 % (p = 0,98) | 95,91 % (p = 0,17) | 87,77 % (p = 0,021) | 95,76 % (p = 0,62) |
+| 343 pares, un intercambio | 99,33 % (p = 0,23) | 96,17 % (p = 0,98) | 81,71 % (p = 8,0·10⁻⁴) | 96,08 % (p = 0,022) |
 
 El recorrido de pares explica casi toda la diferencia, y por eso **es el comportamiento por
 defecto** de la rama. Cuesta entre 1,4 y 1,8 veces el tiempo de GPU, según cuánto pese la búsqueda
@@ -798,23 +782,23 @@ ejecuciones):
 
 | Configuración | KC20-2fl-1rl | KC20-2fl-1uni | KC20-2fl-2uni | KC20-2fl-3uni |
 |---|---|---|---|---|
-| Original, P = 64 | 99,28 % · 39,7 % | 96,25 % · 8,6 % | 90,95 % · 32,9 % | 95,72 % · 2,8 % |
-| Esta versión, P = 64 | 99,22 % · 40,2 % | 95,91 % · 8,1 % | 87,77 % · 25,0 % | 95,78 % · 3,0 % |
-| Esta versión, P = 256 | 99,71 % · 65,0 % | 98,04 % · 20,4 % | 93,55 % · 43,8 % | 97,77 % · 13,7 % |
-| Esta versión, P = 1024 | 99,81 % · 76,9 % | 99,41 % · 49,7 % | 99,12 % · 67,5 % | 98,73 % · 31,4 % |
-| Esta versión, P = 4096 | 99,87 % · 83,6 % | 99,84 % · 77,7 % | 99,59 % · 82,1 % | 99,25 % · 50,0 % |
-| Esta versión, P = 16384 | 99,91 % · 87,2 % | 99,94 % · 90,0 % | 99,74 % · 92,5 % | 99,55 % · 67,0 % |
-| Esta versión, P = 65536 | 99,96 % · 90,6 % | 99,99 % · 96,4 % | 100 % · 100 % | 99,73 % · 77,7 % |
+| Original, P = 64 | 99,27 % · 39,0 % | 96,25 % · 8,6 % | 90,95 % · 32,9 % | 95,70 % · 2,9 % |
+| Esta versión, P = 64 | 99,22 % · 39,4 % | 95,91 % · 8,1 % | 87,77 % · 25,0 % | 95,76 % · 3,0 % |
+| Esta versión, P = 256 | 99,70 % · 64,7 % | 98,04 % · 20,4 % | 93,55 % · 43,8 % | 97,75 % · 13,7 % |
+| Esta versión, P = 1024 | 99,80 % · 77,3 % | 99,41 % · 49,7 % | 99,12 % · 67,5 % | 98,71 % · 31,4 % |
+| Esta versión, P = 4096 | 99,86 % · 83,9 % | 99,84 % · 77,7 % | 99,59 % · 82,1 % | 99,23 % · 49,6 % |
+| Esta versión, P = 16384 | 99,90 % · 88,1 % | 99,94 % · 90,0 % | 99,74 % · 92,5 % | 99,52 % · 66,0 % |
+| Esta versión, P = 65536 | 99,95 % · 91,6 % | 99,99 % · 96,4 % | 100 % · 100 % | 99,71 % · 75,8 % |
 
 Es el argumento de esta rama: la población de la original es el punto donde la búsqueda local hace
 casi todo el trabajo y las dos versiones empatan; lo que la separa son las poblaciones que la
 original no puede ejecutar.
 
 Todo se mide contra los ficheros `.KBP` del repositorio, los mismos contra los que se publicó la
-campaña, para que las dos tablas sean comparables. Esas configuraciones encontraron 38 soluciones
-que esos frentes no dominan, 6 en KC20-2fl-1rl y 32 en KC20-2fl-3uni, así que los frentes del
-repositorio son una cota inferior: `scripts/compare_versions.py --update-reference` los reconstruye,
-pero eso cambiaría las cifras ya publicadas contra ellos, así que se dejan como están.
+campaña, para que las dos tablas sean comparables. Esas configuraciones encontraron 3 soluciones que
+esos frentes no dominan, 1 en KC20-2fl-1rl y 2 en KC20-2fl-3uni, así que los frentes del repositorio
+son una cota inferior: `scripts/compare_versions.py --update-reference` los reconstruye, pero eso
+cambiaría las cifras ya publicadas contra ellos, así que se dejan como están.
 
 **Correcciones del libro (2026-09-19)**
 - **KC20-2fl-3uni:** las series NSGA-II, Greedy 2opt y la serie oculta del óptimo de Pareto del gráfico
