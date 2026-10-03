@@ -481,7 +481,8 @@ tiempo de una generación se conoce para cada P (ver [Rendimiento](#rendimiento)
 
 Tres poblaciones por instancia: P = 1024 con tope de 2000 generaciones (30 ejecuciones en las
 instancias de 2 objetivos, 10 en las de 3), y P = 16384 y P = 65536 con el tope que cada instancia
-necesitó, desde 300 generaciones en KC10 hasta 100 000 en KC30-3fl-1uni y KC30-3fl-2uni.
+necesitó, desde 300 generaciones en KC10 hasta 100 000 en KC30-3fl-1rl, KC30-3fl-1uni y
+KC30-3fl-2uni.
 
 Todo está medido en la misma escala, y llegar a eso exigió dos decisiones que conviene declarar:
 
@@ -519,7 +520,7 @@ percentil 90 llegó al tope aunque la mediana no: ahí la ejecución más lenta 
 | KC20-2fl-3uni | > 2000 | 93 050 · 98 045 † | 8950 · 9388 |
 | KC30-3fl-2uni | > 2000 | > 5000 | > 100 000 |
 | KC30-3fl-1uni | > 2000 | > 5000 | > 100 000 |
-| KC30-3fl-1rl | > 2000 | > 5000 | > 10 000 |
+| KC30-3fl-1rl | > 2000 | > 5000 | > 100 000 |
 
 **Calidad alcanzada.** Cada celda tiene dos números medidos contra el mismo frente de referencia, de
 modo que las tres columnas se pueden leer una al lado de otra:
@@ -551,7 +552,7 @@ soluciones entre las que elegir.
 | KC10-2fl-4rl | 99,36 % · 45,6 % | 99,36 % · 46,2 % | 99,38 % · 49,1 % |
 | KC20-2fl-2uni | 99,31 % · 70,4 % | 99,93 % · 92,5 % | 100 % · 100 % |
 | KC10-2fl-3rl | 99,15 % · 54,5 % | 99,15 % · 55,1 % | 99,19 % · 57,1 % |
-| KC30-3fl-1rl | 96,17 % · 1,7 % | 98,91 % · 40,0 % | 99,57 % · 67,6 % |
+| KC30-3fl-1rl | 95,97 % · 1,3 % | 98,42 % · 28,3 % | 99,70 % · 74,3 % |
 | KC30-3fl-2uni | 92,54 % · 9,5 % | 97,56 % · 43,3 % | 99,52 % · 76,8 % |
 | KC30-3fl-1uni | 91,22 % · 2,0 % | 96,81 % · 23,4 % | 99,03 % · 61,3 % |
 
@@ -562,20 +563,20 @@ Lo que dice la campaña:
   publicado: el frente encontrado domina prácticamente el mismo volumen que el óptimo incluso con
   P = 1024.
 - **Lo que sí las separa es cuántas soluciones de ese frente encuentran.** En KC20-2fl-3uni se pasa
-  del 54,2 % de los puntos de referencia con P = 1024 al 94,2 % con P = 65536, y en KC30-3fl-2uni
-  del 9,5 % al 76,8 %. Una población pequeña devuelve un frente que vale casi lo mismo en volumen
-  con muchas menos soluciones distintas.
+  del 54,2 % de los puntos de referencia con P = 1024 al 94,2 % con P = 65536, y en KC30-3fl-1rl del
+  1,3 % al 74,3 %. Una población pequeña devuelve un frente que vale casi lo mismo en volumen con
+  muchas menos soluciones distintas.
 - **Más población necesita menos generaciones**: la mediana de KC10-2fl-4rl pasa de 1301,5
   generaciones a 35. Una generación no es una cantidad fija de trabajo —con P = 65536 evalúa 64
   veces más descendientes que con P = 1024—, así que esto no dice nada del tiempo total: en
-  KC10-2fl-1rl una generación cuesta 0,86 ms por ejecución con P = 1024 y 105 ms con P = 65536.
+  KC10-2fl-1rl una generación cuesta 0,82 ms por ejecución con P = 1024 y 105 ms con P = 65536.
 - **En KC10 hay un techo que no rompe ni la población ni las generaciones**: KC10-2fl-1uni se queda
   en el 84,6 % de los puntos óptimos publicados con las tres poblaciones. Lo que queda es el
   algoritmo: esta combinación de NSGA-II con el greedy 2-opt converge a un subconjunto del frente
   óptimo.
 - **Las instancias de 3 objetivos no paran nunca**: KC30-3fl-1rl seguían mejorando en la generación
-  100 000 con P = 65536, habiendo alcanzado el 99,57 % del hipervolumen de referencia. Pasar de 5000
-  a 100 000 generaciones añadió 0,24 puntos, medidos sobre las curvas de la traza. Ahí el número de
+  100 000 con P = 65536, habiendo alcanzado el 99,70 % del hipervolumen de referencia. Pasar de 5000
+  a 100 000 generaciones añadió 0,21 puntos, medidos sobre las curvas de la traza. Ahí el número de
   generaciones es una decisión de presupuesto, no una medición.
 
 **Los frentes de referencia están en el repositorio**, para poder comprobar los porcentajes y
@@ -590,12 +591,12 @@ permutación en base 1 y sus costes por línea.
 | KC20-2fl-1uni | mejor conocido | 71 | [`KC20-2fl-1uni.KBP`](mQAPData/KC20-2fl-1uni.KBP) |
 | KC20-2fl-2uni | mejor conocido | 8 | [`KC20-2fl-2uni.KBP`](mQAPData/KC20-2fl-2uni.KBP) |
 | KC20-2fl-3uni | mejor conocido | 243 | [`KC20-2fl-3uni.KBP`](mQAPData/KC20-2fl-3uni.KBP) |
-| KC30-3fl-1rl | mejor conocido | 13 563 | [`KC30-3fl-1rl.KBP`](mQAPData/KC30-3fl-1rl.KBP) |
+| KC30-3fl-1rl | mejor conocido | 16 989 | [`KC30-3fl-1rl.KBP`](mQAPData/KC30-3fl-1rl.KBP) |
 | KC30-3fl-1uni | mejor conocido | 3448 | [`KC30-3fl-1uni.KBP`](mQAPData/KC30-3fl-1uni.KBP) |
 | KC30-3fl-2uni | mejor conocido | 821 | [`KC30-3fl-2uni.KBP`](mQAPData/KC30-3fl-2uni.KBP) |
 
 Los puntos son los que sobreviven al filtro de dominancia sobre la unión de los frentes finales de
-todas las ejecuciones y todas las poblaciones: 821 de 4428 en KC30-3fl-2uni, y 13 563 de 30 096 en
+todas las ejecuciones y todas las poblaciones: 821 de 4428 en KC30-3fl-2uni, y 16 989 de 39 644 en
 KC30-3fl-1rl. Cada línea se verificó recalculando el coste de su permutación contra la instancia.
 
 ### Resultados en el libro de Excel

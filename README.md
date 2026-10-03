@@ -479,7 +479,7 @@ time of a generation is known for each P (see [Performance](#performance)), so
 
 Three populations per instance: P = 1024 capped at 2000 generations (30 runs on the 2-objective
 instances, 10 on the 3-objective ones), and P = 16384 and P = 65536 with the cap each instance
-needed, from 300 generations on KC10 to 100,000 on KC30-3fl-1uni and KC30-3fl-2uni.
+needed, from 300 generations on KC10 to 100,000 on KC30-3fl-1rl, KC30-3fl-1uni and KC30-3fl-2uni.
 
 Everything is measured on the same scale, and getting there took two decisions worth stating:
 
@@ -517,7 +517,7 @@ although the median did not: there the slowest run was still changing.
 | KC20-2fl-3uni | > 2000 | 93,050 · 98,045 † | 8950 · 9388 |
 | KC30-3fl-2uni | > 2000 | > 5000 | > 100,000 |
 | KC30-3fl-1uni | > 2000 | > 5000 | > 100,000 |
-| KC30-3fl-1rl | > 2000 | > 5000 | > 10,000 |
+| KC30-3fl-1rl | > 2000 | > 5000 | > 100,000 |
 
 **Quality reached.** Each cell has two numbers measured against the same reference front, so the
 three columns can be read side by side:
@@ -548,7 +548,7 @@ KC30-3fl-2uni makes it obvious. Its reference front has 821 points: with P = 102
 | KC10-2fl-4rl | 99.36 % · 45.6 % | 99.36 % · 46.2 % | 99.38 % · 49.1 % |
 | KC20-2fl-2uni | 99.31 % · 70.4 % | 99.93 % · 92.5 % | 100 % · 100 % |
 | KC10-2fl-3rl | 99.15 % · 54.5 % | 99.15 % · 55.1 % | 99.19 % · 57.1 % |
-| KC30-3fl-1rl | 96.17 % · 1.7 % | 98.91 % · 40.0 % | 99.57 % · 67.6 % |
+| KC30-3fl-1rl | 95.97 % · 1.3 % | 98.42 % · 28.3 % | 99.70 % · 74.3 % |
 | KC30-3fl-2uni | 92.54 % · 9.5 % | 97.56 % · 43.3 % | 99.52 % · 76.8 % |
 | KC30-3fl-1uni | 91.22 % · 2.0 % | 96.81 % · 23.4 % | 99.03 % · 61.3 % |
 
@@ -559,19 +559,19 @@ What the campaign says:
   optimum: the front found dominates practically the same volume as the optimum even with P = 1024.
 - **What does separate them is how many solutions of that front they find.** On KC20-2fl-3uni it
   goes from 54.2 % of the reference points with P = 1024 to 94.2 % with P = 65536, and on
-  KC30-3fl-2uni from 9.5 % to 76.8 %. A small population returns a front worth almost the same in
+  KC30-3fl-1rl from 1.3 % to 74.3 %. A small population returns a front worth almost the same in
   volume with far fewer distinct solutions.
 - **More population needs fewer generations**: the median of KC10-2fl-4rl goes from 1301.5
   generations to 35. A generation is not a fixed amount of work — with P = 65536 it evaluates 64
   times more offspring than with P = 1024 — so this says nothing about total time: on KC10-2fl-1rl a
-  generation costs 0.86 ms per run with P = 1024 and 105 ms with P = 65536.
+  generation costs 0.82 ms per run with P = 1024 and 105 ms with P = 65536.
 - **On KC10 there is a ceiling that neither the population nor the generations break**:
   KC10-2fl-1uni stays at 84.6 % of the published optimal points with all three populations. What is
   left is the algorithm: this combination of NSGA-II with the greedy 2-opt converges to a subset of
   the optimal front.
 - **The 3-objective instances never stop**: KC30-3fl-1rl were still improving at generation 100,000
-  with P = 65536, having reached 99.57 % of the reference hypervolume. Going from 5000 to 100,000
-  generations added 0.24 points, measured on the trace curves. There the number of generations is a
+  with P = 65536, having reached 99.70 % of the reference hypervolume. Going from 5000 to 100,000
+  generations added 0.21 points, measured on the trace curves. There the number of generations is a
   budget decision, not a measurement.
 
 **The reference fronts are in the repository**, so the percentages can be checked and the fronts
@@ -586,12 +586,12 @@ its costs per line.
 | KC20-2fl-1uni | best known | 71 | [`KC20-2fl-1uni.KBP`](mQAPData/KC20-2fl-1uni.KBP) |
 | KC20-2fl-2uni | best known | 8 | [`KC20-2fl-2uni.KBP`](mQAPData/KC20-2fl-2uni.KBP) |
 | KC20-2fl-3uni | best known | 243 | [`KC20-2fl-3uni.KBP`](mQAPData/KC20-2fl-3uni.KBP) |
-| KC30-3fl-1rl | best known | 13,563 | [`KC30-3fl-1rl.KBP`](mQAPData/KC30-3fl-1rl.KBP) |
+| KC30-3fl-1rl | best known | 16,989 | [`KC30-3fl-1rl.KBP`](mQAPData/KC30-3fl-1rl.KBP) |
 | KC30-3fl-1uni | best known | 3448 | [`KC30-3fl-1uni.KBP`](mQAPData/KC30-3fl-1uni.KBP) |
 | KC30-3fl-2uni | best known | 821 | [`KC30-3fl-2uni.KBP`](mQAPData/KC30-3fl-2uni.KBP) |
 
 The points are those that survive the dominance filter over the union of the final fronts of every
-run and every population: 821 of 4428 on KC30-3fl-2uni, and 13,563 of 30,096 on KC30-3fl-1rl. Every
+run and every population: 821 of 4428 on KC30-3fl-2uni, and 16,989 of 39,644 on KC30-3fl-1rl. Every
 line was verified by recomputing the cost of its permutation against the instance.
 
 ### Results in the Excel workbook
