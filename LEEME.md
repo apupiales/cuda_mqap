@@ -188,6 +188,8 @@ cuda_mqap/
 ├── scripts/run_original_comparison.ps1   Comparación con la versión original, varias ejecuciones
 ├── scripts/prepare_original.py   Árbol de compilación de la versión original para una instancia
 ├── scripts/compare_versions.py   Hipervolumen, cobertura y Mann-Whitney entre dos versiones
+├── scripts/run_rate_grid.ps1     Rejilla de población x configuración del greedy, por instancia
+├── scripts/prepare_rates.py      Árbol de compilación por configuración (kGreedyRate, kGreedyPeriod)
 ├── mQAPData/               Instancias (.dat) y frentes óptimos (.PO)
 ├── reference/v0.x/         Mejores frentes conocidos (.KBP) por versión, con su summary.json
 ├── mQAPMetrics/            Scripts Node.js de métricas y gráficos 3D
@@ -619,10 +621,10 @@ anterior.
 
 - **Pestañas de instancia (KC10-\*, KC20-\*):** cada pestaña tiene dos bloques de esta versión a la
   derecha de los originales, con 10 o 20 genes y 2 objetivos por fila, y dos series en su gráfico: la
-  **verde** usa la población y las iteraciones de la pestaña, y la **roja** las mismas iteraciones
-  con P = 65536, el tope de la rama. Las dos con `--verify` OK.
-  - En las KC10 la serie verde dibuja la primera de 100 ejecuciones concurrentes; la roja, una
-    ejecución única. En las KC20, una ejecución en las dos.
+  **línea base** (verde) usa la población y las iteraciones de la pestaña, y **tope de población**
+  (roja) esas mismas iteraciones con P = 65536, el máximo de la rama. Las dos con `--verify` OK.
+  - En las KC10 la línea base dibuja la primera de 100 ejecuciones concurrentes; el tope de población,
+    una ejecución única. En las KC20, una ejecución en las dos.
   - Debajo de cada bloque hay una nota con la fecha, la rama, el comando, la semilla y el número de
     soluciones distintas.
   - KC10-2fl-2uni se ejecutó con P = 16 (la serie original usaba P = 2) y con 30 iteraciones, que es
@@ -637,7 +639,7 @@ Calidad frente al frente óptimo publicado (`.PO`). *Encontrados* cuenta cuánto
 reproduce exactamente la ejecución dibujada; la [gama](#g-gamma) es la distancia calculada igual que
 `mQAPMetrics/distance_metric_*.js` (menor es mejor):
 
-| Instancia | Puntos `.PO` | Verde: encontrados | Verde: gama | Roja: encontrados | Roja: gama |
+| Instancia | Puntos `.PO` | Línea base: encontrados | Línea base: gama | Tope: encontrados | Tope: gama |
 |---|---|---|---|---|---|
 | KC10-2fl-1rl | 58 | 38 | 4.415,64 | **43** | **231,74** |
 | KC10-2fl-1uni | 13 | 10 | **32,89** | **11** | 212,35 |
@@ -648,19 +650,19 @@ reproduce exactamente la ejecución dibujada; la [gama](#g-gamma) es la distanci
 | KC10-2fl-4rl | 53 | 21 | **8.608,65** | **24** | 10.749,13 |
 | KC10-2fl-5rl | 49 | 17 | 35.863,35 | **26** | **23.388,89** |
 
-Las instancias KC20 no tienen frente publicado; sus series rojas tienen 88, 69, 8, 227 puntos
-distintos (1rl, 1uni, 2uni y 3uni). Cada permutación graficada se comprobó en el host: su coste
-recalculado coincide con el fitness que escribió el programa, y cada frente es no dominado.
+Las instancias KC20 no tienen frente publicado; sus series de tope de población tienen 88, 69, 8,
+227 puntos distintos (1rl, 1uni, 2uni y 3uni). Cada permutación graficada se comprobó en el host: su
+coste recalculado coincide con el fitness que escribió el programa, y cada frente es no dominado.
 
 Tiempos en la RTX 2060 para las ejecuciones con P = 65536: de 13,6 a 21,6 s por pestaña KC10 y de 58
 a 65 s por pestaña KC20; 399 s las doce.
 
-**Lo que cambió el recorrido de pares.** Las series rojas publicadas el 21-09-2026 se midieron con
-el recorrido anterior, una sola pasada `r < s`. Recompilar el código actual con `kGreedyFullPairs =
-false` y repetir las ocho ejecuciones con la misma semilla devuelve exactamente las cifras que
-estaban publicadas, hasta el último decimal, así que la diferencia es del recorrido y no de ningún
-otro cambio que entrara en la rama entremedias. Para las series rojas de KC10, recorrido anterior →
-recorrido actual (en negrita el mejor de los dos):
+**Lo que cambió el recorrido de pares.** Las series de tope de población publicadas el 21-09-2026 se
+midieron con el recorrido anterior, una sola pasada `r < s`. Recompilar el código actual con
+`kGreedyFullPairs = false` y repetir las ocho ejecuciones con la misma semilla devuelve exactamente
+las cifras que estaban publicadas, hasta el último decimal, así que la diferencia es del recorrido y
+no de ningún otro cambio que entrara en la rama entremedias. Para el tope de población en KC10,
+recorrido anterior → recorrido actual (en negrita el mejor de los dos):
 
 | Instancia | Óptimos encontrados | Gama de la ejecución | Media de 100 ejecuciones |
 |---|---|---|---|
@@ -687,19 +689,19 @@ frentes más pequeños. En KC10-2fl-1rl se ve en una sola fila: la gama baja de 
 vez encuentra tres puntos óptimos menos.
 
 En KC20 el efecto va al contrario, y es el caso que decidió el valor por defecto: las cuatro series
-rojas pasan de 86, 68, 8, 212 puntos distintos a 88, 69, 8, 227. Ver [Calidad frente al Greedy 2-opt
-original](#quality-vs-original).
+de tope de población pasan de 86, 68, 8, 212 puntos distintos a 88, 69, 8, 227. Ver [Calidad frente
+al Greedy 2-opt original](#quality-vs-original).
 
-**Distance Metric.** Las columnas F-G de la primera tabla (media y desviación típica de la serie
-verde), las H-I (las de la roja) y las columnas H e I de la segunda tabla contienen la distancia
-gama de esta versión, medida con el mismo protocolo que las columnas originales: **100 ejecuciones
-por instancia KC10** con las iteraciones de su pestaña, `--seed 20260921`, y la distancia calculada
-igual que `mQAPMetrics/distance_metric_*.js` (por ejecución, la media sobre sus permutaciones únicas
-de la distancia al punto más cercano del frente `.PO`; después, media y desviación típica entre
-ejecuciones), truncada a dos decimales como las celdas que ya estaban. La nota de A11 recoge el
-comando. Media / desviación típica:
+**Distance Metric.** Las columnas F-G de la primera tabla (media y desviación típica de la línea
+base), las H-I (las del tope de población) y las columnas H e I de la segunda tabla contienen la
+distancia gama de esta versión, medida con el mismo protocolo que las columnas originales: **100
+ejecuciones por instancia KC10** con las iteraciones de su pestaña, `--seed 20260921`, y la
+distancia calculada igual que `mQAPMetrics/distance_metric_*.js` (por ejecución, la media sobre sus
+permutaciones únicas de la distancia al punto más cercano del frente `.PO`; después, media y
+desviación típica entre ejecuciones), truncada a dos decimales como las celdas que ya estaban. La
+nota de A11 recoge el comando. Media / desviación típica:
 
-| Instancia | Verde (población de la pestaña) | Roja (P = 65536) |
+| Instancia | Línea base (población de la pestaña) | Tope de población (P = 65536) |
 |---|---|---|
 | KC10-2fl-1uni | 42,53 / 52,67 | 97,78 / 27,89 |
 | KC10-2fl-1rl | 1.223,20 / 1.598,49 | 72,22 / 296,75 |
@@ -1091,7 +1093,7 @@ mejora la cobertura en las cinco poblaciones medidas de KC20-2fl-1uni, KC20-2fl-
 = 4096 y se queda algo por detrás a partir de P = 16384. Ver [Calidad frente al Greedy 2-opt
 original](#quality-vs-original).
 
-La serie roja de `comparative_results_kcX_datasets.xlsx` muestra el mismo efecto con el tope de la rama,
+La serie de tope de población de `comparative_results_kcX_datasets.xlsx` muestra el mismo efecto con
 P = 65536, en las doce instancias del libro: ver
 [Resultados en el libro de Excel](#resultados-en-el-libro-de-excel). Cuánta búsqueda local conviene
 entonces es lo que mide el apartado siguiente.

@@ -186,6 +186,8 @@ cuda_mqap/
 ├── scripts/run_original_comparison.ps1   Comparison against the original version, many runs each
 ├── scripts/prepare_original.py   Build tree of the original version for one instance
 ├── scripts/compare_versions.py   Hypervolume, coverage and Mann-Whitney between two versions
+├── scripts/run_rate_grid.ps1     Grid of population x greedy configuration, per instance
+├── scripts/prepare_rates.py      Build tree per greedy configuration (kGreedyRate, kGreedyPeriod)
 ├── mQAPData/               Instances (.dat) and optimal fronts (.PO)
 ├── reference/v0.x/         Best known fronts (.KBP) by version, with their summary.json
 ├── mQAPMetrics/            Node.js metric and 3D plot scripts
@@ -612,10 +614,10 @@ the KC20 ones). No figure of the workbook is left from the previous traversal.
 
 - **Instance tabs (KC10-\*, KC20-\*):** each tab has two blocks of this version to the right of the
   original ones, with 10 or 20 genes and 2 objectives per row, and two series in its chart: the
-  **green** one uses the population and iterations of the tab, and the **red** one the same
-  iterations with P = 65536, the cap of the branch. Both with `--verify` OK.
-  - On KC10 the green series plots the first of 100 concurrent runs and the red one a single run. On
-    KC20, one run in both.
+  **baseline** (green) uses the population and iterations of the tab, and **population cap** (red)
+  those same iterations with P = 65536, the maximum of the branch. Both with `--verify` OK.
+  - On KC10 the baseline plots the first of 100 concurrent runs and the population cap a single run.
+    On KC20, one run in both.
   - Under each block there is a note with the date, the branch, the command, the seed and the number
     of distinct solutions.
   - KC10-2fl-2uni ran with P = 16 (the original series used P = 2) and 30 iterations, which is what
@@ -630,7 +632,7 @@ Quality against the published optimal front (`.PO`). *Found* counts how many poi
 the plotted run reproduces exactly; [gamma](#g-gamma) is the distance computed as
 `mQAPMetrics/distance_metric_*.js` does (lower is better):
 
-| Instance | `.PO` points | Green: found | Green: gamma | Red: found | Red: gamma |
+| Instance | `.PO` points | Baseline: found | Baseline: gamma | Cap: found | Cap: gamma |
 |---|---|---|---|---|---|
 | KC10-2fl-1rl | 58 | 38 | 4,415.64 | **43** | **231.74** |
 | KC10-2fl-1uni | 13 | 10 | **32.89** | **11** | 212.35 |
@@ -641,19 +643,19 @@ the plotted run reproduces exactly; [gamma](#g-gamma) is the distance computed a
 | KC10-2fl-4rl | 53 | 21 | **8,608.65** | **24** | 10,749.13 |
 | KC10-2fl-5rl | 49 | 17 | 35,863.35 | **26** | **23,388.89** |
 
-The KC20 instances have no published front; their red series hold 88, 69, 8, 227 distinct points
-(1rl, 1uni, 2uni and 3uni). Every plotted permutation was checked on the host: its recomputed cost
-matches the fitness the program wrote, and every front is non-dominated.
+The KC20 instances have no published front; their population-cap series hold 88, 69, 8, 227 distinct
+points (1rl, 1uni, 2uni and 3uni). Every plotted permutation was checked on the host: its recomputed
+cost matches the fitness the program wrote, and every front is non-dominated.
 
 Times on the RTX 2060 for the runs with P = 65536: 13.6 to 21.6 s per KC10 tab and 58 to 65 s per
 KC20 tab; 399 s for the twelve.
 
-**What the pair traversal changed.** The red series published on 2026-09-21 were measured with the
-previous traversal, a single pass over `r < s`. Rebuilding the current code with `kGreedyFullPairs =
-false` and repeating the eight runs with the same seed gives exactly the figures that were
-published, to the last decimal, so the difference comes from the traversal and from nothing else
-that landed on the branch in between. For the red series of KC10, previous traversal → current one
-(the better of the two in bold):
+**What the pair traversal changed.** The population-cap series published on 2026-09-21 were measured
+with the previous traversal, a single pass over `r < s`. Rebuilding the current code with
+`kGreedyFullPairs = false` and repeating the eight runs with the same seed gives exactly the figures
+that were published, to the last decimal, so the difference comes from the traversal and from
+nothing else that landed on the branch in between. For the population cap on KC10, previous
+traversal → current one (the better of the two in bold):
 
 | Instance | Optimal points found | Gamma of the run | Mean of 100 runs |
 |---|---|---|---|
@@ -679,20 +681,20 @@ instances with a large population the population loses diversity and ends on sma
 KC10-2fl-1rl it shows in a single row: gamma falls from 568.78 to 231.74 while finding three optimal
 points fewer.
 
-On KC20 the effect goes the other way, and that is the case that decided the default: the four red
-series go from 86, 68, 8, 212 distinct points to 88, 69, 8, 227. See [Quality versus the original
-Greedy 2-opt](#quality-vs-original).
+On KC20 the effect goes the other way, and that is the case that decided the default: the four
+population-cap series go from 86, 68, 8, 212 distinct points to 88, 69, 8, 227. See [Quality versus
+the original Greedy 2-opt](#quality-vs-original).
 
-**Distance Metric.** Columns F-G of the first table (mean and standard deviation of the green
-series), H-I (those of the red one) and columns H and I of the second table hold the gamma distance
-of this version, measured with the same protocol as the original columns: **100 runs per KC10
-instance** with the iterations of its tab, `--seed 20260921`, and the distance computed as
+**Distance Metric.** Columns F-G of the first table (mean and standard deviation of the baseline
+series), H-I (those of the population cap) and columns H and I of the second table hold the gamma
+distance of this version, measured with the same protocol as the original columns: **100 runs per
+KC10 instance** with the iterations of its tab, `--seed 20260921`, and the distance computed as
 `mQAPMetrics/distance_metric_*.js` does (per run, the mean over its unique permutations of the
 distance to the nearest point of the `.PO` front; then the mean and the standard deviation over the
 runs), truncated to two decimals like the cells that were already there. The note in A11 records the
 command. Mean / standard deviation:
 
-| Instance | Green (population of the tab) | Red (P = 65536) |
+| Instance | Baseline (population of the tab) | Population cap (P = 65536) |
 |---|---|---|
 | KC10-2fl-1uni | 42.53 / 52.67 | 97.78 / 27.89 |
 | KC10-2fl-1rl | 1,223.20 / 1,598.49 | 72.22 / 296.75 |
@@ -1076,7 +1078,7 @@ KC20-2fl-3uni — for instance 100 % against 97.5 % with P = 65536 on KC20-2fl-2
 KC20-2fl-1rl it wins up to P = 4096 and falls slightly behind from P = 16384 on. See [Quality versus
 the original Greedy 2-opt](#quality-vs-original).
 
-The red series of `comparative_results_kcX_datasets.xlsx` shows the same effect at the cap of the branch,
+The population-cap series of `comparative_results_kcX_datasets.xlsx` shows the same effect at the cap
 P = 65536, on the twelve instances of the workbook: see
 [Results in the Excel workbook](#results-in-the-excel-workbook). How much local search is worth it then
 is what the next section measures.
