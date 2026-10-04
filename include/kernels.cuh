@@ -78,9 +78,12 @@ void launchReproduce(const short* genes, const unsigned int* fitness,
 
 // Adapted greedy 2-opt on rows [P, 2P) of each run with O(n) delta evaluation. Leaves the
 // improved permutations and their fitness in place. greedyType[run]: 0 = sum of all objectives,
-// k = objective k only.
+// k = objective k only. It always writes the fitness of every offspring, which is where the
+// offspring of the generation get theirs, even when greedyApplies() leaves a permutation untouched;
+// seed and generation are the arguments of that decision.
 template <int OBJ>
 void launchGreedy2Opt(short* genes, unsigned int* fitness, const int* flow, const int* dist,
-                      const int* greedyType, int population, int n, int runs);
+                      const int* greedyType, int population, int n, int runs,
+                      unsigned long long seed, int generation);
 
 } // namespace mqap

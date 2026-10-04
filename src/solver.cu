@@ -155,7 +155,8 @@ std::vector<RunResult> solveImpl(const Instance& instance, const SolverOptions& 
         launchReproduce<OBJ>(genes, fitness, nextGenes, nextFitness,
                              survivorIndex.get(), survivorRank.get(), survivorCrowding.get(),
                              rng.get(), greedyType.get(), population, n, runs);
-        launchGreedy2Opt<OBJ>(nextGenes, nextFitness, flow.get(), dist.get(), greedyType.get(), population, n, runs);
+        launchGreedy2Opt<OBJ>(nextGenes, nextFitness, flow.get(), dist.get(), greedyType.get(), population, n, runs,
+                              options.seed, iteration);
         std::swap(genes, nextGenes);
         std::swap(fitness, nextFitness);
     }

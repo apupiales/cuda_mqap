@@ -34,6 +34,7 @@
 
 #include "config.h"
 #include "device_buffer.cuh"
+#include "device_common.cuh"
 #include "instance.h"
 #include "kernels.cuh"
 #include "solver.h"
@@ -413,7 +414,10 @@ void testGreedy(int n, int population, int runs) {
     dFlow.copyFromHost(instance.flow);
     dDist.copyFromHost(instance.dist);
     dTypes.copyFromHost(types);
-    launchGreedy2Opt<OBJ>(dGenes.get(), dFitness.get(), dFlow.get(), dDist.get(), dTypes.get(), population, n, runs);
+    const unsigned long long seed = 11 * n + OBJ;
+    const int generation = 3;
+    launchGreedy2Opt<OBJ>(dGenes.get(), dFitness.get(), dFlow.get(), dDist.get(), dTypes.get(), population, n, runs,
+                          seed, generation);
     const std::vector<short> out = dGenes.toHost();
     const std::vector<unsigned int> fitness = dFitness.toHost();
 
@@ -426,8 +430,12 @@ void testGreedy(int n, int population, int runs) {
                 EXPECT(before == after, "greedy modified a survivor row");
                 continue;
             }
-            EXPECT(after == cpuGreedy(instance, before, types[r]), "greedy n=%d OBJ=%d type %d: differs from CPU",
-                   n, OBJ, types[r]);
+            // greedyApplies mirrors kGreedyRate and kGreedyPeriod: an offspring it leaves out keeps its
+            // permutation, and its fitness is written all the same.
+            const std::vector<short> expected = greedyApplies(seed, r, c - population, generation)
+                                                    ? cpuGreedy(instance, before, types[r])
+                                                    : before;
+            EXPECT(after == expected, "greedy n=%d OBJ=%d type %d: differs from CPU", n, OBJ, types[r]);
             for (int o = 0; o < OBJ; o++) {
                 EXPECT(cost(instance, after.data(), o) == fitness[row * OBJ + o], "greedy fitness mismatch");
             }

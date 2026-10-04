@@ -8,6 +8,10 @@
  * or a single objective). The effect of a swap is evaluated in O(n) with warpSwapDelta, so the
  * whole local search of all offspring of all runs is a single kernel launch.
  *
+ * kGreedyRate and kGreedyPeriod can leave part of the offspring without the improvement; the
+ * kernel writes the fitness of every one of them in any case, because this is where the offspring
+ * of the generation get theirs.
+ *
  * Copyright (C) 2019-2026 Andres Pupiales Arevalo <apupiales@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -39,7 +43,8 @@ namespace detail {
 template <int OBJ>
 __global__ void greedy2OptKernel(short* __restrict__ genes, unsigned int* __restrict__ fitness,
                                  const int* __restrict__ flow, const int* __restrict__ dist,
-                                 const int* __restrict__ greedyType, int population, int n) {
+                                 const int* __restrict__ greedyType, int population, int n,
+                                 unsigned long long seed, int generation) {
     extern __shared__ int smem[];
     int* sFlow = smem;                                      // OBJ * n * n
     int* sDist = sFlow + OBJ * n * n;                       // n * n
@@ -70,9 +75,14 @@ __global__ void greedy2OptKernel(short* __restrict__ genes, unsigned int* __rest
         cost[o] = warpCost(sFlow + o * n * n, sDist, p, n, lane);
     }
 
+    // The cost above is computed for every offspring, because this kernel is where the offspring of the
+    // generation get their fitness; only the improvement below is skipped. With the default settings
+    // greedyApplies() is a compile-time true and the branch disappears.
+    const bool improve = greedyApplies(seed, blockIdx.y, local, generation);
+
     // kGreedyFullPairs selects the pair traversal; both bounds are compile-time constants, so the
     // unused branch costs nothing. See its comment in config.h and the README.
-    for (int r = 0; r < n - 1; r++) {
+    for (int r = 0; improve && r < n - 1; r++) {
         for (int s = kGreedyFullPairs ? 1 : r + 1; s < n; s++) {
             if (kGreedyFullPairs && r == s) {
                 continue;
@@ -113,7 +123,8 @@ __global__ void greedy2OptKernel(short* __restrict__ genes, unsigned int* __rest
 
 template <int OBJ>
 void launchGreedy2Opt(short* genes, unsigned int* fitness, const int* flow, const int* dist,
-                      const int* greedyType, int population, int n, int runs) {
+                      const int* greedyType, int population, int n, int runs,
+                      unsigned long long seed, int generation) {
     const size_t smem = matricesSharedMemory(n, OBJ);
     static bool attributeSet = false;
     if (!attributeSet) {
@@ -123,11 +134,14 @@ void launchGreedy2Opt(short* genes, unsigned int* fitness, const int* flow, cons
         attributeSet = true;
     }
     const dim3 grid((population + kWarpsPerBlock - 1) / kWarpsPerBlock, runs);
-    detail::greedy2OptKernel<OBJ><<<grid, 32 * kWarpsPerBlock, smem>>>(genes, fitness, flow, dist, greedyType, population, n);
+    detail::greedy2OptKernel<OBJ><<<grid, 32 * kWarpsPerBlock, smem>>>(genes, fitness, flow, dist, greedyType, population, n,
+                                                                       seed, generation);
     CUDA_CHECK_KERNEL();
 }
 
-template void launchGreedy2Opt<2>(short*, unsigned int*, const int*, const int*, const int*, int, int, int);
-template void launchGreedy2Opt<3>(short*, unsigned int*, const int*, const int*, const int*, int, int, int);
+template void launchGreedy2Opt<2>(short*, unsigned int*, const int*, const int*, const int*, int, int, int,
+                                  unsigned long long, int);
+template void launchGreedy2Opt<3>(short*, unsigned int*, const int*, const int*, const int*, int, int, int,
+                                  unsigned long long, int);
 
 } // namespace mqap

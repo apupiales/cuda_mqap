@@ -61,4 +61,12 @@ constexpr float kTranspositionMutationProbability = 1.0f;
 // with P = 65536 it finds fewer of the published optimal points on six of the eight instances.
 constexpr bool kGreedyFullPairs = true;
 
+// How much of the population the greedy 2-opt improves. 1.0f and 1 are the behaviour of the original
+// version, every offspring of every generation, and are the default. Lower values trade local search for
+// diversity, which is what the small instances lose when the population is large: see the README. The
+// decision is a stateless hash of (seed, run, offspring, generation), so it does not consume numbers from
+// the random streams of the operators, and with kGreedyRate == 1.0f no number is drawn at all.
+constexpr float kGreedyRate = 1.0f;   // fraction of the offspring improved, in (0, 1]
+constexpr int kGreedyPeriod = 1;      // the local search runs on the generations multiple of this
+
 } // namespace mqap
