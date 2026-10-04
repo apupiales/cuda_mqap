@@ -651,6 +651,11 @@ that landed on the branch in between. For the red series of KC10, previous trave
 | KC10-2fl-4rl | 40 → 24 | 3,793.44 → 10,749.13 | 3,001.91 → 8,967.04 |
 | KC10-2fl-5rl | 39 → 26 | 2,629.04 → 23,388.89 | 3,409.13 → 17,656.55 |
 
+That binary with `kGreedyFullPairs = false` was built for this attribution alone, outside the
+repository: every figure installed in the workbook and quoted in this section uses the default
+traversal, the one of the original version (`kernel.cu`, `greedy2Opt`: `i` from 0 to n-2, `j` from 1
+to n-1 skipping `i == j`).
+
 The full traversal finds fewer optimal points on six of the eight instances and worsens the mean of
 the 100 runs on five. It is the same trade-off measured in [Effect of the population size on
 quality](#effect-of-the-population-size-on-quality): a more exhaustive local search brings the

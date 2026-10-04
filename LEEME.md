@@ -657,6 +657,11 @@ recorrido actual (en negrita el mejor de los dos):
 | KC10-2fl-4rl | 40 → 24 | 3.793,44 → 10.749,13 | 3.001,91 → 8.967,04 |
 | KC10-2fl-5rl | 39 → 26 | 2.629,04 → 23.388,89 | 3.409,13 → 17.656,55 |
 
+Ese binario con `kGreedyFullPairs = false` se compiló solo para esta atribución, fuera del
+repositorio: todas las cifras instaladas en el libro y en esta sección son con el recorrido por
+defecto, el de la versión original (`kernel.cu`, `greedy2Opt`: `i` de 0 a n-2, `j` de 1 a n-1
+saltando `i == j`).
+
 El recorrido completo encuentra menos puntos óptimos en seis de las ocho instancias y empeora la
 media de las 100 ejecuciones en cinco. Es el mismo compromiso que mide [Efecto del tamaño de
 población en la calidad](#efecto-del-tamaño-de-población-en-la-calidad): una búsqueda local más
