@@ -1,0 +1,66 @@
+{
+ "version": "v0.1",
+ "date": "2026-09-26",
+ "provenance": "Non-dominated union of every run of the convergence campaign re-run with the pair traversal of the original version (kGreedyFullPairs = true), populations 1024 to 65536, every permutation verified by recomputing its cost against the instance.",
+ "instances": {
+  "KC20-2fl-1rl": {
+   "points": 91,
+   "objectives": 2,
+   "reference_point": [
+    29204469,
+    20829021
+   ]
+  },
+  "KC20-2fl-1uni": {
+   "points": 71,
+   "objectives": 2,
+   "reference_point": [
+    1131685,
+    1036978
+   ]
+  },
+  "KC20-2fl-2uni": {
+   "points": 8,
+   "objectives": 2,
+   "reference_point": [
+    840771,
+    836259
+   ]
+  },
+  "KC20-2fl-3uni": {
+   "points": 243,
+   "objectives": 2,
+   "reference_point": [
+    1260525,
+    1139282
+   ]
+  },
+  "KC30-3fl-1rl": {
+   "points": 16989,
+   "objectives": 3,
+   "reference_point": [
+    64144723,
+    15696879,
+    46982843
+   ]
+  },
+  "KC30-3fl-1uni": {
+   "points": 3448,
+   "objectives": 3,
+   "reference_point": [
+    2495632,
+    2356645,
+    2291825
+   ]
+  },
+  "KC30-3fl-2uni": {
+   "points": 821,
+   "objectives": 3,
+   "reference_point": [
+    2075874,
+    2091527,
+    2141050
+   ]
+  }
+ }
+}

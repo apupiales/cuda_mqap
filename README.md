@@ -187,6 +187,7 @@ cuda_mqap/
 ├── scripts/prepare_original.py   Build tree of the original version for one instance
 ├── scripts/compare_versions.py   Hypervolume, coverage and Mann-Whitney between two versions
 ├── mQAPData/               Instances (.dat) and optimal fronts (.PO)
+├── reference/v0.x/         Best known fronts (.KBP) by version, with their summary.json
 ├── mQAPMetrics/            Node.js metric and 3D plot scripts
 ├── comparative_results_kcX_datasets.xlsx   Comparative results
 ├── cuda_mqap.slnx, cuda_mqap.vcxproj, test_kernels.vcxproj   Visual Studio solution and projects
@@ -568,21 +569,35 @@ What the campaign says:
   generations added 0.21 points, measured on the trace curves. There the number of generations is a
   budget decision, not a measurement.
 
-**The reference fronts are in the repository**, so the percentages can be checked and the fronts
-plotted or compared. On KC10 it is the published optimum; on KC20 and KC30 it is the best front this
-campaign knows, written as a `.KBP` file in the same format as a `.PO`: a 1-based permutation and
-its costs per line.
+<a id="reference-versions"></a>
 
-| Instance | Reference front | Points | File |
+**The reference fronts are in the repository, by version**, so the percentages can be checked and the
+fronts plotted or compared. On KC10 it is the published optimum, `mQAPData/<instance>.PO`, third-party
+data that is never modified. On KC20 and KC30 it is the best front this project knows, written as a
+`.KBP` file in the same format as a `.PO` — a 1-based permutation and its costs per line — and kept in
+`reference/<version>/`, one directory per version.
+
+**Every table of this document is measured against `reference/v0.1`**, the version the campaign produced.
+A solution that no front of a version dominates is always added, which does not invalidate what was
+published against an earlier version: it says the best known front improved. A published version is never
+edited; the addition creates the next directory. The rule and the command are in
+[`reference/README.md`](reference/README.md).
+
+| Instance | Reference front | Points in `v0.1` | Points in `v0.2` |
 |---|---|---|---|
-| KC10-2fl-* | published optimum | 1 to 130 | [`mQAPData/KC10-2fl-*.PO`](mQAPData/) |
-| KC20-2fl-1rl | best known | 91 | [`KC20-2fl-1rl.KBP`](mQAPData/KC20-2fl-1rl.KBP) |
-| KC20-2fl-1uni | best known | 71 | [`KC20-2fl-1uni.KBP`](mQAPData/KC20-2fl-1uni.KBP) |
-| KC20-2fl-2uni | best known | 8 | [`KC20-2fl-2uni.KBP`](mQAPData/KC20-2fl-2uni.KBP) |
-| KC20-2fl-3uni | best known | 243 | [`KC20-2fl-3uni.KBP`](mQAPData/KC20-2fl-3uni.KBP) |
-| KC30-3fl-1rl | best known | 16,989 | [`KC30-3fl-1rl.KBP`](mQAPData/KC30-3fl-1rl.KBP) |
-| KC30-3fl-1uni | best known | 3448 | [`KC30-3fl-1uni.KBP`](mQAPData/KC30-3fl-1uni.KBP) |
-| KC30-3fl-2uni | best known | 821 | [`KC30-3fl-2uni.KBP`](mQAPData/KC30-3fl-2uni.KBP) |
+| KC10-2fl-* | published optimum | 1 to 130, in [`mQAPData/*.PO`](mQAPData/) | the same, never versioned |
+| KC20-2fl-1rl | best known | [91](reference/v0.1/KC20-2fl-1rl.KBP) | [94](reference/v0.2/KC20-2fl-1rl.KBP) |
+| KC20-2fl-1uni | best known | [71](reference/v0.1/KC20-2fl-1uni.KBP) | [71](reference/v0.2/KC20-2fl-1uni.KBP) |
+| KC20-2fl-2uni | best known | [8](reference/v0.1/KC20-2fl-2uni.KBP) | [8](reference/v0.2/KC20-2fl-2uni.KBP) |
+| KC20-2fl-3uni | best known | [243](reference/v0.1/KC20-2fl-3uni.KBP) | [241](reference/v0.2/KC20-2fl-3uni.KBP) |
+| KC30-3fl-1rl | best known | [16,989](reference/v0.1/KC30-3fl-1rl.KBP) | [16,989](reference/v0.2/KC30-3fl-1rl.KBP) |
+| KC30-3fl-1uni | best known | [3448](reference/v0.1/KC30-3fl-1uni.KBP) | [3448](reference/v0.2/KC30-3fl-1uni.KBP) |
+| KC30-3fl-2uni | best known | [821](reference/v0.1/KC30-3fl-2uni.KBP) | [821](reference/v0.2/KC30-3fl-2uni.KBP) |
+
+`v0.2` adds the seven solutions the greedy-rate experiment found on KC20 with P = 65536. On KC20-2fl-1rl
+they are 3 more points; on KC20-2fl-3uni the 4 new ones dominate 6 of the old, so the front goes from 243
+to 241. A hypervolume share published against `v0.1` rescales by 0.9999825 and 0.9999194 respectively, and
+a coverage share by 0.96809 and 1.00830: that is how to read a `v0.1` table next to a `v0.2` one.
 
 The points are those that survive the dominance filter over the union of the final fronts of every
 run and every population: 821 of 4428 on KC30-3fl-2uni, and 16,989 of 39,644 on KC30-3fl-1rl. Every
@@ -826,7 +841,7 @@ That is the argument of this branch: the population of the original is the point
 search does almost all of the work and the two versions tie; what separates them are the populations
 the original cannot run.
 
-Everything is measured against the `.KBP` files in the repository, the same ones the campaign was
+Everything is measured against `reference/v0.1`, the same fronts the campaign was
 published against, so the two tables stay comparable. Those configurations found 2 solutions those
 fronts do not dominate, 1 on KC20-2fl-1rl and 1 on KC20-2fl-3uni, so the fronts in the repository
 are a lower bound: `scripts/compare_versions.py --update-reference` rebuilds them, but that would
@@ -1133,7 +1148,8 @@ KC10 instance, so the population alone already covers the space and the exhausti
 takes diversity away from it; with P = 64 it covers 0.002 % and the local search is what pushes.
 
 **On KC20 at P = 64, lowering the rate breaks the equivalence with the original version.** Mean
-coverage of the `.KBP` reference front, 30 runs per configuration, p against the original:
+coverage of the reference front [`reference/v0.1`](#reference-versions), 30 runs per configuration,
+p against the original:
 
 | Instance | Original | 100 % | 50 % | 25 % | 10 % |
 |---|---|---|---|---|---|
@@ -1168,10 +1184,10 @@ small instance, the measured route is the population at the cap and the local se
 of the offspring: with P = 65536 and 10 %, the KC10 instances come out complete. That is what the
 constant is there for, and nothing else has to change.
 
-> The runs on KC20 with P = 65536 found 7 solutions that the current reference front of KC20-2fl-1rl
-> and KC20-2fl-3uni does not dominate (6 at 50 % and 1 at 100 %), so those `.KBP` files are now
-> known to be incomplete. Updating them would move the percentages of every table that uses them, so
-> it is left pending a rerun of the whole campaign under the same criterion.
+> The runs on KC20 with P = 65536 found 7 solutions the reference front of KC20-2fl-1rl and
+> KC20-2fl-3uni did not dominate (6 at 50 % and 1 at 100 %), and they are added in `reference/v0.2`.
+> The figures of this section are against `reference/v0.1`; the factor that converts one into the
+> other is in [Reference fronts](#reference-versions).
 
 ### How to compute the limit for another GPU
 

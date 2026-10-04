@@ -1,0 +1,47 @@
+{
+ "version": "v0.2",
+ "date": "2026-10-04",
+ "provenance": "Copy of v0.1 with every solution found afterwards that it does not dominate. Every addition is verified by recomputing the cost of its permutation against the instance.",
+ "added": [
+  {
+   "instance": "KC20-2fl-1rl",
+   "from": "v0.1",
+   "points": 94,
+   "found_by": [
+    "P=65536, greedy 100 %",
+    "P=65536, greedy 50 %"
+   ]
+  },
+  {
+   "instance": "KC20-2fl-3uni",
+   "from": "v0.2",
+   "points": 241,
+   "found_by": [
+    "P=65536, greedy 50 %"
+   ]
+  }
+ ],
+ "instances": {
+  "KC20-2fl-1rl": {
+   "points": 94
+  },
+  "KC20-2fl-1uni": {
+   "points": 71
+  },
+  "KC20-2fl-2uni": {
+   "points": 8
+  },
+  "KC20-2fl-3uni": {
+   "points": 241
+  },
+  "KC30-3fl-1rl": {
+   "points": 16989
+  },
+  "KC30-3fl-1uni": {
+   "points": 3448
+  },
+  "KC30-3fl-2uni": {
+   "points": 821
+  }
+ }
+}

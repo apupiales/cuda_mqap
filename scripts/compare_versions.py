@@ -21,11 +21,16 @@ populations and runs are comparable:
                configurations once the hypervolume is close to 100 %.
 
 The reference front is `mQAPData/<instance>.PO` when the instance has a published optimum, and
-`mQAPData/<instance>.KBP`, the best front known to this project, otherwise. A run can contain a solution
-the reference front does not dominate; those are reported, and with `--update-reference` they are added
-to the .KBP file, since a reference front is the best front known whoever found it. Every addition is
-verified by recomputing the cost of its permutation against the instance, and adding points changes the
-figures published against that file, which the script prints as the factors they rescale by.
+`reference/<version>/<instance>.KBP`, the best front known to this project, otherwise. The version is the
+latest directory of `reference/` unless `--reference` names another one, and the report says which one was
+used, because a share of hypervolume or of coverage only means something next to the front it came from.
+
+A run can contain a solution the reference front does not dominate; those are reported, and with
+`--update-reference` they are added, since a reference front is the best front known whoever found it.
+Every addition is verified by recomputing the cost of its permutation against the instance. A published
+version is never edited: the addition goes into the next version directory, which starts as a copy of the
+one it came from, and the script prints the factors that convert a share published against the previous
+version into the new scale. See reference/README.md.
 
 The difference against the baseline is tested with the Mann-Whitney U test (two-sided), which compares
 distributions without assuming normality, as is usual when comparing stochastic optimizers. It needs
@@ -35,10 +40,13 @@ Copyright (C) 2019-2026 Andres Pupiales Arevalo <apupiales@gmail.com>
 SPDX-License-Identifier: GPL-3.0-or-later
 """
 import argparse
+import datetime
 import glob
+import json
 import math
 import os
 import re
+import shutil
 import statistics
 import sys
 
@@ -132,12 +140,102 @@ def permutations_of(key, n):
     return out
 
 
-def reference_path(instance):
-    for extension in ('.PO', '.KBP'):
-        path = os.path.join(ROOT, 'mQAPData', instance + extension)
-        if os.path.exists(path):
-            return path
-    sys.exit('%s: no reference front (.PO or .KBP) in mQAPData' % instance)
+def version_key(name):
+    """Sorts v0.2 before v0.10, which a plain string sort does not."""
+    return [int(piece) for piece in re.findall(r'\d+', name)] or [0]
+
+
+def reference_versions():
+    """The reference version directories, oldest first."""
+    root = os.path.join(ROOT, 'reference')
+    if not os.path.isdir(root):
+        return []
+    found = [name for name in os.listdir(root)
+             if name.startswith('v') and os.path.isdir(os.path.join(root, name))]
+    return sorted(found, key=version_key)
+
+
+def next_version():
+    """The name after the latest one: v0.2 -> v0.3, and v0.1 when there is none."""
+    existing = reference_versions()
+    if not existing:
+        return 'v0.1'
+    pieces = version_key(existing[-1])
+    pieces[-1] += 1
+    return 'v' + '.'.join(str(piece) for piece in pieces)
+
+
+def write_version(source, instance, front, permutations, contributors, into=None):
+    """Writes a reference version: the updated instance, a copy of the rest, and its summary.
+
+    A published version is never edited, so by default this creates the next directory and refuses to
+    touch one that already exists. `into` names an open version instead, which is how the several
+    instances of one experiment land in the same version. Returns its name.
+    """
+    name = into or next_version()
+    target = os.path.join(ROOT, 'reference', name)
+    if into:
+        if not os.path.isdir(target):
+            sys.exit('reference/%s does not exist; drop --into to create the next version' % name)
+    elif os.path.isdir(target):
+        sys.exit('reference/%s already exists; pass --into %s to add to it' % (name, name))
+    else:
+        os.makedirs(target)
+    if source:
+        for existing in sorted(os.listdir(os.path.join(ROOT, 'reference', source))):
+            if (existing.endswith('.KBP') and existing != instance + '.KBP'
+                    and not os.path.exists(os.path.join(target, existing))):
+                shutil.copyfile(os.path.join(ROOT, 'reference', source, existing),
+                                os.path.join(target, existing))
+    with open(os.path.join(target, instance + '.KBP'), 'w', encoding='utf-8', newline='\n') as handle:
+        for costs in sorted(front):
+            handle.write('%s %s\n' % (' '.join(str(v) for v in permutations[costs]),
+                                      ' '.join(str(v) for v in costs)))
+    # Several instances of one experiment write into the same version, so the record accumulates.
+    path = os.path.join(target, 'summary.json')
+    summary = json.load(open(path, encoding='utf-8')) if os.path.exists(path) else {
+        'version': name,
+        'date': datetime.date.today().isoformat(),
+        'provenance': 'Copy of %s with every solution found afterwards that it does not dominate. Every '
+                      'addition is verified by recomputing the cost of its permutation against the '
+                      'instance.' % (source or 'nothing'),
+        'added': [],
+    }
+    summary['added'].append({
+        'instance': instance,
+        'from': source,
+        'points': len(front),
+        'found_by': sorted(contributors),
+    })
+    summary['instances'] = {}
+    for existing in sorted(os.listdir(target)):
+        if not existing.endswith('.KBP'):
+            continue
+        points = [tuple(int(v) for v in line.split())
+                  for line in open(os.path.join(target, existing), encoding='utf-8') if line.split()]
+        summary['instances'][existing[:-len('.KBP')]] = {'points': len(points)}
+    with open(path, 'w', encoding='utf-8', newline='\n') as handle:
+        json.dump(summary, handle, indent=1, ensure_ascii=False)
+        handle.write('\n')
+    return name
+
+
+def reference_path(instance, version=None):
+    """The published optimum when the instance has one, otherwise the .KBP of a reference version."""
+    published = os.path.join(ROOT, 'mQAPData', instance + '.PO')
+    if os.path.exists(published):
+        return published
+    available = reference_versions()
+    if version is None:
+        if not available:
+            sys.exit('%s: no reference front: neither mQAPData/%s.PO nor any reference/v* directory'
+                     % (instance, instance))
+        version = available[-1]
+    path = os.path.join(ROOT, 'reference', version, instance + '.KBP')
+    if os.path.exists(path):
+        return path
+    sys.exit('%s: no reference front: neither mQAPData/%s.PO nor reference/%s/%s.KBP'
+             % (instance, instance, version, instance))
 
 
 def main():
@@ -145,8 +243,16 @@ def main():
     parser.add_argument('instance', help='instance name, e.g. KC20-2fl-1uni')
     parser.add_argument('groups', nargs='+', metavar='LABEL=PATH',
                         help='result file per version or configuration; the first one is the baseline')
+    parser.add_argument('--reference', metavar='VERSION',
+                        help='reference version to measure against, such as v0.1 (default: the latest '
+                             'directory of reference/)')
+    parser.add_argument('--into', metavar='VERSION',
+                        help='with --update-reference, the version directory to write into, which must '
+                             'already exist; this is how several instances of one experiment share a '
+                             'version (default: create the next one)')
     parser.add_argument('--update-reference', action='store_true',
-                        help='add to the .KBP file the solutions it does not dominate (never to a .PO)')
+                        help='write the next reference version with the solutions this one does not '
+                             'dominate (never for an instance with a published .PO)')
     args = parser.parse_args()
 
     versions = []
@@ -160,7 +266,9 @@ def main():
             sys.exit('%s: no file matches %s' % (label, pattern))
         versions.append((label, read_runs(found[0]), found[0]))
 
-    path = reference_path(args.instance)
+    path = reference_path(args.instance, args.reference)
+    shown = os.path.relpath(path, ROOT).replace(os.sep, '/')
+    source = os.path.basename(os.path.dirname(path)) if path.endswith('.KBP') else None
     front = read_front(path)
     known = {costs: permutation for permutation, costs in front}
     n, _objectives, distances, flows = load_instance(os.path.join(ROOT, 'mQAPData', args.instance + '.dat'))
@@ -187,7 +295,7 @@ def main():
     total = hypervolume(minimal(sorted(reference)), point)
 
     print('instance %s, reference front %s with %d points, reference point %s'
-          % (args.instance, os.path.basename(path), len(reference), point))
+          % (args.instance, shown, len(reference), point))
     if additions:
         by_label = {}
         for _costs, (_permutation, label) in additions.items():
@@ -196,17 +304,15 @@ def main():
               % (len(additions), ', '.join('%s: %d' % kv for kv in sorted(by_label.items()))))
         if update:
             removed = len([c for c in known if c not in reference])
-            with open(path, 'w', encoding='utf-8', newline='\n') as f:
-                for costs in sorted(reference):
-                    f.write('%s %s\n' % (' '.join(str(v) for v in union[costs]),
-                                         ' '.join(str(v) for v in costs)))
+            name = write_version(source, args.instance, reference, union,
+                                 {label for _c, (_p, label) in additions.items()}, args.into)
             old_total = hypervolume(minimal(sorted(known)), point)
-            print('  %s updated: %d -> %d points (%d removed). A hypervolume share published against the '
-                  'previous file rescales by %.7f and a coverage share by %.5f'
-                  % (os.path.basename(path), len(known), len(reference), removed,
+            print('  reference/%s/%s.KBP written: %d -> %d points (%d removed). A hypervolume share '
+                  'published against %s rescales by %.7f and a coverage share by %.5f'
+                  % (name, args.instance, len(known), len(reference), removed, source,
                      old_total / total, float(len(known)) / len(reference)))
         elif path.endswith('.KBP'):
-            print('  pass --update-reference to add them to %s' % os.path.basename(path))
+            print('  pass --update-reference to write the next reference version with them')
 
     measured = []
     for label, runs, _path in versions:
