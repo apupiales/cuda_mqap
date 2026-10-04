@@ -435,12 +435,6 @@ población y las iteraciones que usaba cada instancia en la versión original:
 
 ### Cuántas generaciones necesita cada instancia (`--trace`)
 
-> **Las series del libro de Excel siguen medidas con el recorrido de pares anterior**, el de una
-> sola pasada `r < s`, anterior a que el de la versión original pasara a ser el comportamiento por
-> defecto (ver [B8 retirado](#errores-corregidos)). Todo lo demás de esta sección —la campaña de
-> convergencia, los frentes de referencia `.KBP` y las tablas de [Rendimiento](#rendimiento)— se
-> volvió a medir con el recorrido actual.
-
 `--trace FICHERO` escribe un CSV con `run,generation,f1,f2[,f3]`: las soluciones no dominadas distintas
 de **cada** generación de cada ejecución, desde la supervivencia de la población inicial (generación 0)
 hasta el frente final. Copia los supervivientes al host una vez por generación, así que sincroniza con el
@@ -601,98 +595,135 @@ KC30-3fl-1rl. Cada línea se verificó recalculando el coste de su permutación 
 
 ### Resultados en el libro de Excel
 
-El 2026-09-19 se añadieron a `comparative_results_kcX_datasets.xlsx` los resultados de esta versión:
+El 2026-10-03 se volvieron a medir en `comparative_results_kcX_datasets.xlsx` las dos series de esta
+versión, con el recorrido de pares de la versión original, que es ahora el comportamiento por
+defecto de la rama (`kGreedyFullPairs = true`: 73 intentos de intercambio por individuo en las
+instancias KC10 y 343 en las KC20). Ya no queda ninguna cifra del libro medida con el recorrido
+anterior.
 
-- **Pestañas de instancia (KC10-\*, KC20-\*):** cada pestaña tiene un bloque nuevo a la derecha de los
-  existentes, con 20 o 10 genes y 2 objetivos por fila, y una serie **verde** en su gráfico:
-  *"CUDA NSGA-II Paralelo + Greedy 2opt, N iteraciones (optimizado con claude)"*. Se usaron la población y
-  las iteraciones de cada pestaña, con `--verify`.
-  - En las KC10 se muestra la primera de 100 ejecuciones concurrentes; en las KC20, una única ejecución.
-  - Debajo de cada bloque hay una nota con el comando, la semilla y el tiempo.
-  - KC10-2fl-2uni se ejecutó con P = 16 (las series originales usaron P = 2).
-- **Distance Metric:** columnas F–G (media y desviación típica) y columna H de la segunda tabla, con la
-  [distancia gama](#g-gamma) de esta versión sobre 100 ejecuciones por instancia KC10. Se calcula igual que
-  `mQAPMetrics/distance_metric_*.js` y se trunca a 2 decimales, como los valores existentes.
+- **Pestañas de instancia (KC10-\*, KC20-\*):** cada pestaña tiene dos bloques de esta versión a la
+  derecha de los originales, con 10 o 20 genes y 2 objetivos por fila, y dos series en su gráfico: la
+  **verde** usa la población y las iteraciones de la pestaña, y la **roja** las mismas iteraciones
+  con P = 65536, el tope de la rama. Las dos con `--verify` OK.
+  - En las KC10 la serie verde dibuja la primera de 100 ejecuciones concurrentes; la roja, una
+    ejecución única. En las KC20, una ejecución en las dos.
+  - Debajo de cada bloque hay una nota con la fecha, la rama, el comando, la semilla y el número de
+    soluciones distintas.
+  - KC10-2fl-2uni se ejecutó con P = 16 (la serie original usaba P = 2) y con 30 iteraciones, que es
+    lo que dicen todas las series de su pestaña, aunque su antiguo fichero de *settings* diga 70.
 
-**Población máxima de la rama (2026-09-21).** Los mismos 12 experimentos se repitieron con
-`--population 65536`, el tope de esta rama, manteniendo las iteraciones de cada pestaña (70, 30 o 25 en
-KC10; 300 en KC20), una ejecución, semilla 20260920 y `--verify` OK. Cada pestaña tiene un segundo bloque
-nuevo y una serie **roja** en su gráfico: *"CUDA NSGA-II Paralelo + Greedy 2opt, N iteraciones (optimizado
-con claude, poblacion 65536)"*.
+Con P = 65536 la población final entera es no dominada, así que el frente que escribe el programa
+tiene 65 536 filas, de las que solo 1 a 227 son soluciones distintas. El bloque y la serie guardan
+las distintas: desde que el programa no repite soluciones en la salida, el frente que escribe ya no
+tiene filas repetidas, y las repeticiones dibujarían los mismos puntos.
 
-Con esa población toda la población final es no dominada, así que el frente que escribe el programa tiene
-65 536 filas, de las cuales solo entre 1 y 212 son soluciones distintas; el bloque y la serie guardan las
-distintas, porque las repeticiones dibujarían los mismos puntos. La nota bajo cada bloque recoge el
-comando, la semilla, el número de puntos distintos y el tiempo de la ejecución.
-
-Calidad frente al frente óptimo publicado (`.PO`), junto a la serie verde de la misma rama. *Encontrados*
-cuenta cuántos puntos del óptimo reproduce exactamente la ejecución; la gama es la distancia calculada
-igual que `mQAPMetrics/distance_metric_*.js` (menor es mejor):
+Calidad frente al frente óptimo publicado (`.PO`). *Encontrados* cuenta cuántos puntos del óptimo
+reproduce exactamente la ejecución dibujada; la [gama](#g-gamma) es la distancia calculada igual que
+`mQAPMetrics/distance_metric_*.js` (menor es mejor):
 
 | Instancia | Puntos `.PO` | Verde: encontrados | Verde: gama | Roja: encontrados | Roja: gama |
 |---|---|---|---|---|---|
-| KC10-2fl-1rl | 58 | 38 | 685,46 | **46** | **568,78** |
-| KC10-2fl-1uni | 13 | 7 | 241,93 | **12** | **0,00** |
-| KC10-2fl-2rl | 15 | 12 | 0,00 | **15** | 0,00 |
+| KC10-2fl-1rl | 58 | 38 | 4.415,64 | **43** | **231,74** |
+| KC10-2fl-1uni | 13 | 10 | **32,89** | **11** | 212,35 |
+| KC10-2fl-2rl | 15 | 13 | 0,00 | **15** | 0,00 |
 | KC10-2fl-2uni | 1 | 1 | 0,00 | 1 | 0,00 |
-| KC10-2fl-3rl | 55 | 28 | 24 466,49 | **40** | **17 757,94** |
-| KC10-2fl-3uni | 130 | 66 | 420,75 | **114** | **11,47** |
-| KC10-2fl-4rl | 53 | 29 | 7992,15 | **40** | **3793,44** |
-| KC10-2fl-5rl | 49 | 26 | 24 552,85 | **39** | **2629,05** |
+| KC10-2fl-3rl | 55 | 25 | 25.093,97 | **31** | **18.809,27** |
+| KC10-2fl-3uni | 130 | 61 | 328,38 | **93** | **76,71** |
+| KC10-2fl-4rl | 53 | 21 | **8.608,65** | **24** | 10.749,13 |
+| KC10-2fl-5rl | 49 | 17 | 35.863,35 | **26** | **23.388,89** |
 
-Las instancias KC20 no tienen frente publicado; sus series rojas tienen 86, 68, 8 y 212 puntos distintos
-(1rl, 1uni, 2uni y 3uni). Cada permutación graficada se comprobó en el host: su coste recalculado coincide
-con el fitness que escribió el programa, y cada frente es no dominado.
+Las instancias KC20 no tienen frente publicado; sus series rojas tienen 88, 69, 8, 227 puntos
+distintos (1rl, 1uni, 2uni y 3uni). Cada permutación graficada se comprobó en el host: su coste
+recalculado coincide con el fitness que escribió el programa, y cada frente es no dominado.
 
-Tiempos en la RTX 2060: 6,6–6,8 s por pestaña KC10 de 70 generaciones y 38–39 s por pestaña KC20 de 300;
-201 s las doce.
+Tiempos en la RTX 2060 para las ejecuciones con P = 65536: de 13,6 a 21,6 s por pestaña KC10 y de 58
+a 65 s por pestaña KC20; 399 s las doce.
 
-**Distance Metric.** Las columnas H e I de la primera tabla (media y desviación típica) y la columna I de
-la segunda contienen la distancia gama de esta población, medida con el mismo protocolo que las columnas
-verdes: **100 ejecuciones por instancia KC10** con las iteraciones de su pestaña, `--seed 20260921`, y la
-distancia calculada igual que `mQAPMetrics/distance_metric_*.js` (por ejecución, la media sobre sus
-permutaciones únicas de la distancia al punto más cercano del frente `.PO`; después, media y desviación
-típica entre ejecuciones). La nota de A11 recoge el comando. Media / desviación típica, verde frente a roja:
+**Lo que cambió el recorrido de pares.** Las series rojas publicadas el 21-09-2026 se midieron con
+el recorrido anterior, una sola pasada `r < s`. Recompilar el código actual con `kGreedyFullPairs =
+false` y repetir las ocho ejecuciones con la misma semilla devuelve exactamente las cifras que
+estaban publicadas, hasta el último decimal, así que la diferencia es del recorrido y no de ningún
+otro cambio que entrara en la rama entremedias. Para las series rojas de KC10, recorrido anterior →
+recorrido actual (en negrita el mejor de los dos):
+
+| Instancia | Óptimos encontrados | Gama de la ejecución | Media de 100 ejecuciones |
+|---|---|---|---|
+| KC10-2fl-1rl | 46 → 43 | 568,78 → **231,74** | 557,92 → **72,22** |
+| KC10-2fl-1uni | 12 → 11 | 0,00 → 212,35 | 0,00 → 97,78 |
+| KC10-2fl-2rl | 15 → 15 | 0,00 → 0,00 | 0,00 → 0,00 |
+| KC10-2fl-2uni | 1 → 1 | 0,00 → 0,00 | 0,00 → 0,00 |
+| KC10-2fl-3rl | 40 → 31 | 17.757,93 → 18.809,27 | 16.132,53 → 17.895,91 |
+| KC10-2fl-3uni | 114 → 93 | 11,47 → 76,71 | 12,51 → 131,74 |
+| KC10-2fl-4rl | 40 → 24 | 3.793,44 → 10.749,13 | 3.001,91 → 8.967,04 |
+| KC10-2fl-5rl | 39 → 26 | 2.629,04 → 23.388,89 | 3.409,13 → 17.656,55 |
+
+El recorrido completo encuentra menos puntos óptimos en seis de las ocho instancias y empeora la
+media de las 100 ejecuciones en cinco. Es el mismo compromiso que mide [Efecto del tamaño de
+población en la calidad](#efecto-del-tamaño-de-población-en-la-calidad): una búsqueda local más
+exhaustiva acerca al frente las soluciones que encuentra, pero colapsa cada descendiente a su óptimo
+local, y en instancias pequeñas con población grande la población pierde diversidad y acaba en
+frentes más pequeños. En KC10-2fl-1rl se ve en una sola fila: la gama baja de 568,78 a 231,74 y a la
+vez encuentra tres puntos óptimos menos.
+
+En KC20 el efecto va al contrario, y es el caso que decidió el valor por defecto: las cuatro series
+rojas pasan de 86, 68, 8, 212 puntos distintos a 88, 69, 8, 227. Ver [Calidad frente al Greedy 2-opt
+original](#quality-vs-original).
+
+**Distance Metric.** Las columnas F-G de la primera tabla (media y desviación típica de la serie
+verde), las H-I (las de la roja) y las columnas H e I de la segunda tabla contienen la distancia
+gama de esta versión, medida con el mismo protocolo que las columnas originales: **100 ejecuciones
+por instancia KC10** con las iteraciones de su pestaña, `--seed 20260921`, y la distancia calculada
+igual que `mQAPMetrics/distance_metric_*.js` (por ejecución, la media sobre sus permutaciones únicas
+de la distancia al punto más cercano del frente `.PO`; después, media y desviación típica entre
+ejecuciones), truncada a dos decimales como las celdas que ya estaban. La nota de A11 recoge el
+comando. Media / desviación típica:
 
 | Instancia | Verde (población de la pestaña) | Roja (P = 65536) |
 |---|---|---|
-| KC10-2fl-1rl | 850,56 / 656,20 | 557,92 / 56,58 |
-| KC10-2fl-1uni | 192,02 / 342,12 | 0,00 / 0,00 |
-| KC10-2fl-2rl | 10.941,55 / 7.430,27 | 0,00 / 0,00 |
-| KC10-2fl-2uni | 532,56 / 1.806,81 | 0,00 / 0,00 |
-| KC10-2fl-3rl | 20.531,69 / 2.896,06 | 16.132,53 / 2.893,64 |
-| KC10-2fl-3uni | 376,23 / 77,04 | 12,51 / 5,86 |
-| KC10-2fl-4rl | 7.515,98 / 2.082,63 | 3.001,91 / 1.277,88 |
-| KC10-2fl-5rl | 26.891,28 / 10.070,77 | 3.409,13 / 921,20 |
+| KC10-2fl-1uni | 42,53 / 52,67 | 97,78 / 27,89 |
+| KC10-2fl-1rl | 1.223,20 / 1.598,49 | 72,22 / 296,75 |
+| KC10-2fl-2uni | 66,43 / 661,03 | 0,00 / 0,00 |
+| KC10-2fl-2rl | 3.587,60 / 4.934,85 | 0,00 / 0,00 |
+| KC10-2fl-3uni | 389,98 / 68,11 | 131,74 / 34,05 |
+| KC10-2fl-3rl | 23.512,19 / 3.791,34 | 17.895,91 / 4.235,31 |
+| KC10-2fl-4rl | 12.670,80 / 1.620,08 | 8.967,04 / 2.068,29 |
+| KC10-2fl-5rl | 28.294,55 / 9.013,65 | 17.656,55 / 3.690,52 |
 
-Una gama de 0,00 significa que **todas las soluciones encontradas en cada una de las 100 ejecuciones están
-exactamente sobre el frente óptimo publicado**, no que se haya encontrado el frente entero: la serie roja
-de KC10-2fl-1uni tiene 12 de sus 13 puntos. La ejecución que se dibuja en los gráficos es una ejecución
-única aparte, con semilla 20260920; esta tabla compara los lotes de 100 ejecuciones.
+La ejecución dibujada en los gráficos es otra, única y con semilla 20260920; esta tabla compara los
+lotes de 100 ejecuciones.
 
-**Una semilla para el lote, un flujo aleatorio por ejecución.** `--seed` no repite la misma aleatoriedad en
-todas las ejecuciones. `curand_init(seed, id, 0, ...)`, en `src/operators.cu`, da a cada uno de los
-`runs × 2P` estados su propia subsecuencia de Philox, así que la ejecución *r* saca sus números del tramo
-`[r·2P, (r+1)·2P)` y dos ejecuciones nunca comparten números: con la misma semilla, tres ejecuciones de
-P = 16 y cero generaciones ya dan tres poblaciones distintas. Lo que se repite entre ejecuciones es la
-convergencia, no la aleatoriedad. Contando los frentes distintos de las 100 ejecuciones de cada lote:
+Una gama de 0,00 significa que **todas las soluciones encontradas en cada una de las 100 ejecuciones
+están exactamente sobre el frente óptimo publicado**. Ocurre en dos instancias con P = 65536,
+KC10-2fl-2uni y KC10-2fl-2rl, y en las dos cada ejecución encuentra además el frente entero: los 15
+puntos de KC10-2fl-2rl y el único de KC10-2fl-2uni, en las 100. No es garantía de lo segundo:
+KC10-2fl-1uni llegaba a 0,00 con el recorrido anterior y ahora da 97,78, porque sus ejecuciones
+encuentran 12 o 13 soluciones distintas de las que 11 o 12 están sobre el frente de 13 puntos.
+
+**Una semilla para el lote, un flujo aleatorio por ejecución.** `--seed` no repite la misma
+aleatoriedad en todas las ejecuciones. `curand_init(seed, id, 0, ...)`, en `src/operators.cu`, da a
+cada uno de los `runs × 2P` estados su propia subsecuencia de Philox, así que la ejecución *r* saca
+sus números del tramo `[r·2P, (r+1)·2P)` y dos ejecuciones nunca comparten números: con la misma
+semilla, tres ejecuciones de P = 16 y cero generaciones ya dan tres poblaciones distintas. Lo que se
+repite entre ejecuciones es la convergencia, no la aleatoriedad. Contando los frentes distintos de
+las 100 ejecuciones con P = 65536:
 
 | Instancia | Frentes distintos / 100 | Tamaños |
 |---|---|---|
-| KC10-2fl-3uni | 60 | 113–119 puntos |
-| KC10-2fl-1rl | 21 | 47–50 puntos |
-| KC10-2fl-1uni | 2 | 12 y 13 puntos |
+| KC10-2fl-3uni | 96 | 106–116 puntos |
+| KC10-2fl-1rl | 31 | 43–46 puntos |
+| KC10-2fl-1uni | 4 | 12–13 puntos |
 
-En KC10-2fl-1rl, 64 de las 100 ejecuciones acaban exactamente en el mismo frente de 47 puntos, porque con
-P = 65536 la búsqueda converge a él; en KC10-2fl-1uni uno de los dos frentes tiene 12 de los 13 puntos
-óptimos publicados y el otro los 13. Por eso también la desviación típica vale 0,00 en 1uni, 2rl y 2uni:
-no porque las ejecuciones sean iguales, sino porque en todas ellas cada solución encontrada está sobre el
-frente óptimo, de modo que la distancia es 0 en todas.
+En KC10-2fl-1rl, 47 de las 100 ejecuciones acaban exactamente en el mismo frente de 43 puntos,
+porque con P = 65536 la búsqueda converge a él. El recorrido nuevo deja más variedad que el anterior
+—KC10-2fl-3uni pasa de 60 frentes distintos a 96, y KC10-2fl-1rl de 21 a 31—, que es la otra cara
+del mismo efecto: cada ejecución explora más pares y acaba en un sitio distinto, aunque el frente al
+que llega tenga menos puntos.
 
-Una semilla fija mantiene el lote reproducible: repetir el comando de la nota de A11 devuelve exactamente
-las cifras de la tabla. Una semilla tomada del reloj no añadiría independencia entre ejecuciones —ya la
-tienen— y sí se perdería eso. Lo que tampoco responde un timestamp es si el resultado depende de la
-semilla concreta; eso se comprueba repitiendo el lote con una segunda semilla fija y comparando las medias.
+Una semilla fija mantiene el lote reproducible: repetir el comando de la nota de A11 devuelve
+exactamente las cifras de la tabla. Una semilla tomada del reloj no añadiría independencia entre
+ejecuciones —ya la tienen— y sí se perdería eso. Lo que tampoco responde un timestamp es si el
+resultado depende de la semilla concreta; eso se comprueba repitiendo el lote con una segunda
+semilla fija y comparando las medias.
 
 <a id="quality-vs-original"></a>
 **Calidad frente al Greedy 2-opt original.** En KC10 hay frente óptimo publicado, así que su

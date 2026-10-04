@@ -56,7 +56,9 @@ constexpr float kTranspositionMutationProbability = 1.0f;
 // s over [1, n-1] skipping r == s, so most pairs are visited in both orders, (n-1) + (n-2)^2 swap
 // trials (343 at n = 20). false visits each pair r < s once, n(n-1)/2 trials (190 at n = 20).
 // The choice is a trade-off measured in the README, not a defect either way: the full traversal is what
-// makes the KC20 quality match the original version, and it costs 1.4 to 1.8 times the GPU time.
+// makes the KC20 quality match the original version, and it costs 1.4 to 1.8 times the GPU time. On the
+// small KC10 instances with a large population it goes the other way, and the README measures that too:
+// with P = 65536 it finds fewer of the published optimal points on six of the eight instances.
 constexpr bool kGreedyFullPairs = true;
 
 } // namespace mqap

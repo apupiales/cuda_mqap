@@ -35,13 +35,16 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
-# Parameters of the former settings_<instance>.cu files. KC10-2fl-2uni used POPULATION_SIZE 4;
-# the minimum population is now 16 (one warp per NSGA-II block needs 2P >= 32).
+# Parameters of each tab of comparative_results_kcX_datasets.xlsx. They are the ones of the former
+# settings_<instance>.cu files except on KC10-2fl-2uni, whose settings file says 70 iterations while every
+# series of its tab is labelled 30, so 30 is what makes a new series comparable there. That same file
+# used POPULATION_SIZE 4, and the minimum population is now 16 (one warp per NSGA-II block needs
+# 2P >= 32).
 $experiments = [ordered]@{
     "KC10-2fl-1rl"  = @{ Population = 64;  Iterations = 70 }
     "KC10-2fl-1uni" = @{ Population = 16;  Iterations = 70 }
     "KC10-2fl-2rl"  = @{ Population = 16;  Iterations = 70 }
-    "KC10-2fl-2uni" = @{ Population = 16;  Iterations = 70 }
+    "KC10-2fl-2uni" = @{ Population = 16;  Iterations = 30 }
     "KC10-2fl-3rl"  = @{ Population = 64;  Iterations = 70 }
     "KC10-2fl-3uni" = @{ Population = 128; Iterations = 25 }
     "KC10-2fl-4rl"  = @{ Population = 64;  Iterations = 70 }

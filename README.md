@@ -433,12 +433,6 @@ population and iterations each instance used in the original version:
 
 ### How many generations each instance needs (`--trace`)
 
-> **The Excel workbook series are still measured with the previous pair traversal**, the single `r <
-> s` pass, from before the one of the original version became the default (see [B8
-> withdrawn](#fixed-bugs)). Everything else in this section — the convergence campaign, the `.KBP`
-> reference fronts and the tables of [Performance](#performance) — was measured again with the
-> current traversal.
-
 `--trace FILE` writes a CSV with `run,generation,f1,f2[,f3]`: the distinct non-dominated solutions of
 **every** generation of every run, from the survival of the initial population (generation 0) to the
 final front. It copies the survivors to the host once per generation, so it synchronizes with the device
@@ -596,99 +590,133 @@ line was verified by recomputing the cost of its permutation against the instanc
 
 ### Results in the Excel workbook
 
-On 2026-09-19 the results of this version were added to `comparative_results_kcX_datasets.xlsx`:
+On 2026-10-03 the two series of this version in `comparative_results_kcX_datasets.xlsx` were
+measured again, with the pair traversal of the original version, which is now the default of the
+branch (`kGreedyFullPairs = true`: 73 swap trials per individual on the KC10 instances and 343 on
+the KC20 ones). No figure of the workbook is left from the previous traversal.
 
-- **Instance tabs (KC10-\*, KC20-\*):** each tab has a new block to the right of the existing ones, with
-  20 or 10 genes and 2 objectives per row, and a **green** series in its chart:
-  *"CUDA NSGA-II Paralelo + Greedy 2opt, N iteraciones (optimizado con claude)"*. Each tab's own population
-  and iterations were used, with `--verify`.
-  - KC10 tabs show the first of 100 concurrent runs; KC20 tabs, a single run.
-  - A note below each block records the command, seed and time.
-  - KC10-2fl-2uni ran with P = 16 (the original series used P = 2).
-- **Distance Metric:** columns F–G (mean and standard deviation) and column H of the second table, with the
-  [gamma distance](#g-gamma) of this version over 100 runs per KC10 instance. It is computed exactly like
-  `mQAPMetrics/distance_metric_*.js` and truncated to 2 decimals, like the existing values.
+- **Instance tabs (KC10-\*, KC20-\*):** each tab has two blocks of this version to the right of the
+  original ones, with 10 or 20 genes and 2 objectives per row, and two series in its chart: the
+  **green** one uses the population and iterations of the tab, and the **red** one the same
+  iterations with P = 65536, the cap of the branch. Both with `--verify` OK.
+  - On KC10 the green series plots the first of 100 concurrent runs and the red one a single run. On
+    KC20, one run in both.
+  - Under each block there is a note with the date, the branch, the command, the seed and the number
+    of distinct solutions.
+  - KC10-2fl-2uni ran with P = 16 (the original series used P = 2) and 30 iterations, which is what
+    every series of its tab says, although its former settings file says 70.
 
-**Maximum population of the branch (2026-09-21).** The same 12 experiments were run again with
-`--population 65536`, the cap of this branch, keeping the iterations of each tab (70, 30 or 25 on KC10;
-300 on KC20), one run, seed 20260920 and `--verify` OK. Every tab has a second new block and a **red**
-series in its chart: *"CUDA NSGA-II Paralelo + Greedy 2opt, N iteraciones (optimizado con claude,
-poblacion 65536)"*.
+With P = 65536 the whole final population is non-dominated, so the front the program writes has
+65,536 rows, of which only 1 to 227 are distinct solutions. The block and the series keep the
+distinct ones: since the program stopped repeating solutions in its output, the front it writes has
+no repeated rows, and the repetitions would draw the same points.
 
-With that population the whole final population is non-dominated, so the front the program writes has
-65,536 rows, of which only 1 to 212 are distinct solutions; the block and the series keep the distinct
-ones, since the repetitions would draw the same points. The note under each block records the command, the
-seed, the number of distinct points and the time of the run.
-
-Quality against the published optimal front (`.PO`), next to the green series of the same branch. *Found*
-counts how many of the optimal points the run reproduces exactly; gamma is the distance computed like
-`mQAPMetrics/distance_metric_*.js` (lower is better):
+Quality against the published optimal front (`.PO`). *Found* counts how many points of the optimum
+the plotted run reproduces exactly; [gamma](#g-gamma) is the distance computed as
+`mQAPMetrics/distance_metric_*.js` does (lower is better):
 
 | Instance | `.PO` points | Green: found | Green: gamma | Red: found | Red: gamma |
 |---|---|---|---|---|---|
-| KC10-2fl-1rl | 58 | 38 | 685.46 | **46** | **568.78** |
-| KC10-2fl-1uni | 13 | 7 | 241.93 | **12** | **0.00** |
-| KC10-2fl-2rl | 15 | 12 | 0.00 | **15** | 0.00 |
+| KC10-2fl-1rl | 58 | 38 | 4,415.64 | **43** | **231.74** |
+| KC10-2fl-1uni | 13 | 10 | **32.89** | **11** | 212.35 |
+| KC10-2fl-2rl | 15 | 13 | 0.00 | **15** | 0.00 |
 | KC10-2fl-2uni | 1 | 1 | 0.00 | 1 | 0.00 |
-| KC10-2fl-3rl | 55 | 28 | 24,466.49 | **40** | **17,757.94** |
-| KC10-2fl-3uni | 130 | 66 | 420.75 | **114** | **11.47** |
-| KC10-2fl-4rl | 53 | 29 | 7,992.15 | **40** | **3,793.44** |
-| KC10-2fl-5rl | 49 | 26 | 24,552.85 | **39** | **2,629.05** |
+| KC10-2fl-3rl | 55 | 25 | 25,093.97 | **31** | **18,809.27** |
+| KC10-2fl-3uni | 130 | 61 | 328.38 | **93** | **76.71** |
+| KC10-2fl-4rl | 53 | 21 | **8,608.65** | **24** | 10,749.13 |
+| KC10-2fl-5rl | 49 | 17 | 35,863.35 | **26** | **23,388.89** |
 
-The KC20 instances have no published front; their red series have 86, 68, 8 and 212 distinct points
-(1rl, 1uni, 2uni and 3uni). Every plotted permutation was checked on the host: its recomputed cost matches
-the fitness written by the program, and each front is non-dominated.
+The KC20 instances have no published front; their red series hold 88, 69, 8, 227 distinct points
+(1rl, 1uni, 2uni and 3uni). Every plotted permutation was checked on the host: its recomputed cost
+matches the fitness the program wrote, and every front is non-dominated.
 
-Times on the RTX 2060: 6.6–6.8 s per KC10 tab of 70 generations and 38–39 s per KC20 tab of 300, 201 s for
-the twelve.
+Times on the RTX 2060 for the runs with P = 65536: 13.6 to 21.6 s per KC10 tab and 58 to 65 s per
+KC20 tab; 399 s for the twelve.
 
-**Distance Metric.** Columns H and I of the first table (mean and standard deviation) and column I of the
-second one hold the gamma distance of this population, measured with the same protocol as the green
-columns: **100 runs per KC10 instance** with the iterations of its tab, `--seed 20260921`, and the distance
-computed exactly like `mQAPMetrics/distance_metric_*.js` (per run, the average over its unique permutations
-of the distance to the closest point of the `.PO` front; then mean and standard deviation over the runs).
-The note in A11 records the command. Mean / standard deviation, green against red:
+**What the pair traversal changed.** The red series published on 2026-09-21 were measured with the
+previous traversal, a single pass over `r < s`. Rebuilding the current code with `kGreedyFullPairs =
+false` and repeating the eight runs with the same seed gives exactly the figures that were
+published, to the last decimal, so the difference comes from the traversal and from nothing else
+that landed on the branch in between. For the red series of KC10, previous traversal → current one
+(the better of the two in bold):
+
+| Instance | Optimal points found | Gamma of the run | Mean of 100 runs |
+|---|---|---|---|
+| KC10-2fl-1rl | 46 → 43 | 568.78 → **231.74** | 557.92 → **72.22** |
+| KC10-2fl-1uni | 12 → 11 | 0.00 → 212.35 | 0.00 → 97.78 |
+| KC10-2fl-2rl | 15 → 15 | 0.00 → 0.00 | 0.00 → 0.00 |
+| KC10-2fl-2uni | 1 → 1 | 0.00 → 0.00 | 0.00 → 0.00 |
+| KC10-2fl-3rl | 40 → 31 | 17,757.93 → 18,809.27 | 16,132.53 → 17,895.91 |
+| KC10-2fl-3uni | 114 → 93 | 11.47 → 76.71 | 12.51 → 131.74 |
+| KC10-2fl-4rl | 40 → 24 | 3,793.44 → 10,749.13 | 3,001.91 → 8,967.04 |
+| KC10-2fl-5rl | 39 → 26 | 2,629.04 → 23,388.89 | 3,409.13 → 17,656.55 |
+
+The full traversal finds fewer optimal points on six of the eight instances and worsens the mean of
+the 100 runs on five. It is the same trade-off measured in [Effect of the population size on
+quality](#effect-of-the-population-size-on-quality): a more exhaustive local search brings the
+solutions it finds closer to the front, but collapses every child to its local optimum, and on small
+instances with a large population the population loses diversity and ends on smaller fronts. On
+KC10-2fl-1rl it shows in a single row: gamma falls from 568.78 to 231.74 while finding three optimal
+points fewer.
+
+On KC20 the effect goes the other way, and that is the case that decided the default: the four red
+series go from 86, 68, 8, 212 distinct points to 88, 69, 8, 227. See [Quality versus the original
+Greedy 2-opt](#quality-vs-original).
+
+**Distance Metric.** Columns F-G of the first table (mean and standard deviation of the green
+series), H-I (those of the red one) and columns H and I of the second table hold the gamma distance
+of this version, measured with the same protocol as the original columns: **100 runs per KC10
+instance** with the iterations of its tab, `--seed 20260921`, and the distance computed as
+`mQAPMetrics/distance_metric_*.js` does (per run, the mean over its unique permutations of the
+distance to the nearest point of the `.PO` front; then the mean and the standard deviation over the
+runs), truncated to two decimals like the cells that were already there. The note in A11 records the
+command. Mean / standard deviation:
 
 | Instance | Green (population of the tab) | Red (P = 65536) |
 |---|---|---|
-| KC10-2fl-1rl | 850.56 / 656.20 | 557.92 / 56.58 |
-| KC10-2fl-1uni | 192.02 / 342.12 | 0.00 / 0.00 |
-| KC10-2fl-2rl | 10,941.55 / 7,430.27 | 0.00 / 0.00 |
-| KC10-2fl-2uni | 532.56 / 1,806.81 | 0.00 / 0.00 |
-| KC10-2fl-3rl | 20,531.69 / 2,896.06 | 16,132.53 / 2,893.64 |
-| KC10-2fl-3uni | 376.23 / 77.04 | 12.51 / 5.86 |
-| KC10-2fl-4rl | 7,515.98 / 2,082.63 | 3,001.91 / 1,277.88 |
-| KC10-2fl-5rl | 26,891.28 / 10,070.77 | 3,409.13 / 921.20 |
+| KC10-2fl-1uni | 42.53 / 52.67 | 97.78 / 27.89 |
+| KC10-2fl-1rl | 1,223.20 / 1,598.49 | 72.22 / 296.75 |
+| KC10-2fl-2uni | 66.43 / 661.03 | 0.00 / 0.00 |
+| KC10-2fl-2rl | 3,587.60 / 4,934.85 | 0.00 / 0.00 |
+| KC10-2fl-3uni | 389.98 / 68.11 | 131.74 / 34.05 |
+| KC10-2fl-3rl | 23,512.19 / 3,791.34 | 17,895.91 / 4,235.31 |
+| KC10-2fl-4rl | 12,670.80 / 1,620.08 | 8,967.04 / 2,068.29 |
+| KC10-2fl-5rl | 28,294.55 / 9,013.65 | 17,656.55 / 3,690.52 |
 
-A gamma of 0.00 means that **every solution found in every one of the 100 runs sits exactly on the
-published optimal front** — not that the whole front was found: the red series of KC10-2fl-1uni holds 12 of
-its 13 points. The run drawn in the charts is a separate single run, with seed 20260920; this table
-compares the 100-run batches.
+The run plotted in the charts is a different one, single and with seed 20260920; this table compares
+the batches of 100 runs.
 
-**One seed for the batch, one random stream per run.** `--seed` does not repeat the same randomness in
-every run. `curand_init(seed, id, 0, ...)` in `src/operators.cu` gives each of the `runs × 2P` states its
-own Philox subsequence, so run *r* draws from the block `[r·2P, (r+1)·2P)` and no two runs share numbers:
-with the same seed, three runs of P = 16 and no generations already produce three different populations.
-What repeats between runs is convergence, not randomness. Counting the distinct fronts of the 100 runs of
-each batch:
+A gamma of 0.00 means that **every solution found in each of the 100 runs sits exactly on the
+published optimal front**. It happens on two instances with P = 65536, KC10-2fl-2uni and
+KC10-2fl-2rl, and on both of them every run also finds the whole front: the 15 points of
+KC10-2fl-2rl and the single one of KC10-2fl-2uni, in all 100. It does not guarantee the latter:
+KC10-2fl-1uni reached 0.00 with the previous traversal and now gives 97.78, because its runs find 12
+or 13 distinct solutions of which 11 or 12 sit on the front of 13 points.
+
+**One seed for the batch, one random stream per run.** `--seed` does not repeat the same randomness
+in every run. `curand_init(seed, id, 0, ...)`, in `src/operators.cu`, gives each of the `runs × 2P`
+states its own Philox subsequence, so run *r* draws its numbers from `[r·2P, (r+1)·2P)` and two runs
+never share numbers: with the same seed, three runs of P = 16 and zero generations already give
+three different populations. What repeats between runs is the convergence, not the randomness.
+Counting the distinct fronts of the 100 runs with P = 65536:
 
 | Instance | Distinct fronts / 100 | Sizes |
 |---|---|---|
-| KC10-2fl-3uni | 60 | 113–119 points |
-| KC10-2fl-1rl | 21 | 47–50 points |
-| KC10-2fl-1uni | 2 | 12 and 13 points |
+| KC10-2fl-3uni | 96 | 106–116 points |
+| KC10-2fl-1rl | 31 | 43–46 points |
+| KC10-2fl-1uni | 4 | 12–13 points |
 
-On KC10-2fl-1rl, 64 of the 100 runs end on exactly the same front of 47 points, because with P = 65536 the
-search converges to it; on KC10-2fl-1uni one of the two fronts has 12 of the 13 published optimal points
-and the other has all 13. This is also why the standard deviation is 0.00 on 1uni, 2rl and 2uni: not
-because the runs are identical, but because in every one of them every solution found lies on the optimal
-front, so the distance is 0 in all of them.
+On KC10-2fl-1rl, 47 of the 100 runs end on exactly the same front of 43 points, because with P =
+65536 the search converges to it. The new traversal leaves more variety than the previous one —
+KC10-2fl-3uni goes from 60 distinct fronts to 96, and KC10-2fl-1rl from 21 to 31 — which is the
+other side of the same effect: each run explores more pairs and ends somewhere else, even though the
+front it reaches holds fewer points.
 
-A fixed seed keeps the batch reproducible: running the command in the note of A11 again gives exactly the
-numbers of the table. A seed taken from the clock would add no independence between runs — they already
-have it — and would lose that. What a timestamp does not answer either is whether the result depends on
-the particular seed; that is checked by repeating the batch with a second fixed seed and comparing the
-means.
+A fixed seed keeps the batch reproducible: running the command in the note of A11 again gives
+exactly the numbers of the table. A seed taken from the clock would add no independence between runs
+— they already have it — and would lose that. What a timestamp does not answer either is whether the
+result depends on the particular seed; that is checked by repeating the batch with a second fixed
+seed and comparing the means.
 
 <a id="quality-vs-original"></a>
 **Quality versus the original Greedy 2-opt.** KC10 has a published optimal front, so its comparison
