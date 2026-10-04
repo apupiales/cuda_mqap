@@ -1077,7 +1077,120 @@ original](#quality-vs-original).
 
 La serie roja de `comparative_results_kcX_datasets.xlsx` muestra el mismo efecto con el tope de la rama,
 P = 65536, en las doce instancias del libro: ver
-[Resultados en el libro de Excel](#resultados-en-el-libro-de-excel).
+[Resultados en el libro de Excel](#resultados-en-el-libro-de-excel). Cuánta búsqueda local conviene
+entonces es lo que mide el apartado siguiente.
+
+### Cuánta búsqueda local conviene (`kGreedyRate`)
+
+La versión original aplica el greedy 2-opt a **todos** los descendientes de **todas** las
+generaciones, y eso es lo que hace esta versión por defecto: `kGreedyRate = 1.0f` y `kGreedyPeriod =
+1` en `include/config.h`. Las dos constantes permiten medir menos que eso —la fracción de
+descendientes que recibe la búsqueda local, y cada cuántas generaciones se aplica—, porque el
+apartado anterior deja una pregunta abierta: si una búsqueda local exhaustiva colapsa la diversidad
+cuando la población es grande, ¿cuánta conviene?
+
+La decisión es un hash sin estado de (semilla, ejecución, descendiente, generación), así que no
+consume números de los flujos aleatorios de los operadores: con el valor por defecto no se extrae
+ninguno y la ejecución es idéntica bit a bit a las de antes de que existieran las constantes. El
+reparto medido con `kGreedyRate = 0.5f` es del 50,07 % de los descendientes, uniforme entre
+generaciones e individuos.
+
+**Con el tope de la rama, P = 65536, en las instancias KC10 el cambio es enorme.** Cada celda da la
+distancia gama media, la fracción media del frente óptimo publicado encontrada por ejecución y
+cuántas ejecuciones lo encuentran **completo**; 100 ejecuciones con el valor por defecto y 30 con
+cada una de las otras, mismas semillas, iteraciones de cada pestaña:
+
+| Instancia | 100 % (por defecto) | 50 % | 10 % |
+|---|---|---|---|
+| KC10-2fl-1rl | 72,22, 75,2 %, 0/100 | 66,97, 99,8 %, 28/30 | 0,00, 100,0 %, 30/30 |
+| KC10-2fl-1uni | 97,78, 85,1 %, 0/100 | 0,00, 100,0 %, 30/30 | 0,00, 100,0 %, 30/30 |
+| KC10-2fl-2rl | 0,00, 100,0 %, 100/100 | 0,00, 100,0 %, 30/30 | 0,00, 100,0 %, 30/30 |
+| KC10-2fl-2uni | 0,00, 100,0 %, 100/100 | 0,00, 100,0 %, 30/30 | 0,00, 100,0 %, 30/30 |
+| KC10-2fl-3rl | 17.895,91, 56,2 %, 0/100 | 86,89, 99,5 %, 26/30 | 0,00, 100,0 %, 30/30 |
+| KC10-2fl-3uni | 131,74, 71,8 %, 0/100 | 1,86, 99,0 %, 11/30 | 0,06, 99,7 %, 23/30 |
+| KC10-2fl-4rl | 8.967,04, 48,0 %, 0/100 | 0,00, 99,8 %, 28/30 | 0,00, 100,0 %, 30/30 |
+| KC10-2fl-5rl | 17.656,55, 54,4 %, 0/100 | 15,88, 99,9 %, 29/30 | 0,00, 100,0 %, 30/30 |
+
+Con el greedy en el 10 % de los descendientes, **siete de las ocho instancias KC10 encuentran el
+frente óptimo publicado completo en las 30 ejecuciones**, y la octava (KC10-2fl-3uni) en 23 de 30,
+con el 99,8 % de sus puntos de media. Con el 100 % ninguna ejecución de ninguna instancia lo
+encuentra completo salvo las dos que ya lo encontraban. Todas las diferencias son significativas (p
+≤ 5,5·10⁻¹⁷, U de Mann-Whitney bilateral sobre la fracción encontrada), y los frentes se comprobaron
+en el host: coste recalculado y no dominancia.
+
+El tiempo de pared no cambia —de 18 a 21 s por ejecución con cualquiera de las tasas—, porque con P
+= 65536 en una instancia KC10 lo que domina no es la búsqueda local sino el trámite de host del
+final: copiar la población, deduplicar las soluciones, verificar y escribir.
+
+**Nada de búsqueda local tampoco es la respuesta.** Con `kGreedyRate = 0.0f`, es decir NSGA-II con
+sus mutaciones y sin greedy, en 30 ejecuciones a P = 65536: KC10-2fl-1rl y KC10-2fl-5rl siguen
+encontrando el frente completo en las 30, pero KC10-2fl-3uni baja al 96,1 % de sus puntos y el
+frente completo solo aparece en una de las 30 ejecuciones, frente al 99,8 % y 23 de 30 con el 10 %
+(p = 7,1·10⁻¹¹). Un poco de búsqueda local rinde mucho; mucha quita diversidad; ninguna deja a la
+instancia más difícil de las tres sin cerrar el frente.
+
+**A la población de la versión original, P = 64, la mejora no aparece.** Las mismas instancias, 30
+ejecuciones, fracción media del frente óptimo encontrada:
+
+| Instancia | 100 % | 50 % | 25 % | 10 % |
+|---|---|---|---|---|
+| KC10-2fl-1rl | 61,2 % | 61,8 % | 57,7 % (p = 0,005) | 47,8 % (p = 4,9·10⁻¹¹) |
+| KC10-2fl-1uni | 80,5 % | 82,3 % | 76,1 % (p = 0,02) | 61,7 % (p = 4,0·10⁻¹⁰) |
+| KC10-2fl-2rl | 93,5 % | 94,0 % | 89,3 % (p = 0,004) | 73,1 % (p = 4,8·10⁻¹²) |
+| KC10-2fl-2uni | 100,0 % | 100,0 % | 100,0 % | 83,3 % (p = 0,02) |
+| KC10-2fl-3rl | 47,0 % | 50,4 % (p = 2,4·10⁻⁴) | 46,6 % | 40,0 % (p = 3,6·10⁻⁶) |
+| KC10-2fl-3uni | 27,0 % | 22,2 % (p = 4,2·10⁻⁷) | 15,6 % (p = 4,1·10⁻¹¹) | 7,7 % (p = 2,8·10⁻¹¹) |
+| KC10-2fl-4rl | 36,2 % | 43,5 % (p = 8,7·10⁻¹¹) | 44,5 % (p = 1,0·10⁻¹¹) | 42,4 % (p = 1,0·10⁻⁸) |
+| KC10-2fl-5rl | 40,1 % | 42,3 % | 39,1 % | 34,2 % (p = 6,1·10⁻⁶) |
+
+Solo KC10-2fl-4rl y KC10-2fl-3rl ganan algo bajando la tasa; KC10-2fl-3uni pierde, y con el 10 %
+empeoran siete de las ocho. Es decir, lo que decide no es el tamaño de la instancia sino **el de la
+población frente al espacio de búsqueda**: P = 65536 es el 1,8 % de las 10! = 3 628 800
+permutaciones de una instancia KC10, así que la población sola ya cubre el espacio y la búsqueda
+local exhaustiva solo le quita diversidad; con P = 64 cubre el 0,002 % y la búsqueda local es lo que
+empuja.
+
+**En KC20 a P = 64, bajar la tasa rompe la equivalencia con la versión original.** Cobertura media
+del frente de referencia `.KBP`, 30 ejecuciones por configuración, p frente a la original:
+
+| Instancia | Original | 100 % | 50 % | 25 % | 10 % |
+|---|---|---|---|---|---|
+| KC20-2fl-1rl | 39,0 % | 39,4 % (p = 0,85) | 30,2 % (p = 3,0·10⁻⁹) | 18,1 % (p = 2,7·10⁻¹¹) | 6,9 % (p = 2,7·10⁻¹¹) |
+| KC20-2fl-1uni | 8,5 % | 8,1 % (p = 0,63) | 4,6 % (p = 5,4·10⁻⁶) | 1,7 % (p = 2,2·10⁻¹⁰) | 0,3 % (p = 3,7·10⁻¹²) |
+| KC20-2fl-2uni | 32,9 % | 25,0 % (p = 0,04) | 17,9 % (p = 5,9·10⁻⁴) | 11,2 % (p = 2,1·10⁻⁶) | 5,4 % (p = 3,1·10⁻⁹) |
+| KC20-2fl-3uni | 2,8 % | 2,9 % (p = 0,76) | 1,3 % (p = 5,0·10⁻⁴) | 0,5 % (p = 5,0·10⁻⁸) | 0,0 % (p = 5,9·10⁻¹¹) |
+
+Con el 100 % la prueba no distingue las dos versiones en tres de las cuatro instancias, que es el
+resultado de [Calidad frente al Greedy 2-opt original](#quality-vs-original). Cualquier tasa menor
+empeora significativamente las cuatro, y el hipervolumen acompaña: del 99,2 % al 98,7 % con el 50 %
+en KC20-2fl-1rl y al 93,8 % con el 10 %. Lo mismo ocurre aplicando el greedy cada dos o cada cuatro
+generaciones.
+
+**En KC20 a P = 65536 el efecto es mixto**, que es la cuarta casilla del experimento. Diez
+ejecuciones por configuración:
+
+| Instancia | 100 %: hipervolumen / cobertura | 50 %: hipervolumen / cobertura | p (cobertura) |
+|---|---|---|---|
+| KC20-2fl-1rl | 99,93 % / 92,0 % | 99,99 % / 96,9 % | 2,9·10⁻⁴ |
+| KC20-2fl-2uni | 100,00 % / 100,0 % | 100,00 % / 100,0 % | — |
+| KC20-2fl-3uni | 99,70 % / 75,6 % | 99,65 % / 71,8 % | 6,4·10⁻⁴ |
+
+KC20-2fl-1rl mejora, KC20-2fl-2uni empata en el 100 % de las dos métricas y KC20-2fl-3uni pierde
+cobertura con el hipervolumen indistinguible. Con n = 20 el espacio tiene 20! ≈ 2,4·10¹⁸
+permutaciones, así que ni P = 65536 lo cubre y la búsqueda local sigue haciendo falta: el efecto no
+es del tamaño de la población a secas, sino de la población **en relación con el espacio**.
+
+**Conclusión y valor por defecto.** `kGreedyRate` se queda en 1.0f: es lo que hace la versión
+original, es lo que sostiene la equivalencia estadística con ella en su propia configuración y es lo
+mejor en las instancias donde el espacio de búsqueda no se cubre. Pero si lo que se quiere es el
+frente óptimo de una instancia pequeña, el camino medido es población al tope y la búsqueda local en
+una fracción de los descendientes: con P = 65536 y el 10 %, las KC10 salen completas. La constante
+está ahí para eso, y no hay que tocar nada más.
+
+> Las ejecuciones en KC20 con P = 65536 encontraron 7 soluciones que no domina el frente de
+> referencia actual de KC20-2fl-1rl y KC20-2fl-3uni (6 con el 50 % y 1 con el 100 %), así que sus
+> ficheros `.KBP` ya se saben incompletos. Actualizarlos movería los porcentajes de todas las tablas
+> que los usan, así que queda pendiente de rehacer la campaña entera con el mismo criterio.
 
 ### Cómo calcular el límite en otra GPU
 
@@ -1134,8 +1247,10 @@ muy por encima de lo que permite el tiempo: con P = 4096, cada ejecución de KC3
   latencia, y en el camino multibloque lo interesante es el coste de `grid.sync()` y de las ordenaciones
   por segmentos de CUB.
 - Más operadores de cruce y variantes del criterio del greedy 2-opt. El recorrido de pares ya es el de
-  la versión original; queda abierto si algún criterio más barato recupera la diversidad que cuesta en
-  instancias pequeñas con población grande.
+  la versión original, y la diversidad que cuesta en instancias pequeñas con población grande se recupera
+  bajando `kGreedyRate` (ver
+  [Cuánta búsqueda local conviene](#cuánta-búsqueda-local-conviene-kgreedyrate)); queda abierto si un
+  criterio más barato da lo mismo sin bajar la tasa.
 
 ---
 

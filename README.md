@@ -1063,7 +1063,115 @@ the original Greedy 2-opt](#quality-vs-original).
 
 The red series of `comparative_results_kcX_datasets.xlsx` shows the same effect at the cap of the branch,
 P = 65536, on the twelve instances of the workbook: see
-[Results in the Excel workbook](#results-in-the-excel-workbook).
+[Results in the Excel workbook](#results-in-the-excel-workbook). How much local search is worth it then
+is what the next section measures.
+
+### How much local search is worth it (`kGreedyRate`)
+
+The original version applies the greedy 2-opt to **every** offspring of **every** generation, and so
+does this one by default: `kGreedyRate = 1.0f` and `kGreedyPeriod = 1` in `include/config.h`. The
+two constants allow measuring less than that — the fraction of the offspring that gets the local
+search, and how often it runs — because the previous section leaves a question open: if an
+exhaustive local search collapses the diversity when the population is large, how much is worth it?
+
+The decision is a stateless hash of (seed, run, offspring, generation), so it takes no numbers from
+the random streams of the operators: at the default none is drawn and a run is bit-identical to the
+ones made before the constants existed. The share measured with `kGreedyRate = 0.5f` is 50.07 % of
+the offspring, uniform across generations and individuals.
+
+**At the cap of the branch, P = 65536, the change on the KC10 instances is large.** Each cell gives
+the mean gamma distance, the mean fraction of the published optimal front found per run, and how
+many runs find it **whole**; 100 runs at the default and 30 at each of the others, same seeds, the
+iterations of each tab:
+
+| Instance | 100 % (default) | 50 % | 10 % |
+|---|---|---|---|
+| KC10-2fl-1rl | 72.22, 75.2 %, 0/100 | 66.97, 99.8 %, 28/30 | 0.00, 100.0 %, 30/30 |
+| KC10-2fl-1uni | 97.78, 85.1 %, 0/100 | 0.00, 100.0 %, 30/30 | 0.00, 100.0 %, 30/30 |
+| KC10-2fl-2rl | 0.00, 100.0 %, 100/100 | 0.00, 100.0 %, 30/30 | 0.00, 100.0 %, 30/30 |
+| KC10-2fl-2uni | 0.00, 100.0 %, 100/100 | 0.00, 100.0 %, 30/30 | 0.00, 100.0 %, 30/30 |
+| KC10-2fl-3rl | 17,895.91, 56.2 %, 0/100 | 86.89, 99.5 %, 26/30 | 0.00, 100.0 %, 30/30 |
+| KC10-2fl-3uni | 131.74, 71.8 %, 0/100 | 1.86, 99.0 %, 11/30 | 0.06, 99.7 %, 23/30 |
+| KC10-2fl-4rl | 8,967.04, 48.0 %, 0/100 | 0.00, 99.8 %, 28/30 | 0.00, 100.0 %, 30/30 |
+| KC10-2fl-5rl | 17,656.55, 54.4 %, 0/100 | 15.88, 99.9 %, 29/30 | 0.00, 100.0 %, 30/30 |
+
+With the greedy on 10 % of the offspring, **seven of the eight KC10 instances find the whole
+published optimal front in all 30 runs**, and the eighth (KC10-2fl-3uni) in 23 of 30, with 99.8 % of
+its points on average. At 100 % no run of any instance finds it whole except the two that already
+did. Every difference is significant (p ≤ 5.5·10⁻¹⁷, two-sided Mann-Whitney on the fraction found),
+and the fronts were checked on the host: recomputed cost and non-dominance.
+
+The wall time does not change — 18 to 21 s per run at any of the rates — because with P = 65536 on a
+KC10 instance what dominates is not the local search but the host work at the end: copying the
+population back, deduplicating the solutions, verifying and writing them.
+
+**No local search at all is not the answer either.** With `kGreedyRate = 0.0f`, that is NSGA-II with
+its mutations and no greedy, over 30 runs at P = 65536: KC10-2fl-1rl and KC10-2fl-5rl still find the
+whole front in all 30, but KC10-2fl-3uni falls to 96.1 % of its points and the whole front appears
+in only one of the 30 runs, against 99.8 % and 23 of 30 at 10 % (p = 7.1·10⁻¹¹). A little local
+search goes a long way; a lot takes diversity away; none leaves the hardest of the three without
+closing the front.
+
+**At the population of the original version, P = 64, the gain does not appear.** The same instances,
+30 runs, mean fraction of the optimal front found:
+
+| Instance | 100 % | 50 % | 25 % | 10 % |
+|---|---|---|---|---|
+| KC10-2fl-1rl | 61.2 % | 61.8 % | 57.7 % (p = 0.005) | 47.8 % (p = 4.9·10⁻¹¹) |
+| KC10-2fl-1uni | 80.5 % | 82.3 % | 76.1 % (p = 0.02) | 61.7 % (p = 4.0·10⁻¹⁰) |
+| KC10-2fl-2rl | 93.5 % | 94.0 % | 89.3 % (p = 0.004) | 73.1 % (p = 4.8·10⁻¹²) |
+| KC10-2fl-2uni | 100.0 % | 100.0 % | 100.0 % | 83.3 % (p = 0.02) |
+| KC10-2fl-3rl | 47.0 % | 50.4 % (p = 2.4·10⁻⁴) | 46.6 % | 40.0 % (p = 3.6·10⁻⁶) |
+| KC10-2fl-3uni | 27.0 % | 22.2 % (p = 4.2·10⁻⁷) | 15.6 % (p = 4.1·10⁻¹¹) | 7.7 % (p = 2.8·10⁻¹¹) |
+| KC10-2fl-4rl | 36.2 % | 43.5 % (p = 8.7·10⁻¹¹) | 44.5 % (p = 1.0·10⁻¹¹) | 42.4 % (p = 1.0·10⁻⁸) |
+| KC10-2fl-5rl | 40.1 % | 42.3 % | 39.1 % | 34.2 % (p = 6.1·10⁻⁶) |
+
+Only KC10-2fl-4rl and KC10-2fl-3rl gain something from a lower rate; KC10-2fl-3uni loses, and at 10
+% seven of the eight get worse. What decides is not the size of the instance but **the size of the
+population against the search space**: P = 65536 is 1.8 % of the 10! = 3,628,800 permutations of a
+KC10 instance, so the population alone already covers the space and the exhaustive local search only
+takes diversity away from it; with P = 64 it covers 0.002 % and the local search is what pushes.
+
+**On KC20 at P = 64, lowering the rate breaks the equivalence with the original version.** Mean
+coverage of the `.KBP` reference front, 30 runs per configuration, p against the original:
+
+| Instance | Original | 100 % | 50 % | 25 % | 10 % |
+|---|---|---|---|---|---|
+| KC20-2fl-1rl | 39.0 % | 39.4 % (p = 0.85) | 30.2 % (p = 3.0·10⁻⁹) | 18.1 % (p = 2.7·10⁻¹¹) | 6.9 % (p = 2.7·10⁻¹¹) |
+| KC20-2fl-1uni | 8.5 % | 8.1 % (p = 0.63) | 4.6 % (p = 5.4·10⁻⁶) | 1.7 % (p = 2.2·10⁻¹⁰) | 0.3 % (p = 3.7·10⁻¹²) |
+| KC20-2fl-2uni | 32.9 % | 25.0 % (p = 0.04) | 17.9 % (p = 5.9·10⁻⁴) | 11.2 % (p = 2.1·10⁻⁶) | 5.4 % (p = 3.1·10⁻⁹) |
+| KC20-2fl-3uni | 2.8 % | 2.9 % (p = 0.76) | 1.3 % (p = 5.0·10⁻⁴) | 0.5 % (p = 5.0·10⁻⁸) | 0.0 % (p = 5.9·10⁻¹¹) |
+
+At 100 % the test does not distinguish the two versions on three of the four instances, which is the
+result of [Quality versus the original Greedy 2-opt](#quality-vs-original). Any lower rate makes all
+four significantly worse, and the hypervolume follows: from 99.2 % to 98.7 % at 50 % on KC20-2fl-1rl
+and to 93.8 % at 10 %. The same happens applying the greedy every two or every four generations.
+
+**On KC20 at P = 65536 the effect is mixed**, which is the fourth cell of the experiment. Ten runs
+per configuration:
+
+| Instance | 100 %: hypervolume / coverage | 50 %: hypervolume / coverage | p (coverage) |
+|---|---|---|---|
+| KC20-2fl-1rl | 99.93 % / 92.0 % | 99.99 % / 96.9 % | 2.9·10⁻⁴ |
+| KC20-2fl-2uni | 100.00 % / 100.0 % | 100.00 % / 100.0 % | — |
+| KC20-2fl-3uni | 99.70 % / 75.6 % | 99.65 % / 71.8 % | 6.4·10⁻⁴ |
+
+KC20-2fl-1rl improves, KC20-2fl-2uni ties at 100 % of both measures and KC20-2fl-3uni loses coverage
+with the hypervolume indistinguishable. With n = 20 the space holds 20! ≈ 2.4·10¹⁸ permutations, so
+not even P = 65536 covers it and the local search is still needed: the effect is not about the size
+of the population alone, but about the population **relative to the space**.
+
+**Conclusion and default.** `kGreedyRate` stays at 1.0f: it is what the original version does, it is
+what holds the statistical equivalence with it at its own configuration, and it is the best choice
+on the instances whose search space is not covered. But if what one wants is the optimal front of a
+small instance, the measured route is the population at the cap and the local search on a fraction
+of the offspring: with P = 65536 and 10 %, the KC10 instances come out complete. That is what the
+constant is there for, and nothing else has to change.
+
+> The runs on KC20 with P = 65536 found 7 solutions that the current reference front of KC20-2fl-1rl
+> and KC20-2fl-3uni does not dominate (6 at 50 % and 1 at 100 %), so those `.KBP` files are now
+> known to be incomplete. Updating them would move the percentages of every table that uses them, so
+> it is left pending a rerun of the whole campaign under the same criterion.
 
 ### How to compute the limit for another GPU
 
@@ -1118,8 +1226,10 @@ above what the time allows: with P = 4096 each run of KC30 costs about 0.7 s of 
 - Nsight Compute analysis of the survival: the single-block path (P ≤ 256) is latency bound, and in the
   multi-block path the interesting costs are `grid.sync()` and the segmented sorts of CUB.
 - More crossover operators and variants of the greedy 2-opt criterion. The pair traversal is already
-  the one of the original version; what is open is whether a cheaper criterion recovers the diversity it
-  costs on small instances with a large population.
+  the one of the original version, and the diversity it costs on small instances with a large population
+  comes back by lowering `kGreedyRate` (see
+  [How much local search is worth it](#how-much-local-search-is-worth-it-kgreedyrate)); what is open is
+  whether a cheaper criterion gives the same without lowering the rate.
 
 ---
 
