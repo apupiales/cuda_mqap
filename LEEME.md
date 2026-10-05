@@ -1211,6 +1211,95 @@ está ahí para eso, y no hay que tocar nada más.
 > `reference/v0.2`. Las cifras de este apartado son contra `reference/v0.1`; el factor que convierte
 > una a la otra está en [Frentes de referencia](#reference-versions).
 
+### La mejor configuración de cada problema
+
+Las dos constantes del greedy y el tamaño de población forman una rejilla, y lo que sigue es su
+recorrido completo: las 23 instancias de `mQAPData/` en cinco poblaciones (256, 1024, 4096, 16 384 y
+65 536) con seis configuraciones del greedy (al 100 %, 50 %, 25 % y 10 % de los descendientes, y al
+100 % cada dos y cada cuatro generaciones), diez ejecuciones por celda, `--seed 20260921` y
+`--verify` OK en todas: **690 celdas**, 20,8 h de GPU en la RTX 2060.
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\run_rate_grid.ps1
+python scripts\analyze_rate_grid.py results\grid --out results\grid\best.json
+```
+
+El presupuesto de generaciones está fijado por familia —70 en KC10, 300 en KC20 y KC30—, así que lo
+que responde la rejilla es qué configuración es mejor para un presupuesto dado, no cuántas
+generaciones necesita una instancia, que es lo que mide [la campaña de
+convergencia](#cuántas-generaciones-necesita-cada-instancia---trace). El indicador es la
+[cobertura](#g-coverage) del frente de referencia: el óptimo publicado en KC10 y
+[`reference/v0.3`](#reference-versions) en el resto, construido con la unión no dominada de las
+propias celdas de la rejilla.
+
+| Instancia | Mejor configuración | Cobertura | Mejor con el greedy al 100 % | Cobertura | p |
+|---|---|---|---|---|---|
+| KC10-2fl-1rl | P = 16 384, greedy 50 % | 100,00 % | P = 65 536, greedy 100 % | 74,65 % | 4,0·10⁻⁵ |
+| KC10-2fl-1uni | P = 1024, greedy 25 % | 100,00 % | P = 256, greedy 100 % | 84,61 % | 1,5·10⁻⁵ |
+| KC10-2fl-2rl | P = 1024, greedy 10 % | 100,00 % | P = 16 384, greedy 100 % | 100,00 % | — |
+| KC10-2fl-2uni | P = 256, greedy 10 % | 100,00 % | P = 256, greedy 100 % | 100,00 % | — |
+| KC10-2fl-3rl | P = 16 384, greedy 10 % | 100,00 % | P = 65 536, greedy 100 % | 55,63 % | 4,8·10⁻⁵ |
+| KC10-2fl-3uni | P = 65 536, greedy 10 % | 100,00 % | P = 65 536, greedy 100 % | 72,76 % | 5,4·10⁻⁵ |
+| KC10-2fl-4rl | P = 16 384, greedy 10 % | 100,00 % | P = 65 536, greedy 100 % | 47,54 % | 4,7·10⁻⁵ |
+| KC10-2fl-5rl | P = 16 384, greedy 10 % | 100,00 % | P = 65 536, greedy 100 % | 54,69 % | 5,4·10⁻⁵ |
+| KC20-2fl-1rl | P = 65 536, greedy 25 % | 96,59 % | P = 65 536, greedy 100 % | 89,25 % | 1,6·10⁻⁴ |
+| KC20-2fl-1uni | P = 65 536, greedy 100 %, cada 2 generaciones | 98,02 % | P = 65 536, greedy 100 % | 95,91 % | 0,005 |
+| KC20-2fl-2rl | P = 65 536, greedy 25 % | 58,86 % | P = 65 536, greedy 100 % | 41,20 % | 1,5·10⁻⁴ |
+| KC20-2fl-2uni | P = 65 536, greedy 10 % | 100,00 % | P = 65 536, greedy 100 % | 100,00 % | — |
+| KC20-2fl-3rl | P = 65 536, greedy 25 % | 59,67 % | P = 65 536, greedy 100 % | 45,62 % | 1,6·10⁻⁴ |
+| KC20-2fl-3uni | **la misma** | 73,53 % | P = 65 536, greedy 100 % | 73,53 % | — |
+| KC20-2fl-4rl | P = 65 536, greedy 10 % | 48,38 % | P = 65 536, greedy 100 % | 30,90 % | 1,6·10⁻⁴ |
+| KC20-2fl-5rl | P = 65 536, greedy 25 % | 63,44 % | P = 65 536, greedy 100 % | 54,25 % | 1,6·10⁻⁴ |
+| KC30-2fl-1rl | P = 65 536, greedy 50 % | 45,29 % | P = 65 536, greedy 100 % | 41,27 % | 1,6·10⁻⁴ |
+| KC30-3fl-1rl | **la misma** | 14,68 % | P = 65 536, greedy 100 % | 14,68 % | — |
+| KC30-3fl-1uni | **la misma** | 14,64 % | P = 65 536, greedy 100 % | 14,64 % | — |
+| KC30-3fl-2rl | **la misma** | 24,33 % | P = 65 536, greedy 100 % | 24,33 % | — |
+| KC30-3fl-2uni | **la misma** | 42,98 % | P = 65 536, greedy 100 % | 42,98 % | — |
+| KC30-3fl-3rl | **la misma** | 28,19 % | P = 65 536, greedy 100 % | 28,19 % | — |
+| KC30-3fl-3uni | **la misma** | 22,82 % | P = 65 536, greedy 100 % | 22,82 % | — |
+
+En 13 de las 23 instancias una configuración con el greedy frenado cubre más frente que cualquiera
+con el greedy al 100 %, y en 3 más iguala la cobertura con una población o una tasa menores, es
+decir más barata. El patrón va por familias:
+
+- **KC10** (n = 10): hay que frenar la búsqueda local. Con el greedy en el 10-50 % de los
+  descendientes las ocho instancias encuentran **el frente óptimo publicado completo**, y además con
+  poblaciones muy por debajo del tope: P = 256 en KC10-2fl-2uni, P = 1024 en dos y P = 16 384 en
+  cuatro. En las seis donde el greedy al 100 % no llegaba al frente entero, se queda entre el 47 % y
+  el 84 % de sus puntos.
+- **KC20** (n = 20): el tope de población siempre, P = 65 536, y la búsqueda local frenada en seis
+  de las ocho, normalmente al 25 %, con ganancias de 7 a 17 puntos de cobertura. En KC20-2fl-3uni
+  gana la de serie y en KC20-2fl-1uni gana aplicar el greedy entero cada dos generaciones.
+- **KC30** (n = 30): el greedy al 100 % y en todas las generaciones es lo mejor en las seis de tres
+  objetivos; en KC30-2fl-1rl, la de dos, gana frenarlo al 50 %. Aquí la búsqueda local no sobra: es
+  lo que empuja.
+
+Es el mismo efecto que mide [Cuánta búsqueda local
+conviene](#cuánta-búsqueda-local-conviene-kgreedyrate), ahora en las 23 instancias: lo que decide no
+es el tamaño de la instancia ni el de la población por separado, sino **la población frente al
+espacio de búsqueda**. P = 65 536 es el 1,8 % de las 10! permutaciones de una instancia KC10, el
+2,7·10⁻¹¹ % de las 20! de una KC20 y el 2,5·10⁻²⁹ % de las 30! de una KC30: cuanto menos cubre la
+población, más falta hace la búsqueda local, y cuanto más cubre, más daño hace quitarle diversidad.
+
+**Confirmación en KC10.** La celda elegida es la más barata que llega al 100 % en diez ejecuciones,
+así que conviene repetirla con más y con otra semilla. Treinta ejecuciones con `--seed 20261005`:
+
+| Instancia | Configuración | Puntos del óptimo | Encontrados | Frente completo |
+|---|---|---|---|---|
+| KC10-2fl-1rl | P = 16 384, greedy 50 % | 58 | 99,71 % | 25/30 |
+| KC10-2fl-1uni | P = 1024, greedy 25 % | 13 | 98,71 % | 25/30 |
+| KC10-2fl-2rl | P = 1024, greedy 10 % | 15 | 100,00 % | 30/30 |
+| KC10-2fl-2uni | P = 256, greedy 10 % | 1 | 100,00 % | 30/30 |
+| KC10-2fl-3rl | P = 16 384, greedy 10 % | 55 | 100,00 % | 30/30 |
+| KC10-2fl-3uni | P = 65 536, greedy 10 % | 130 | 100,00 % | 30/30 |
+| KC10-2fl-4rl | P = 16 384, greedy 10 % | 53 | 99,93 % | 29/30 |
+| KC10-2fl-5rl | P = 16 384, greedy 10 % | 49 | 100,00 % | 30/30 |
+
+La elección aguanta: 5 de las 8 instancias cierran el frente óptimo en las treinta ejecuciones. Las
+3 que no llegan (1rl, 1uni, 4rl) lo rozan, con 98,71 % de los puntos en el peor caso, que es lo que
+cabe esperar de una celda elegida por su resultado en diez ejecuciones: la más barata que llega al
+100 % en diez lo hace casi siempre en treinta, no siempre.
+
 ### Cómo calcular el límite en otra GPU
 
 1. **Tope del código:** P ≤ 65536 (`kMaxPopulation` en `include/config.h`). Es un límite de tiempo, no de
