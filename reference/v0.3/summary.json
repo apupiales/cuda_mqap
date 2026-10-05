@@ -1,0 +1,230 @@
+{
+ "version": "v0.3",
+ "date": "2026-10-05",
+ "provenance": "Copy of v0.2 with every solution found afterwards that it does not dominate. Every addition is verified by recomputing the cost of its permutation against the instance.",
+ "added": [
+  {
+   "instance": "KC20-2fl-2uni",
+   "from": "v0.2",
+   "points": 8,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC20-2fl-1rl",
+   "from": "v0.2",
+   "points": 94,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC20-2fl-1uni",
+   "from": "v0.2",
+   "points": 71,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC20-2fl-2rl",
+   "from": "v0.2",
+   "points": 150,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC20-2fl-2uni",
+   "from": "v0.2",
+   "points": 8,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC20-2fl-3rl",
+   "from": "v0.2",
+   "points": 215,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC20-2fl-3uni",
+   "from": "v0.2",
+   "points": 243,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC20-2fl-4rl",
+   "from": "v0.2",
+   "points": 99,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC20-2fl-5rl",
+   "from": "v0.2",
+   "points": 174,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC30-2fl-1rl",
+   "from": "v0.2",
+   "points": 251,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC30-3fl-1uni",
+   "from": "v0.2",
+   "points": 3562,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC30-3fl-2uni",
+   "from": "v0.2",
+   "points": 847,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC30-3fl-2rl",
+   "from": "v0.2",
+   "points": 13388,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC30-3fl-3rl",
+   "from": "v0.2",
+   "points": 26219,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC30-3fl-3uni",
+   "from": "v0.2",
+   "points": 4181,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  },
+  {
+   "instance": "KC30-3fl-1rl",
+   "from": "v0.2",
+   "points": 17097,
+   "found_by": [
+    "rate010p1_P1024.txt",
+    "rate010p1_P16384.txt",
+    "rate010p1_P256.txt",
+    "rate010p1_P4096.txt"
+   ]
+  }
+ ],
+ "instances": {
+  "KC20-2fl-1rl": {
+   "points": 94
+  },
+  "KC20-2fl-1uni": {
+   "points": 71
+  },
+  "KC20-2fl-2rl": {
+   "points": 150
+  },
+  "KC20-2fl-2uni": {
+   "points": 8
+  },
+  "KC20-2fl-3rl": {
+   "points": 215
+  },
+  "KC20-2fl-3uni": {
+   "points": 243
+  },
+  "KC20-2fl-4rl": {
+   "points": 99
+  },
+  "KC20-2fl-5rl": {
+   "points": 174
+  },
+  "KC30-2fl-1rl": {
+   "points": 251
+  },
+  "KC30-3fl-1rl": {
+   "points": 17097
+  },
+  "KC30-3fl-1uni": {
+   "points": 3562
+  },
+  "KC30-3fl-2rl": {
+   "points": 13388
+  },
+  "KC30-3fl-2uni": {
+   "points": 847
+  },
+  "KC30-3fl-3rl": {
+   "points": 26219
+  },
+  "KC30-3fl-3uni": {
+   "points": 4181
+  }
+ }
+}
