@@ -1300,6 +1300,26 @@ La elección aguanta: 5 de las 8 instancias cierran el frente óptimo en las tre
 cabe esperar de una celda elegida por su resultado en diez ejecuciones: la más barata que llega al
 100 % en diez lo hace casi siempre en treinta, no siempre.
 
+**Confirmación en KC20 y KC30.** En las instancias donde ganó una configuración distinta, las dos
+con treinta ejecuciones y `--seed 20261005`, al tope de población, y el tiempo de pared de cada
+tanda:
+
+| Instancia | Mejor configuración | Cobertura | Greedy al 100 % | p | Minutos |
+|---|---|---|---|---|---|
+| KC20-2fl-1rl | P = 65 536, greedy 25 % | 96,20 % | 88,93 % | 2,0·10⁻¹¹ | 22,0 vs 28,5 |
+| KC20-2fl-1uni | P = 65 536, greedy 100 %, cada 2 generaciones | 97,46 % | 96,80 % | 0,08 | 24,9 vs 29,6 |
+| KC20-2fl-2rl | P = 65 536, greedy 25 % | 58,88 % | 41,42 % | 2,3·10⁻¹¹ | 21,6 vs 29,0 |
+| KC20-2fl-3rl | P = 65 536, greedy 25 % | 59,44 % | 45,22 % | 2,7·10⁻¹¹ | 21,8 vs 29,1 |
+| KC20-2fl-4rl | P = 65 536, greedy 10 % | 48,04 % | 31,17 % | 2,1·10⁻¹¹ | 20,3 vs 30,6 |
+| KC20-2fl-5rl | P = 65 536, greedy 25 % | 61,87 % | 53,94 % | 2,7·10⁻¹¹ | 21,4 vs 28,3 |
+| KC30-2fl-1rl | P = 65 536, greedy 50 % | 45,17 % | 41,11 % | 1,0·10⁻⁹ | 32,0 vs 42,5 |
+
+Aguantan seis de las siete, con p ≤ 1,1·10⁻⁹. La excepción es KC20-2fl-1uni: la ventaja de aplicar
+el greedy entero cada dos generaciones venía de las diez ejecuciones de la rejilla y con treinta
+deja de ser significativa (p = 0,081). Y frenar la búsqueda local además sale más rápido, entre un
+20 % y un 34 % menos de tiempo de pared por tanda, porque hay menos intentos de intercambio que
+evaluar.
+
 ### Cómo calcular el límite en otra GPU
 
 1. **Tope del código:** P ≤ 65536 (`kMaxPopulation` en `include/config.h`). Es un límite de tiempo, no de

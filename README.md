@@ -1279,6 +1279,24 @@ The choice holds: 5 of the 8 instances close the optimal front in all thirty run
 chosen on its result over ten runs should be expected to do: the cheapest one that reaches 100 %
 over ten reaches it almost always over thirty, not always.
 
+**Confirmation on KC20 and KC30.** On the instances where another configuration won, both with
+thirty runs and `--seed 20261005`, at the population cap, and the wall time of each batch:
+
+| Instance | Best configuration | Coverage | Greedy at 100 % | p | Minutes |
+|---|---|---|---|---|---|
+| KC20-2fl-1rl | P = 65,536, greedy 25 % | 96.20 % | 88.93 % | 2.0·10⁻¹¹ | 22.0 vs 28.5 |
+| KC20-2fl-1uni | P = 65,536, greedy 100 %, every 2 generations | 97.46 % | 96.80 % | 0.08 | 24.9 vs 29.6 |
+| KC20-2fl-2rl | P = 65,536, greedy 25 % | 58.88 % | 41.42 % | 2.3·10⁻¹¹ | 21.6 vs 29.0 |
+| KC20-2fl-3rl | P = 65,536, greedy 25 % | 59.44 % | 45.22 % | 2.7·10⁻¹¹ | 21.8 vs 29.1 |
+| KC20-2fl-4rl | P = 65,536, greedy 10 % | 48.04 % | 31.17 % | 2.1·10⁻¹¹ | 20.3 vs 30.6 |
+| KC20-2fl-5rl | P = 65,536, greedy 25 % | 61.87 % | 53.94 % | 2.7·10⁻¹¹ | 21.4 vs 28.3 |
+| KC30-2fl-1rl | P = 65,536, greedy 50 % | 45.17 % | 41.11 % | 1.0·10⁻⁹ | 32.0 vs 42.5 |
+
+The gain holds on six of the seven, at p ≤ 1.1·10⁻⁹. The exception is KC20-2fl-1uni: the advantage
+of the whole greedy every two generations came from the ten runs of the grid and stops being
+significant over thirty (p = 0.081). And throttling the local search is also faster, between 20 %
+and 34 % less wall time per batch, because there are fewer swap trials to evaluate.
+
 ### How to compute the limit for another GPU
 
 1. **Code cap:** P ≤ 65536 (`kMaxPopulation` in `include/config.h`). It is a time limit, not a memory or
