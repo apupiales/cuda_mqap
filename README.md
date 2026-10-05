@@ -615,13 +615,42 @@ the KC20 ones). No figure of the workbook is left from the previous traversal.
 - **Instance tabs (KC10-\*, KC20-\*):** each tab has two blocks of this version to the right of the
   original ones, with 10 or 20 genes and 2 objectives per row, and two series in its chart: the
   **baseline** (green) uses the population and iterations of the tab, and **population cap** (red)
-  those same iterations with P = 65536, the maximum of the branch. Both with `--verify` OK.
-  - On KC10 the baseline plots the first of 100 concurrent runs and the population cap a single run.
-    On KC20, one run in both.
-  - Under each block there is a note with the date, the branch, the command, the seed and the number
-    of distinct solutions.
-  - KC10-2fl-2uni ran with P = 16 (the original series used P = 2) and 30 iterations, which is what
-    every series of its tab says, although its former settings file says 70.
+  those same iterations with P = 65536, the maximum of the branch. Both with `--verify` OK. - On
+  KC10 the baseline plots the first of 100 concurrent runs and the population cap a single run. On
+  KC20, one run in both. - Under each block there is a note with the date, the branch, the command,
+  the seed and the number of distinct solutions. - KC10-2fl-2uni ran with P = 16 (the original
+  series used P = 2) and 30 iterations, which is what every series of its tab says, although its
+  former settings file says 70.
+
+On 2026-10-05 two more series were added, and the two earlier ones took the name of their role in
+the experiment instead of their colour, which is what the legend of each chart says:
+
+- **Best configuration** (blue): the one [the configuration
+  grid](#the-best-configuration-for-each-problem) found for that instance. A single run, the first
+  of the batch it was confirmed with.
+- **Best known front** (grey), on the KC20 tabs only: `reference/v0.3`. On KC10 that role is already
+  played by the "Optimo de Pareto" series of the original workbook, which is the published optimum.
+
+| Instance | Best configuration | Points | Best known front | Points |
+|---|---|---|---|---|
+| KC10-2fl-1rl | P = 16384, greedy 50 %, 70 iteraciones | 58 | published optimum | 58 |
+| KC10-2fl-1uni | P = 1024, greedy 25 %, 70 iteraciones | 13 | published optimum | 13 |
+| KC10-2fl-2rl | P = 1024, greedy 10 %, 70 iteraciones | 15 | published optimum | 15 |
+| KC10-2fl-2uni | P = 256, greedy 10 %, 30 iteraciones | 1 | published optimum | 1 |
+| KC10-2fl-3rl | P = 16384, greedy 10 %, 70 iteraciones | 55 | published optimum | 55 |
+| KC10-2fl-3uni | P = 65536, greedy 10 %, 25 iteraciones | 130 | published optimum | 130 |
+| KC10-2fl-4rl | P = 16384, greedy 10 %, 70 iteraciones | 53 | published optimum | 53 |
+| KC10-2fl-5rl | P = 16384, greedy 10 %, 70 iteraciones | 49 | published optimum | 49 |
+| KC20-2fl-1rl | P = 65536, greedy 25 %, 300 iteraciones | 92 | reference/v0.3 | 94 |
+| KC20-2fl-1uni | P = 65536, greedy 100 % cada 2 generaciones, 300 iteraciones | 70 | reference/v0.3 | 71 |
+| KC20-2fl-2uni | P = 65536, greedy 10 %, 300 iteraciones | 8 | reference/v0.3 | 8 |
+| KC20-2fl-3uni | — | — | reference/v0.3 | 243 |
+
+KC20-2fl-3uni has no best-configuration series because its best is the one the population cap
+already plots, and repeating it with another seed would only crowd the legend. And a correction: the
+update of 2026-10-03 had left the two series of this version **without a name**, because stripping
+the columns of their block removed their header cell too and the legend was left with the name the
+chart had cached; the header is written again now, and it says the role of the series.
 
 With P = 65536 the whole final population is non-dominated, so the front the program writes has
 65,536 rows, of which only 1 to 227 are distinct solutions. The block and the series keep the

@@ -620,15 +620,45 @@ instancias KC10 y 343 en las KC20). Ya no queda ninguna cifra del libro medida c
 anterior.
 
 - **Pestañas de instancia (KC10-\*, KC20-\*):** cada pestaña tiene dos bloques de esta versión a la
-  derecha de los originales, con 10 o 20 genes y 2 objetivos por fila, y dos series en su gráfico: la
-  **línea base** (verde) usa la población y las iteraciones de la pestaña, y **tope de población**
-  (roja) esas mismas iteraciones con P = 65536, el máximo de la rama. Las dos con `--verify` OK.
-  - En las KC10 la línea base dibuja la primera de 100 ejecuciones concurrentes; el tope de población,
-    una ejecución única. En las KC20, una ejecución en las dos.
-  - Debajo de cada bloque hay una nota con la fecha, la rama, el comando, la semilla y el número de
-    soluciones distintas.
-  - KC10-2fl-2uni se ejecutó con P = 16 (la serie original usaba P = 2) y con 30 iteraciones, que es
-    lo que dicen todas las series de su pestaña, aunque su antiguo fichero de *settings* diga 70.
+  derecha de los originales, con 10 o 20 genes y 2 objetivos por fila, y dos series en su gráfico:
+  la **línea base** (verde) usa la población y las iteraciones de la pestaña, y **tope de
+  población** (roja) esas mismas iteraciones con P = 65536, el máximo de la rama. Las dos con
+  `--verify` OK. - En las KC10 la línea base dibuja la primera de 100 ejecuciones concurrentes; el
+  tope de población, una ejecución única. En las KC20, una ejecución en las dos. - Debajo de cada
+  bloque hay una nota con la fecha, la rama, el comando, la semilla y el número de soluciones
+  distintas. - KC10-2fl-2uni se ejecutó con P = 16 (la serie original usaba P = 2) y con 30
+  iteraciones, que es lo que dicen todas las series de su pestaña, aunque su antiguo fichero de
+  *settings* diga 70.
+
+El 2026-10-05 se añadieron dos series más, y las dos anteriores pasaron a llamarse por su papel en
+el experimento en vez de por su color, que es lo que dice la leyenda de cada gráfico:
+
+- **Mejor configuración** (azul): la que encontró [la rejilla de
+  configuraciones](#la-mejor-configuración-de-cada-problema) para esa instancia. Una sola ejecución,
+  la primera del lote con el que se confirmó.
+- **Mejor frente conocido** (gris), solo en las pestañas KC20: `reference/v0.3`. En las KC10 ese
+  papel ya lo cumple la serie «Optimo de Pareto» del libro original, que es el óptimo publicado.
+
+| Instancia | Mejor configuración | Puntos | Mejor frente conocido | Puntos |
+|---|---|---|---|---|
+| KC10-2fl-1rl | P = 16384, greedy 50 %, 70 iteraciones | 58 | óptimo publicado | 58 |
+| KC10-2fl-1uni | P = 1024, greedy 25 %, 70 iteraciones | 13 | óptimo publicado | 13 |
+| KC10-2fl-2rl | P = 1024, greedy 10 %, 70 iteraciones | 15 | óptimo publicado | 15 |
+| KC10-2fl-2uni | P = 256, greedy 10 %, 30 iteraciones | 1 | óptimo publicado | 1 |
+| KC10-2fl-3rl | P = 16384, greedy 10 %, 70 iteraciones | 55 | óptimo publicado | 55 |
+| KC10-2fl-3uni | P = 65536, greedy 10 %, 25 iteraciones | 130 | óptimo publicado | 130 |
+| KC10-2fl-4rl | P = 16384, greedy 10 %, 70 iteraciones | 53 | óptimo publicado | 53 |
+| KC10-2fl-5rl | P = 16384, greedy 10 %, 70 iteraciones | 49 | óptimo publicado | 49 |
+| KC20-2fl-1rl | P = 65536, greedy 25 %, 300 iteraciones | 92 | reference/v0.3 | 94 |
+| KC20-2fl-1uni | P = 65536, greedy 100 % cada 2 generaciones, 300 iteraciones | 70 | reference/v0.3 | 71 |
+| KC20-2fl-2uni | P = 65536, greedy 10 %, 300 iteraciones | 8 | reference/v0.3 | 8 |
+| KC20-2fl-3uni | — | — | reference/v0.3 | 243 |
+
+En KC20-2fl-3uni no hay serie de mejor configuración porque la mejor es la del tope de población, y
+repetirla con otra semilla solo cargaría la leyenda. Y una corrección: la actualización del
+2026-10-03 había dejado las dos series de esta versión **sin nombre**, porque al limpiar las
+columnas de su bloque borraba también su celda de cabecera y la leyenda se quedaba con el nombre que
+el gráfico tenía en caché; ahora la cabecera está escrita y dice el papel de la serie.
 
 Con P = 65536 la población final entera es no dominada, así que el frente que escribe el programa
 tiene 65 536 filas, de las que solo 1 a 227 son soluciones distintas. El bloque y la serie guardan
