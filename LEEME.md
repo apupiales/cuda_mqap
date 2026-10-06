@@ -48,6 +48,10 @@ concurrente** en una sola llamada al programa.
 - Selección por torneo binario, mutación por intercambio y mutación por transposición (inversión de un segmento).
 - Greedy 2-opt adaptado a varios objetivos: en cada generación se elige al azar si el criterio de mejora
   es la suma de todos los objetivos o un único objetivo.
+- La búsqueda local se puede limitar a una fracción de los descendientes o a una generación de cada
+  N (`--greedy-rate`, `--greedy-every`), y **cada instancia usa por defecto la configuración que se
+  midió mejor para ella**; ver [La mejor configuración de cada
+  problema](#la-mejor-configuración-de-cada-problema).
 - Instancias de 2 y 3 objetivos (flujos) y hasta 64 instalaciones. El cargador rechaza cualquier
   instancia mayor (`kMaxFacilities` en `include/config.h`), y con 3 objetivos el límite efectivo es
   63 en GPU con 64 KB de *shared memory*, porque con n = 64 las matrices de flujo y distancia de un
@@ -68,7 +72,8 @@ concurrente** en una sola llamada al programa.
 
 **Ingeniería**
 - Separación estricta host/device: `main.cpp` no contiene código CUDA, y los kernels se exponen mediante funciones lanzadoras.
-- Instancias leídas de los ficheros `.dat` en tiempo de ejecución; los parámetros se pasan por línea de comandos.
+- Instancias leídas de los ficheros `.dat` en tiempo de ejecución; los parámetros se pasan por línea
+  de comandos, y los que no se dan salen de la tabla de la instancia (`include/best_configuration.h`).
 - Control de errores `CUDA_CHECK`/`CUDA_CHECK_KERNEL` y gestión de memoria RAII (`DeviceBuffer<T>`).
 - **Plug and play en Visual Studio 2026**: clonar, abrir `cuda_mqap.slnx` y pulsar F5. La versión de CUDA,
   el toolset de C++ y las arquitecturas de GPU se adaptan a la máquina. También `CMakeLists.txt` con `ctest`.
@@ -136,21 +141,25 @@ Cada generación hace lo siguiente:
    El ganador se copia y se muta:
    - **Mutación por intercambio**: se intercambian dos genes al azar; se aplica 2 veces.
    - **Mutación por transposición**: se invierte el segmento comprendido entre dos posiciones aleatorias.
-3. **[Greedy 2-opt](#g-greedy-2opt) adaptado** sobre cada descendiente. Los pares de posiciones se recorren en el orden
-   de la versión original —`r` en `[0, n−2]`, `s` en `[1, n−1]`, saltando `r == s`, así que casi todos los
-   pares se visitan en los dos órdenes— y se conserva el intercambio si no empeora el criterio de la
-   generación, elegido al azar para cada ejecución y generación: la suma de todos los objetivos o un
-   único objetivo `k`. Volver a visitar un par después de aceptar un intercambio puede mejorarlo otra
-   vez, y eso es lo que hace que la calidad iguale a la de la versión original; ver [Calidad frente al
-   Greedy 2-opt original](#quality-vs-original). La idea de adaptar el criterio proviene de
+3. **[Greedy 2-opt](#g-greedy-2opt) adaptado** sobre los descendientes que indique la configuración
+   —todos salvo que `--greedy-rate` o `--greedy-every` digan otra cosa. Los pares de posiciones se
+   recorren en el orden de la versión original —`r` en `[0, n−2]`, `s` en `[1, n−1]`, saltando
+   `r == s`, así que casi todos los pares se visitan en los dos órdenes— y se conserva el
+   intercambio si no empeora el criterio de la generación, elegido al azar para cada ejecución y
+   generación: la suma de todos los objetivos o un único objetivo `k`. Volver a visitar un par
+   después de aceptar un intercambio puede mejorarlo otra vez, y eso es lo que hace que la calidad
+   iguale a la de la versión original; ver [Calidad frente al Greedy 2-opt
+   original](#quality-vs-original). La idea de adaptar el criterio proviene de
    <https://arxiv.org/ftp/arxiv/papers/1109/1109.1276.pdf>.
 
 Parámetros:
 
 | Parámetro | Dónde | Valor por defecto |
 |---|---|---|
-| Tamaño de población `P` | `--population` | 64 (potencia de 2 entre 16 y 65536) |
-| Generaciones | `--iterations` | 70 |
+| Tamaño de población `P` | `--population` | la de la instancia, o 64 (potencia de 2 entre 16 y 65536) |
+| Generaciones | `--iterations` | las de la instancia, o 70 |
+| Fracción de descendientes con búsqueda local | `--greedy-rate` | la de la instancia, o 1.0 |
+| Generaciones entre búsquedas locales | `--greedy-every` | 1 |
 | Ejecuciones independientes | `--runs` | 1 |
 | Semilla | `--seed` | aleatoria (se imprime) |
 | Mutaciones por intercambio por hijo | `include/config.h` (`kExchangeMutations`) | 2 |
@@ -164,6 +173,7 @@ Parámetros:
 ```
 cuda_mqap/
 ├── include/
+│   ├── best_configuration.h  Configuración medida como mejor de cada instancia, que usa por defecto
 │   ├── config.h            Límites (n, P, objetivos) y parámetros de los operadores
 │   ├── cuda_check.cuh      CUDA_CHECK / CUDA_CHECK_KERNEL
 │   ├── device_buffer.cuh   DeviceBuffer<T>: memoria de GPU con RAII
@@ -189,7 +199,8 @@ cuda_mqap/
 ├── scripts/prepare_original.py   Árbol de compilación de la versión original para una instancia
 ├── scripts/compare_versions.py   Hipervolumen, cobertura y Mann-Whitney entre dos versiones
 ├── scripts/run_rate_grid.ps1     Rejilla de población x configuración del greedy, por instancia
-├── include/best_configuration.h  Configuración medida como mejor de cada instancia, que usa por defecto
+├── scripts/analyze_rate_grid.py  Puntúa las celdas de la rejilla y da la mejor configuración
+├── scripts/build_reference.py    Construye el mejor frente conocido de una instancia (.KBP)
 ├── mQAPData/               Instancias (.dat) y frentes óptimos (.PO)
 ├── reference/v0.x/         Mejores frentes conocidos (.KBP) por versión, con su summary.json
 ├── mQAPMetrics/            Scripts Node.js de métricas y gráficos 3D
@@ -376,30 +387,34 @@ cuda_mqap <instance.dat> [opciones]
 Ejemplos:
 
 ```
-:: Una ejecución con verificación
+:: Con la configuración medida mejor para la instancia
 build\x64\Release\cuda_mqap.exe mQAPData\KC10-2fl-1rl.dat --verify
 
-:: 30 ejecuciones independientes en paralelo, reproducibles
-build\x64\Release\cuda_mqap.exe mQAPData\KC20-2fl-1rl.dat --iterations 300 --runs 30 --seed 2026 --quiet
+:: Con la configuración genérica, P = 64 y 70 generaciones
+build\x64\Release\cuda_mqap.exe mQAPData\KC10-2fl-1rl.dat --untuned --verify
 
-:: Instancia de 3 objetivos
+:: 30 ejecuciones independientes en paralelo, reproducibles
+build\x64\Release\cuda_mqap.exe mQAPData\KC20-2fl-1rl.dat --runs 30 --seed 2026 --quiet
+
+:: Instancia de 3 objetivos con una población pequeña
 build\x64\Release\cuda_mqap.exe mQAPData\KC30-3fl-1rl.dat --population 32 --runs 10
 ```
 
-Salida por consola (resumida):
+Salida por consola de la segunda, la genérica, que es la que cabe en unas líneas:
 
 ```
 Instance KC10-2fl-1rl: n = 10, objectives = 2 | population = 64, iterations = 70, runs = 1, seed = 42
+Greedy 2-opt on 100 % of the offspring | --untuned: generic defaults
 
-FINAL SOLUTION (run 0, 64 non-dominated)
-0 3 6 1 9 4 8 7 5 2 5925064 2282788
+FINAL SOLUTION (run 0, 37 non-dominated)
 5 1 3 4 0 6 2 8 7 9 1665490 5884156
-5 1 6 3 0 2 8 9 7 4 1869616 4670952
+0 3 6 1 9 4 8 7 5 2 5925064 2282788
+5 0 6 3 1 2 8 9 7 4 1874454 4641012
 ...
 Verification: OK
 
 Results appended to result_KC10-2fl-1rl_nsga2_greedy_2opt.txt
-Time Spent: 0.148970 s (GPU 13.494 ms)
+Time Spent: 0.112270 s (GPU 12.258 ms)
 ```
 
 ### La ejecución por defecto de cada instancia
@@ -575,8 +590,9 @@ percentil 90 llegó al tope aunque la mediana no: ahí la ejecución más lenta 
 | KC30-3fl-1uni | > 2000 | > 5000 | > 100 000 |
 | KC30-3fl-1rl | > 2000 | > 5000 | > 100 000 |
 
-**Calidad alcanzada.** Cada celda tiene dos números medidos contra el mismo frente de referencia, de
-modo que las tres columnas se pueden leer una al lado de otra:
+**Calidad alcanzada.** Cada celda tiene dos números medidos contra el mismo frente de referencia,
+[`reference/v0.1`](#reference-versions), de modo que las tres columnas se pueden leer una al lado de
+otra:
 
 - El **primero es el [hipervolumen](#g-hypervolume)** del frente con el que terminó la ejecución,
   como fracción del que domina el frente de referencia. Responde a "cuánto de la región interesante
@@ -586,7 +602,7 @@ modo que las tres columnas se pueden leer una al lado de otra:
   realmente la ejecución, en fracción. Responde a "cuántos compromisos distintos ofrece este
   frente", y es lo que separa a las configuraciones.
 
-KC30-3fl-2uni lo hace evidente. Su frente de referencia tiene 821 puntos: con P = 1024 la ejecución
+KC30-3fl-2uni lo hace evidente. Su frente de referencia tiene 821 puntos en `v0.1`: con P = 1024 la ejecución
 domina el 92,54 % de su volumen habiendo encontrado el 9,5 % de sus puntos, unos 78, y con P = 65536
 domina el 99,52 % habiendo encontrado el 76,8 %, unos 630. Casi el mismo volumen, muchas más
 soluciones entre las que elegir.
@@ -640,28 +656,38 @@ terceros que no se modifican nunca. En KC20 y KC30 es el mejor frente que conoce
 como fichero `.KBP` con el mismo formato que un `.PO` —una permutación en base 1 y sus costes por línea— y
 guardado en `reference/<versión>/`, un directorio por versión.
 
-**Todas las tablas de este documento están medidas contra `reference/v0.1`**, la versión que produjo la
-campaña. Una solución que ningún frente de una versión domina se añade siempre, y eso no invalida lo
+**Cada tabla de este documento dice contra qué versión está medida**, y el párrafo que sigue a la
+tabla recoge cuál usa cada una. Una solución que ningún frente de una versión domina se añade siempre, y eso no invalida lo
 publicado contra una versión anterior: significa que el mejor frente conocido ha mejorado. Una versión
 publicada no se edita; lo que se añade crea el directorio siguiente. La regla y el comando están en
 [`reference/README.md`](reference/README.md).
 
-| Instancia | Frente de referencia | Puntos en `v0.1` | Puntos en `v0.2` |
-|---|---|---|---|
-| KC10-2fl-* | óptimo publicado | 1 a 130, en [`mQAPData/*.PO`](mQAPData/) | los mismos, sin versionar |
-| KC20-2fl-1rl | mejor conocido | [91](reference/v0.1/KC20-2fl-1rl.KBP) | [94](reference/v0.2/KC20-2fl-1rl.KBP) |
-| KC20-2fl-1uni | mejor conocido | [71](reference/v0.1/KC20-2fl-1uni.KBP) | [71](reference/v0.2/KC20-2fl-1uni.KBP) |
-| KC20-2fl-2uni | mejor conocido | [8](reference/v0.1/KC20-2fl-2uni.KBP) | [8](reference/v0.2/KC20-2fl-2uni.KBP) |
-| KC20-2fl-3uni | mejor conocido | [243](reference/v0.1/KC20-2fl-3uni.KBP) | [241](reference/v0.2/KC20-2fl-3uni.KBP) |
-| KC30-3fl-1rl | mejor conocido | [16 989](reference/v0.1/KC30-3fl-1rl.KBP) | [16 989](reference/v0.2/KC30-3fl-1rl.KBP) |
-| KC30-3fl-1uni | mejor conocido | [3448](reference/v0.1/KC30-3fl-1uni.KBP) | [3448](reference/v0.2/KC30-3fl-1uni.KBP) |
-| KC30-3fl-2uni | mejor conocido | [821](reference/v0.1/KC30-3fl-2uni.KBP) | [821](reference/v0.2/KC30-3fl-2uni.KBP) |
+| Instancia | Frente de referencia | `v0.1` | `v0.2` | `v0.3` |
+|---|---|---|---|---|
+| KC10-2fl-* | óptimo publicado | 1 a 130, en [`mQAPData/*.PO`](mQAPData/) | los mismos, sin versionar | — |
+| KC20-2fl-1rl | mejor conocido | [91](reference/v0.1/KC20-2fl-1rl.KBP) | [94](reference/v0.2/KC20-2fl-1rl.KBP) | [94](reference/v0.3/KC20-2fl-1rl.KBP) |
+| KC20-2fl-1uni | mejor conocido | [71](reference/v0.1/KC20-2fl-1uni.KBP) | [71](reference/v0.2/KC20-2fl-1uni.KBP) | [71](reference/v0.3/KC20-2fl-1uni.KBP) |
+| KC20-2fl-2rl | mejor conocido | — | — | [150](reference/v0.3/KC20-2fl-2rl.KBP) |
+| KC20-2fl-2uni | mejor conocido | [8](reference/v0.1/KC20-2fl-2uni.KBP) | [8](reference/v0.2/KC20-2fl-2uni.KBP) | [8](reference/v0.3/KC20-2fl-2uni.KBP) |
+| KC20-2fl-3rl | mejor conocido | — | — | [215](reference/v0.3/KC20-2fl-3rl.KBP) |
+| KC20-2fl-3uni | mejor conocido | [243](reference/v0.1/KC20-2fl-3uni.KBP) | [241](reference/v0.2/KC20-2fl-3uni.KBP) | [243](reference/v0.3/KC20-2fl-3uni.KBP) |
+| KC20-2fl-4rl | mejor conocido | — | — | [99](reference/v0.3/KC20-2fl-4rl.KBP) |
+| KC20-2fl-5rl | mejor conocido | — | — | [174](reference/v0.3/KC20-2fl-5rl.KBP) |
+| KC30-2fl-1rl | mejor conocido | — | — | [251](reference/v0.3/KC30-2fl-1rl.KBP) |
+| KC30-3fl-1rl | mejor conocido | [16 989](reference/v0.1/KC30-3fl-1rl.KBP) | [16 989](reference/v0.2/KC30-3fl-1rl.KBP) | [17 097](reference/v0.3/KC30-3fl-1rl.KBP) |
+| KC30-3fl-1uni | mejor conocido | [3448](reference/v0.1/KC30-3fl-1uni.KBP) | [3448](reference/v0.2/KC30-3fl-1uni.KBP) | [3562](reference/v0.3/KC30-3fl-1uni.KBP) |
+| KC30-3fl-2rl | mejor conocido | — | — | [13 388](reference/v0.3/KC30-3fl-2rl.KBP) |
+| KC30-3fl-2uni | mejor conocido | [821](reference/v0.1/KC30-3fl-2uni.KBP) | [821](reference/v0.2/KC30-3fl-2uni.KBP) | [847](reference/v0.3/KC30-3fl-2uni.KBP) |
+| KC30-3fl-3rl | mejor conocido | — | — | [26 219](reference/v0.3/KC30-3fl-3rl.KBP) |
+| KC30-3fl-3uni | mejor conocido | — | — | [4181](reference/v0.3/KC30-3fl-3uni.KBP) |
 
 `v0.2` añade las siete soluciones que encontró el experimento de la tasa del greedy en KC20 con
-P = 65536. En KC20-2fl-1rl son 3 puntos más; en KC20-2fl-3uni los 4 nuevos dominan a 6 de los antiguos,
-así que el frente pasa de 243 a 241 puntos. Una fracción de hipervolumen publicada contra `v0.1` se
-reescala por 0,9999825 y 0,9999194 respectivamente, y una de cobertura por 0,96809 y 1,00830: así se lee
-una tabla de `v0.1` al lado de una de `v0.2`.
+P = 65536. `v0.3` es la de la rejilla de configuraciones: da frente por primera vez a ocho instancias y
+mejora cuatro de las siete que ya lo tenían, así que **las quince instancias sin óptimo publicado tienen
+ya su frente**. Las tablas de este documento dicen contra qué versión están medidas: la campaña de
+convergencia y la comparación con la original contra `v0.1`, y la rejilla y el libro de Excel contra
+`v0.3`. Una fracción de hipervolumen publicada contra `v0.1` se reescala por 0,9999825 en KC20-2fl-1rl y
+0,9999194 en KC20-2fl-3uni, y una de cobertura por 0,96809 y 1,00830.
 
 Los puntos son los que sobreviven al filtro de dominancia sobre la unión de los frentes finales de
 todas las ejecuciones y todas las poblaciones: 821 de 4428 en KC30-3fl-2uni, y 16 989 de 39 644 en
@@ -987,8 +1013,14 @@ implementación independiente en CPU:
 | Supervivencia multibloque | La misma comprobación forzando el camino multibloque con P = 16, 64 y 256, y con P = 512, 1024 y 2048 |
 | Poblaciones grandes | Con P = 32768 y P = 65536 (más de 32767 individuos por ejecución): los supervivientes son distintos, están ordenados por (rango, crowding) y nadie de la población domina a un superviviente de rango 1 |
 | Greedy 2-opt | La permutación resultante es **idéntica** a la de un greedy en CPU que recalcula el coste completo (n = 10, 30 y 60, este último con más de 48 KB de *shared memory*) |
+| Tasa y periodo del greedy | Un descendiente que la puerta deja fuera conserva su permutación y su fitness se escribe igual: con la tasa al 25 % y con el periodo 2 en una generación impar |
 | Reproducción | Los supervivientes y su fitness se copian correctamente y los hijos son permutaciones válidas |
 | Población inicial | Todas las permutaciones son válidas y están barajadas |
+| Frente final | Cada solución distinta aparece una sola vez en el fichero de resultados |
+| Traza (`--trace`) | Hay un frente por generación y el de la última coincide con el frente final |
+
+Son **26 comprobaciones**; al terminar imprime `ALL TESTS PASSED` o el detalle de cada fallo con su
+fichero y línea.
 
 ```
 build\x64\Release\test_kernels.exe mQAPData
@@ -1024,7 +1056,9 @@ monolítico anterior (`kernel.cu`, commit `3f3a187`) con sus errores de memoria 
 | KC30-3fl-1rl, P=32, 70 gen., 30 ejecuciones | ~21 min (estimado) | 0,34 s (250 ms de GPU) | ~3 700× |
 
 En esta versión, el tiempo de pared está dominado por la creación del contexto CUDA (~0,1 s), así
-que el tiempo de GPU refleja mejor el coste del algoritmo.
+que el tiempo de GPU refleja mejor el coste del algoritmo. Las filas están medidas con el greedy en
+todos los descendientes, que es lo que hace la original, así que para reproducirlas hay que añadir
+`--untuned`: si no, cada instancia usa su configuración medida y el tiempo cambia.
 
 Perfil con Nsight Systems (KC10-2fl-1rl, 70 generaciones, 1 ejecución):
 

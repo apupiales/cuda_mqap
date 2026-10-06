@@ -47,6 +47,10 @@ parallel primitives), and it is 36 launches per generation from P = 512 to P = 4
 - Binary tournament selection, exchange mutation and transposition mutation (reversal of a segment).
 - Greedy 2-opt adapted to several objectives: in each generation the improvement criterion is chosen at
   random, either the sum of all objectives or a single objective.
+- The local search can be limited to a fraction of the offspring or to one generation in N
+  (`--greedy-rate`, `--greedy-every`), and **each instance defaults to the configuration measured
+  best for it**; see [The best configuration for each
+  problem](#the-best-configuration-for-each-problem).
 - Instances with 2 or 3 objectives (flow matrices) and up to 64 facilities. The loader rejects
   anything larger (`kMaxFacilities` in `include/config.h`), and with 3 objectives the effective
   limit is 63 on GPUs with 64 KB of *shared memory*, because the flow and distance matrices of a
@@ -66,7 +70,8 @@ parallel primitives), and it is 36 launches per generation from P = 512 to P = 4
 
 **Engineering**
 - Strict host/device separation: `main.cpp` contains no CUDA code, and kernels are exposed through launcher functions.
-- Instances read from the `.dat` files at runtime; parameters are passed on the command line.
+- Instances read from the `.dat` files at runtime; parameters are passed on the command line, and
+  the ones not given come from the table of the instance (`include/best_configuration.h`).
 - `CUDA_CHECK`/`CUDA_CHECK_KERNEL` error checking and RAII memory management (`DeviceBuffer<T>`).
 - **Plug and play in Visual Studio 2026**: clone, open `cuda_mqap.slnx`, press F5. The CUDA version,
   C++ toolset and GPU architectures adapt to the machine. Also `CMakeLists.txt` with `ctest`.
@@ -134,12 +139,13 @@ Each generation does the following:
    The winner is copied and mutated:
    - **Exchange mutation**: two random genes are swapped; it is applied twice.
    - **Transposition mutation**: the segment between two random positions is reversed.
-3. **Adapted [Greedy 2-opt](#g-greedy-2opt)** on each offspring. The pairs of positions are visited in the order of
-   the original version — `r` over `[0, n−2]`, `s` over `[1, n−1]`, skipping `r == s`, so most pairs are
-   visited in both orders — and a swap is kept if it does not worsen the criterion of the generation,
-   chosen at random for each run and generation: the sum of all objectives or a single objective `k`.
-   Revisiting a pair after an accepted swap can improve it again, and that is what makes the quality
-   match the original version; see [Quality versus the original Greedy
+3. **Adapted [Greedy 2-opt](#g-greedy-2opt)** on the offspring the configuration says — all of them
+   unless `--greedy-rate` or `--greedy-every` say otherwise. The pairs of positions are visited in
+   the order of the original version — `r` over `[0, n−2]`, `s` over `[1, n−1]`, skipping `r == s`,
+   so most pairs are visited in both orders — and a swap is kept if it does not worsen the criterion
+   of the generation, chosen at random for each run and generation: the sum of all objectives or a
+   single objective `k`. Revisiting a pair after an accepted swap can improve it again, and that is
+   what makes the quality match the original version; see [Quality versus the original Greedy
    2-opt](#quality-vs-original). The idea of adapting the criterion comes from
    <https://arxiv.org/ftp/arxiv/papers/1109/1109.1276.pdf>.
 
@@ -147,8 +153,10 @@ Parameters:
 
 | Parameter | Where | Default |
 |---|---|---|
-| Population size `P` | `--population` | 64 (power of 2 between 16 and 65536) |
-| Generations | `--iterations` | 70 |
+| Population size `P` | `--population` | the one of the instance, or 64 (power of 2 between 16 and 65536) |
+| Generations | `--iterations` | the ones of the instance, or 70 |
+| Fraction of the offspring with local search | `--greedy-rate` | the one of the instance, or 1.0 |
+| Generations between local searches | `--greedy-every` | 1 |
 | Independent runs | `--runs` | 1 |
 | Seed | `--seed` | random (printed) |
 | Exchange mutations per child | `include/config.h` (`kExchangeMutations`) | 2 |
@@ -162,6 +170,7 @@ Parameters:
 ```
 cuda_mqap/
 ├── include/
+│   ├── best_configuration.h  Configuration measured best for each instance, used as its defaults
 │   ├── config.h            Limits (n, P, objectives) and operator parameters
 │   ├── cuda_check.cuh      CUDA_CHECK / CUDA_CHECK_KERNEL
 │   ├── device_buffer.cuh   DeviceBuffer<T>: GPU memory with RAII
@@ -187,7 +196,8 @@ cuda_mqap/
 ├── scripts/prepare_original.py   Build tree of the original version for one instance
 ├── scripts/compare_versions.py   Hypervolume, coverage and Mann-Whitney between two versions
 ├── scripts/run_rate_grid.ps1     Grid of population x greedy configuration, per instance
-├── include/best_configuration.h  Configuration measured best for each instance, used as its defaults
+├── scripts/analyze_rate_grid.py  Scores the cells of the grid and reports the best configuration
+├── scripts/build_reference.py    Builds the best known front of an instance (.KBP)
 ├── mQAPData/               Instances (.dat) and optimal fronts (.PO)
 ├── reference/v0.x/         Best known fronts (.KBP) by version, with their summary.json
 ├── mQAPMetrics/            Node.js metric and 3D plot scripts
@@ -374,30 +384,34 @@ cuda_mqap <instance.dat> [options]
 Examples:
 
 ```
-:: One run with verification
+:: With the configuration measured best for the instance
 build\x64\Release\cuda_mqap.exe mQAPData\KC10-2fl-1rl.dat --verify
 
-:: 30 independent runs in parallel, reproducible
-build\x64\Release\cuda_mqap.exe mQAPData\KC20-2fl-1rl.dat --iterations 300 --runs 30 --seed 2026 --quiet
+:: With the generic configuration, P = 64 and 70 generations
+build\x64\Release\cuda_mqap.exe mQAPData\KC10-2fl-1rl.dat --untuned --verify
 
-:: 3-objective instance
+:: 30 independent runs in parallel, reproducible
+build\x64\Release\cuda_mqap.exe mQAPData\KC20-2fl-1rl.dat --runs 30 --seed 2026 --quiet
+
+:: 3-objective instance with a small population
 build\x64\Release\cuda_mqap.exe mQAPData\KC30-3fl-1rl.dat --population 32 --runs 10
 ```
 
-Console output (abridged):
+Console output of the second one, the generic one, which is the one that fits in a few lines:
 
 ```
 Instance KC10-2fl-1rl: n = 10, objectives = 2 | population = 64, iterations = 70, runs = 1, seed = 42
+Greedy 2-opt on 100 % of the offspring | --untuned: generic defaults
 
-FINAL SOLUTION (run 0, 64 non-dominated)
-0 3 6 1 9 4 8 7 5 2 5925064 2282788
+FINAL SOLUTION (run 0, 37 non-dominated)
 5 1 3 4 0 6 2 8 7 9 1665490 5884156
-5 1 6 3 0 2 8 9 7 4 1869616 4670952
+0 3 6 1 9 4 8 7 5 2 5925064 2282788
+5 0 6 3 1 2 8 9 7 4 1874454 4641012
 ...
 Verification: OK
 
 Results appended to result_KC10-2fl-1rl_nsga2_greedy_2opt.txt
-Time Spent: 0.148970 s (GPU 13.494 ms)
+Time Spent: 0.112270 s (GPU 12.258 ms)
 ```
 
 ### The default call of each instance
@@ -572,8 +586,8 @@ although the median did not: there the slowest run was still changing.
 | KC30-3fl-1uni | > 2000 | > 5000 | > 100,000 |
 | KC30-3fl-1rl | > 2000 | > 5000 | > 100,000 |
 
-**Quality reached.** Each cell has two numbers measured against the same reference front, so the
-three columns can be read side by side:
+**Quality reached.** Each cell has two numbers measured against the same reference front,
+[`reference/v0.1`](#reference-versions), so the three columns can be read side by side:
 
 - The **first is the [hypervolume](#g-hypervolume)** of the front the run ended with, as a share of
   the one the reference front dominates. It answers "how much of the interesting region of the
@@ -583,7 +597,7 @@ three columns can be read side by side:
   actually found, as a share. It answers "how many distinct trade-offs does this front offer", and
   it is what separates the configurations.
 
-KC30-3fl-2uni makes it obvious. Its reference front has 821 points: with P = 1024 the run dominates
+KC30-3fl-2uni makes it obvious. Its reference front has 821 points in `v0.1`: with P = 1024 the run dominates
 92.54 % of its volume having found 9.5 % of its points, about 78, and with P = 65536 it dominates
 99.52 % having found 76.8 %, about 630. Almost the same volume, many more solutions to choose from.
 
@@ -635,27 +649,39 @@ data that is never modified. On KC20 and KC30 it is the best front this project 
 `.KBP` file in the same format as a `.PO` — a 1-based permutation and its costs per line — and kept in
 `reference/<version>/`, one directory per version.
 
-**Every table of this document is measured against `reference/v0.1`**, the version the campaign produced.
+**Every table of this document says which version it was measured against**, and the paragraph after
+the table records which one each uses.
 A solution that no front of a version dominates is always added, which does not invalidate what was
 published against an earlier version: it says the best known front improved. A published version is never
 edited; the addition creates the next directory. The rule and the command are in
 [`reference/README.md`](reference/README.md).
 
-| Instance | Reference front | Points in `v0.1` | Points in `v0.2` |
-|---|---|---|---|
-| KC10-2fl-* | published optimum | 1 to 130, in [`mQAPData/*.PO`](mQAPData/) | the same, never versioned |
-| KC20-2fl-1rl | best known | [91](reference/v0.1/KC20-2fl-1rl.KBP) | [94](reference/v0.2/KC20-2fl-1rl.KBP) |
-| KC20-2fl-1uni | best known | [71](reference/v0.1/KC20-2fl-1uni.KBP) | [71](reference/v0.2/KC20-2fl-1uni.KBP) |
-| KC20-2fl-2uni | best known | [8](reference/v0.1/KC20-2fl-2uni.KBP) | [8](reference/v0.2/KC20-2fl-2uni.KBP) |
-| KC20-2fl-3uni | best known | [243](reference/v0.1/KC20-2fl-3uni.KBP) | [241](reference/v0.2/KC20-2fl-3uni.KBP) |
-| KC30-3fl-1rl | best known | [16,989](reference/v0.1/KC30-3fl-1rl.KBP) | [16,989](reference/v0.2/KC30-3fl-1rl.KBP) |
-| KC30-3fl-1uni | best known | [3448](reference/v0.1/KC30-3fl-1uni.KBP) | [3448](reference/v0.2/KC30-3fl-1uni.KBP) |
-| KC30-3fl-2uni | best known | [821](reference/v0.1/KC30-3fl-2uni.KBP) | [821](reference/v0.2/KC30-3fl-2uni.KBP) |
+| Instance | Reference front | `v0.1` | `v0.2` | `v0.3` |
+|---|---|---|---|---|
+| KC10-2fl-* | published optimum | 1 to 130, in [`mQAPData/*.PO`](mQAPData/) | the same, never versioned | — |
+| KC20-2fl-1rl | best known | [91](reference/v0.1/KC20-2fl-1rl.KBP) | [94](reference/v0.2/KC20-2fl-1rl.KBP) | [94](reference/v0.3/KC20-2fl-1rl.KBP) |
+| KC20-2fl-1uni | best known | [71](reference/v0.1/KC20-2fl-1uni.KBP) | [71](reference/v0.2/KC20-2fl-1uni.KBP) | [71](reference/v0.3/KC20-2fl-1uni.KBP) |
+| KC20-2fl-2rl | best known | — | — | [150](reference/v0.3/KC20-2fl-2rl.KBP) |
+| KC20-2fl-2uni | best known | [8](reference/v0.1/KC20-2fl-2uni.KBP) | [8](reference/v0.2/KC20-2fl-2uni.KBP) | [8](reference/v0.3/KC20-2fl-2uni.KBP) |
+| KC20-2fl-3rl | best known | — | — | [215](reference/v0.3/KC20-2fl-3rl.KBP) |
+| KC20-2fl-3uni | best known | [243](reference/v0.1/KC20-2fl-3uni.KBP) | [241](reference/v0.2/KC20-2fl-3uni.KBP) | [243](reference/v0.3/KC20-2fl-3uni.KBP) |
+| KC20-2fl-4rl | best known | — | — | [99](reference/v0.3/KC20-2fl-4rl.KBP) |
+| KC20-2fl-5rl | best known | — | — | [174](reference/v0.3/KC20-2fl-5rl.KBP) |
+| KC30-2fl-1rl | best known | — | — | [251](reference/v0.3/KC30-2fl-1rl.KBP) |
+| KC30-3fl-1rl | best known | [16,989](reference/v0.1/KC30-3fl-1rl.KBP) | [16,989](reference/v0.2/KC30-3fl-1rl.KBP) | [17,097](reference/v0.3/KC30-3fl-1rl.KBP) |
+| KC30-3fl-1uni | best known | [3448](reference/v0.1/KC30-3fl-1uni.KBP) | [3448](reference/v0.2/KC30-3fl-1uni.KBP) | [3562](reference/v0.3/KC30-3fl-1uni.KBP) |
+| KC30-3fl-2rl | best known | — | — | [13,388](reference/v0.3/KC30-3fl-2rl.KBP) |
+| KC30-3fl-2uni | best known | [821](reference/v0.1/KC30-3fl-2uni.KBP) | [821](reference/v0.2/KC30-3fl-2uni.KBP) | [847](reference/v0.3/KC30-3fl-2uni.KBP) |
+| KC30-3fl-3rl | best known | — | — | [26,219](reference/v0.3/KC30-3fl-3rl.KBP) |
+| KC30-3fl-3uni | best known | — | — | [4181](reference/v0.3/KC30-3fl-3uni.KBP) |
 
-`v0.2` adds the seven solutions the greedy-rate experiment found on KC20 with P = 65536. On KC20-2fl-1rl
-they are 3 more points; on KC20-2fl-3uni the 4 new ones dominate 6 of the old, so the front goes from 243
-to 241. A hypervolume share published against `v0.1` rescales by 0.9999825 and 0.9999194 respectively, and
-a coverage share by 0.96809 and 1.00830: that is how to read a `v0.1` table next to a `v0.2` one.
+`v0.2` adds the seven solutions the greedy-rate experiment found on KC20 with P = 65536. `v0.3` is the one
+of the configuration grid: it gives a front for the first time to eight instances and improves four of the
+seven that had one, so **the fifteen instances without a published optimum all have their front now**. The
+tables of this document say which version they were measured against: the convergence campaign and the
+comparison with the original against `v0.1`, and the grid and the Excel workbook against `v0.3`. A
+hypervolume share published against `v0.1` rescales by 0.9999825 on KC20-2fl-1rl and 0.9999194 on
+KC20-2fl-3uni, and a coverage share by 0.96809 and 1.00830.
 
 The points are those that survive the dominance filter over the union of the final fronts of every
 run and every population: 821 of 4428 on KC30-3fl-2uni, and 16,989 of 39,644 on KC30-3fl-1rl. Every
@@ -974,8 +1000,14 @@ independent CPU implementation:
 | Multi-block survival | Same check with the multi-block path forced for P = 16, 64 and 256, and for P = 512, 1024 and 2048 |
 | Large populations | With P = 32768 and P = 65536 (more than 32767 individuals per run): the survivors are distinct, ordered by (rank, crowding), and nobody in the population dominates a survivor of rank 1 |
 | Greedy 2-opt | The resulting permutation is **identical** to that of a CPU greedy that recomputes the full cost (n = 10, 30 and 60, the latter with more than 48 KB of *shared memory*) |
+| Greedy rate and period | An offspring the gate leaves out keeps its permutation and its fitness is written all the same: at a rate of 25 % and with a period of 2 on an odd generation |
 | Reproduction | Survivors and their fitness are copied correctly and the children are valid permutations |
 | Initial population | Every permutation is valid and shuffled |
+| Final front | Every distinct solution appears once in the result file |
+| Trace (`--trace`) | There is one front per generation and the last one matches the final front |
+
+There are **26 checks**; at the end it prints `ALL TESTS PASSED` or the detail of each failure with its
+file and line.
 
 ```
 build\x64\Release\test_kernels.exe mQAPData
@@ -1011,7 +1043,9 @@ previous monolithic code (`kernel.cu`, commit `3f3a187`) with its memory errors 
 | KC30-3fl-1rl, P=32, 70 gen., 30 runs | ~21 min (estimated) | 0.34 s (250 ms GPU) | ~3,700× |
 
 In this version the wall time is dominated by the creation of the CUDA context (~0.1 s), so the GPU
-time better reflects the cost of the algorithm.
+time reflects the cost of the algorithm better. The rows are measured with the greedy on every
+offspring, which is what the original does, so reproducing them needs `--untuned`: otherwise each
+instance uses its measured configuration and the time changes.
 
 Nsight Systems profile (KC10-2fl-1rl, 70 generations, 1 run):
 
