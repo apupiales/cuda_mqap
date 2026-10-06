@@ -73,8 +73,10 @@ foreach ($instance in $Instances) {
     "### this version on $instance, $Runs runs of $Iterations generations with P = $Population"
     $out = Join-Path $dir 'this_version.txt'
     if (Test-Path $out) { Remove-Item $out }
+    # --untuned: the comparison is against the original version, so this one has to run its own
+    # operators, the greedy 2-opt on every offspring, not the configuration tuned for the instance.
     & $Exe "mQAPData\$instance.dat" --population $Population --iterations $Iterations `
-        --runs $Runs --seed $Seed --quiet --output $out 2>&1 |
+        --runs $Runs --seed $Seed --untuned --quiet --output $out 2>&1 |
         Select-String -Pattern 'Time Spent|Error' | ForEach-Object { "  $($_.Line)" }
 
     if ($BigPopulation -gt 0) {
@@ -82,7 +84,7 @@ foreach ($instance in $Instances) {
         $big = Join-Path $dir 'this_version_big.txt'
         if (Test-Path $big) { Remove-Item $big }
         & $Exe "mQAPData\$instance.dat" --population $BigPopulation --iterations $Iterations `
-            --runs $Runs --seed $Seed --quiet --output $big 2>&1 |
+            --runs $Runs --seed $Seed --untuned --quiet --output $big 2>&1 |
             Select-String -Pattern 'Time Spent|Error' | ForEach-Object { "  $($_.Line)" }
     }
 }

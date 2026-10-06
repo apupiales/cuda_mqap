@@ -77,6 +77,9 @@ foreach ($name in $selected) {
         "--iterations", $p.Iterations,
         "--runs", $Runs,
         "--output", (Join-Path $outPath "result_${name}_nsga2_greedy_2opt.txt"),
+        # --untuned: these series are the greedy 2-opt on every offspring, as the original version does,
+        # not the configuration measured best for the instance.
+        "--untuned",
         "--quiet"
     )
     if ($Seed -ne 0) {

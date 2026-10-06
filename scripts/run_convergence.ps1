@@ -80,8 +80,10 @@ foreach ($name in $selected) {
     # campaign, so the stream is merged and only the exit code decides.
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
+    # --untuned: the campaign measures the greedy 2-opt on every offspring, which is what the published
+    # tables report, not the configuration measured best for each instance.
     & $exePath $dat --population $Population --iterations $Iterations --runs $Runs --seed $Seed `
-        --quiet --trace $trace --trace-max $TraceMax --trace-every $TraceEvery --output $result 2>&1 |
+        --untuned --quiet --trace $trace --trace-max $TraceMax --trace-every $TraceEvery --output $result 2>&1 |
         Where-Object { $_ -match 'Warning' } | ForEach-Object { Write-Warning "$name`: $_" }
     $code = $LASTEXITCODE
     $ErrorActionPreference = $previous

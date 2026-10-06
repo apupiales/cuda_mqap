@@ -1355,6 +1355,10 @@ Repeating one of the confirmation runs with no options at all — only `--runs 3
 gives the same file byte for byte on KC10-2fl-5rl, KC10-2fl-1uni, KC10-2fl-2uni and KC20-2fl-1rl,
 which is the check that the table and the measurement say the same thing.
 
+The measurement scripts of the repository pass `--untuned`: the series of the workbook, the
+convergence campaign and the comparison against the original version are all measured with the whole
+greedy on every offspring, which is what the original does, so the table must not change them.
+
 ### How to compute the limit for another GPU
 
 1. **Code cap:** P ≤ 65536 (`kMaxPopulation` in `include/config.h`). It is a time limit, not a memory or

@@ -1311,8 +1311,8 @@ decir más barata. El patrón va por familias:
   lo que empuja.
 
 Es el mismo efecto que mide [Cuánta búsqueda local
-conviene](#cuánta-búsqueda-local-conviene---greedy-rate), ahora en las 23 instancias: lo que decide no
-es el tamaño de la instancia ni el de la población por separado, sino **la población frente al
+conviene](#cuánta-búsqueda-local-conviene---greedy-rate), ahora en las 23 instancias: lo que decide
+no es el tamaño de la instancia ni el de la población por separado, sino **la población frente al
 espacio de búsqueda**. P = 65 536 es el 1,8 % de las 10! permutaciones de una instancia KC10, el
 2,7·10⁻¹¹ % de las 20! de una KC20 y el 2,5·10⁻²⁹ % de las 30! de una KC30: cuanto menos cubre la
 población, más falta hace la búsqueda local, y cuanto más cubre, más daño hace quitarle diversidad.
@@ -1377,6 +1377,10 @@ una instancia KC30 son minutos de GPU, no segundos.
 Repetir una de las ejecuciones de la confirmación sin dar ninguna opción —solo `--runs 30 --seed
 20261005`— devuelve el mismo fichero byte a byte en KC10-2fl-5rl, KC10-2fl-1uni, KC10-2fl-2uni y
 KC20-2fl-1rl, que es la comprobación de que la tabla y la medición dicen lo mismo.
+
+Los scripts de medición del repositorio pasan `--untuned`: las series del libro, la campaña de
+convergencia y la comparación con la versión original están medidas con el greedy entero en todos
+los descendientes, que es lo que hace la original, así que la tabla no debe cambiarlas.
 
 ### Cómo calcular el límite en otra GPU
 
