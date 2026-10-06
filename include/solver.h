@@ -47,6 +47,10 @@ struct SolverOptions {
     int traceEvery = 1;              // Generations between two recorded fronts; the last one is always
                                      // recorded. It bounds the size of the trace when the fronts are
                                      // large (3 objectives with a big population).
+    // Keeps the initial population, the 2P random permutations of every run with their fitness, in
+    // SolveStats::initialPopulation. It is a device-to-device copy queued before the first generation and
+    // brought to the host after the timer stops, so the run neither synchronizes nor changes.
+    bool recordInitial = false;
 };
 
 struct Solution {
@@ -71,6 +75,7 @@ struct SolveStats {
     float gpuMilliseconds = 0.0f;    // Time of the whole algorithm on the device.
     std::vector<TracePoint> trace;   // Front of every generation, when SolverOptions::trace is set.
     int traceTruncated = 0;          // Generations whose front did not fit in traceMaxPoints.
+    std::vector<std::vector<Solution>> initialPopulation; // [run][2P], when SolverOptions::recordInitial is set.
 };
 
 // Throws std::invalid_argument when the options or the instance are not supported.

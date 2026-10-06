@@ -367,6 +367,79 @@ void testTrace(const Instance& instance, int population, int iterations, int run
     }
 }
 
+// --initial records the population the run starts from: 2P valid permutations per run with their exact
+// fitness. With zero generations the final population is the survival of that population, so every
+// survivor has to be one of its solutions and the final front has to be exactly its non-dominated
+// set; and recording it must not change the run.
+void testInitialPopulation(const Instance& instance, int population, int runs) {
+    SolverOptions options;
+    options.population = population;
+    options.iterations = 0;
+    options.runs = runs;
+    options.seed = 99;
+    options.recordInitial = true;
+    SolveStats stats;
+    const std::vector<RunResult> results = solve(instance, options, &stats);
+    EXPECT(static_cast<int>(stats.initialPopulation.size()) == runs,
+           "the initial population has %zu runs", stats.initialPopulation.size());
+    for (int run = 0; run < runs && run < static_cast<int>(stats.initialPopulation.size()); run++) {
+        const std::vector<Solution>& start = stats.initialPopulation[run];
+        EXPECT(static_cast<int>(start.size()) == 2 * population,
+               "run %d starts with %zu solutions instead of %d", run, start.size(), 2 * population);
+        std::set<std::pair<std::vector<short>, std::vector<unsigned int>>> members;
+        for (const Solution& solution : start) {
+            std::vector<short> sorted = solution.permutation;
+            std::sort(sorted.begin(), sorted.end());
+            bool valid = static_cast<int>(sorted.size()) == instance.n;
+            for (int i = 0; valid && i < instance.n; i++) valid = sorted[i] == i;
+            EXPECT(valid, "run %d: invalid initial permutation", run);
+            if (!valid) continue;
+            for (int o = 0; o < instance.objectives; o++) {
+                EXPECT(cost(instance, solution.permutation.data(), o) == static_cast<long long>(solution.fitness[o]),
+                       "run %d: initial fitness differs from the CPU cost (objective %d)", run, o);
+            }
+            members.insert({solution.permutation, solution.fitness});
+        }
+        for (const Solution& survivor : results[run].population) {
+            EXPECT(members.count({survivor.permutation, survivor.fitness}) == 1,
+                   "run %d: a survivor of generation 0 is not in the initial population", run);
+        }
+        std::set<std::vector<short>> nonDominated;
+        for (const Solution& a : start) {
+            bool dominated = false;
+            for (const Solution& b : start) {
+                bool noWorse = true;
+                bool better = false;
+                for (int o = 0; o < instance.objectives; o++) {
+                    noWorse &= b.fitness[o] <= a.fitness[o];
+                    better |= b.fitness[o] < a.fitness[o];
+                }
+                if (noWorse && better) {
+                    dominated = true;
+                    break;
+                }
+            }
+            if (!dominated) nonDominated.insert(a.permutation);
+        }
+        std::set<std::vector<short>> front;
+        for (const Solution& solution : results[run].paretoFront) front.insert(solution.permutation);
+        EXPECT(front == nonDominated, "run %d: the front of generation 0 has %zu solutions, the initial "
+               "population %zu non-dominated ones", run, front.size(), nonDominated.size());
+    }
+
+    options.iterations = 5;
+    const std::vector<RunResult> recorded = solve(instance, options, &stats);
+    options.recordInitial = false;
+    const std::vector<RunResult> plain = solve(instance, options);
+    for (int run = 0; run < runs; run++) {
+        bool same = recorded[run].population.size() == plain[run].population.size();
+        for (size_t i = 0; same && i < plain[run].population.size(); i++) {
+            same = recorded[run].population[i].permutation == plain[run].population[i].permutation;
+        }
+        EXPECT(same, "run %d: recording the initial population changed the result", run);
+    }
+}
+
 // CPU greedy 2-opt with full cost recomputation (no delta formula). Same pair traversal as the kernel,
 // selected by kGreedyFullPairs, so the test checks whichever one is configured.
 std::vector<short> cpuGreedy(const Instance& instance, std::vector<short> p, int type) {
@@ -646,6 +719,7 @@ int main(int argc, char** argv) {
     run("initial population: valid shuffled permutations", [] { testInitPopulation(30, 128, 4); });
     run("final front: every distinct solution, only once", [&] { testUniqueFront(kc10, 256, 30, 2); });
     run("--trace: one front per generation, ending in the final one", [&] { testTrace(kc10, 64, 10, 2); });
+    run("--initial: the population the run starts from", [&] { testInitialPopulation(kc30, 512, 2); });
 
     std::printf("\n%s (%d failure%s)\n", failures == 0 ? "ALL TESTS PASSED" : "TESTS FAILED", failures,
                 failures == 1 ? "" : "s");

@@ -130,6 +130,9 @@ std::vector<RunResult> solveImpl(const Instance& instance, const SolverOptions& 
     DeviceBuffer<int> greedyType(runs);
     DeviceBuffer<RngState> rng(totalRows);
     SurvivalWorkspace survivalWorkspace(population, runs); // multi-block buffers only when P > 256
+    const bool recordInitial = options.recordInitial && stats != nullptr;
+    DeviceBuffer<short> initialGenes(recordInitial ? totalRows * n : 0);
+    DeviceBuffer<unsigned int> initialFitness(recordInitial ? totalRows * OBJ : 0);
 
     cudaEvent_t start;
     cudaEvent_t stop;
@@ -145,6 +148,13 @@ std::vector<RunResult> solveImpl(const Instance& instance, const SolverOptions& 
     launchRngInit(rng.get(), static_cast<int>(totalRows), options.seed);
     launchInitPopulation(rng.get(), genes, rows, n, runs);
     launchFitness<OBJ>(genes, fitness, flow.get(), dist.get(), rows, n, runs);
+    if (recordInitial) {
+        // Queued on the default stream like the kernels, so the host does not wait for it.
+        CUDA_CHECK(cudaMemcpyAsync(initialGenes.get(), genes, initialGenes.size() * sizeof(short),
+                                   cudaMemcpyDeviceToDevice));
+        CUDA_CHECK(cudaMemcpyAsync(initialFitness.get(), fitness, initialFitness.size() * sizeof(unsigned int),
+                                   cudaMemcpyDeviceToDevice));
+    }
 
     for (int iteration = 0; iteration <= options.iterations; iteration++) {
         // Rt (2P) -> best P by rank and crowding distance.
@@ -182,6 +192,23 @@ std::vector<RunResult> solveImpl(const Instance& instance, const SolverOptions& 
     CUDA_CHECK(cudaMemcpy(hostFitness.data(), fitness, hostFitness.size() * sizeof(unsigned int), cudaMemcpyDeviceToHost));
     const std::vector<int> hostIndex = survivorIndex.toHost();
     const std::vector<int> hostRank = survivorRank.toHost();
+
+    if (recordInitial) {
+        const std::vector<short> startGenes = initialGenes.toHost();
+        const std::vector<unsigned int> startFitness = initialFitness.toHost();
+        stats->initialPopulation.assign(runs, {});
+        for (int run = 0; run < runs; run++) {
+            std::vector<Solution>& initial = stats->initialPopulation[run];
+            initial.reserve(rows);
+            for (int i = 0; i < rows; i++) {
+                const size_t source = static_cast<size_t>(run) * rows + i;
+                Solution solution;
+                solution.permutation.assign(startGenes.begin() + source * n, startGenes.begin() + (source + 1) * n);
+                solution.fitness.assign(startFitness.begin() + source * OBJ, startFitness.begin() + (source + 1) * OBJ);
+                initial.push_back(std::move(solution));
+            }
+        }
+    }
 
     std::vector<RunResult> results(runs);
     for (int run = 0; run < runs; run++) {

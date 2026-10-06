@@ -41,6 +41,7 @@ struct Arguments {
     std::string instancePath;
     std::string outputPath;
     std::string tracePath;
+    std::string initialPath;
     mqap::SolverOptions options;
     bool verify = false;
     bool quiet = false;
@@ -70,6 +71,7 @@ void printUsage(const char* program) {
         "                   the survivors once per generation, so the time is no longer comparable\n"
         "  --trace-max N    points kept per run and generation in the trace (default 4096)\n"
         "  --trace-every K  record the front every K generations, plus the last one (default 1)\n"
+        "  --initial FILE   write the initial population of every run to FILE (CSV, overwritten)\n"
         "  --verify         check the final populations on the CPU\n"
         "  --quiet          do not print the final solutions\n",
         program);
@@ -106,6 +108,9 @@ bool parseArguments(int argc, char** argv, Arguments& args) {
             args.options.traceMaxPoints = std::atoi(argv[++i]);
         } else if (arg == "--trace-every" && hasValue) {
             args.options.traceEvery = std::atoi(argv[++i]);
+        } else if (arg == "--initial" && hasValue) {
+            args.initialPath = argv[++i];
+            args.options.recordInitial = true;
         } else if (arg == "--verify") {
             args.verify = true;
         } else if (arg == "--quiet") {
@@ -162,6 +167,26 @@ bool verifyRun(const mqap::Instance& instance, const mqap::RunResult& result, in
         }
     }
     return ok;
+}
+
+// The initial population has no ranks yet: only valid permutations and exact fitness values.
+bool verifyInitial(const mqap::Instance& instance, const std::vector<mqap::Solution>& start, int run) {
+    for (const mqap::Solution& solution : start) {
+        std::vector<int> seen(instance.n, 0);
+        for (short location : solution.permutation) {
+            if (location < 0 || location >= instance.n || seen[location]++) {
+                std::fprintf(stderr, "verify initial population of run %d: invalid permutation\n", run);
+                return false;
+            }
+        }
+        for (int o = 0; o < instance.objectives; o++) {
+            if (mqap::cost(instance, solution.permutation.data(), o) != static_cast<long long>(solution.fitness[o])) {
+                std::fprintf(stderr, "verify initial population of run %d: wrong fitness (objective %d)\n", run, o);
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 // Same format as the original program: { 'permutation': [f1, f2], ... },
@@ -269,6 +294,37 @@ int main(int argc, char** argv) {
             }
         }
 
+        if (!args.initialPath.empty()) {
+            // run, the costs and the permutation (0-based, separated by spaces), one solution per row.
+            std::ofstream initial(args.initialPath);
+            if (!initial) {
+                std::fprintf(stderr, "Error opening %s\n", args.initialPath.c_str());
+                return 1;
+            }
+            initial << "run";
+            for (int o = 0; o < instance.objectives; o++) {
+                initial << ",f" << (o + 1);
+            }
+            initial << ",permutation\n";
+            size_t rows = 0;
+            for (size_t run = 0; run < stats.initialPopulation.size(); run++) {
+                for (const mqap::Solution& solution : stats.initialPopulation[run]) {
+                    initial << run;
+                    for (unsigned int value : solution.fitness) {
+                        initial << ',' << value;
+                    }
+                    initial << ',';
+                    for (size_t i = 0; i < solution.permutation.size(); i++) {
+                        initial << (i > 0 ? " " : "") << solution.permutation[i];
+                    }
+                    initial << "\n";
+                    rows++;
+                }
+            }
+            initial.close();
+            std::printf("Initial population of %zu solutions written to %s\n", rows, args.initialPath.c_str());
+        }
+
         if (!args.quiet) {
             for (size_t run = 0; run < results.size(); run++) {
                 std::printf("\nFINAL SOLUTION (run %zu, %zu non-dominated)\n", run, results[run].paretoFront.size());
@@ -289,6 +345,9 @@ int main(int argc, char** argv) {
             bool ok = true;
             for (size_t run = 0; run < results.size(); run++) {
                 ok &= verifyRun(instance, results[run], static_cast<int>(run));
+            }
+            for (size_t run = 0; run < stats.initialPopulation.size(); run++) {
+                ok &= verifyInitial(instance, stats.initialPopulation[run], static_cast<int>(run));
             }
             std::printf("\nVerification: %s\n", ok ? "OK" : "FAILED");
             exitCode = ok ? 0 : 1;

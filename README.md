@@ -28,15 +28,16 @@ parallel primitives), and it is 36 launches per generation from P = 512 to P = 4
 7. [Build](#build)
 8. [Usage](#usage)
 9. [Experiments and metrics](#experiments-and-metrics)
-10. [Tests and validation](#tests-and-validation)
-11. [Performance](#performance)
-12. [Improvements over the original version](#improvements-over-the-original-version)
-13. [Population size limits and GPU resources](#population-size-limits-and-gpu-resources)
-14. [Conclusions](#conclusions)
-15. [Limitations and future work](#limitations-and-future-work)
-16. [Troubleshooting](#troubleshooting)
-17. [Glossary](#glossary)
-18. [Credits and license](#credits-and-license)
+10. [Visualizing the fronts](#visualizing-the-fronts)
+11. [Tests and validation](#tests-and-validation)
+12. [Performance](#performance)
+13. [Improvements over the original version](#improvements-over-the-original-version)
+14. [Population size limits and GPU resources](#population-size-limits-and-gpu-resources)
+15. [Conclusions](#conclusions)
+16. [Limitations and future work](#limitations-and-future-work)
+17. [Troubleshooting](#troubleshooting)
+18. [Glossary](#glossary)
+19. [Credits and license](#credits-and-license)
 
 ---
 
@@ -199,6 +200,9 @@ cuda_mqap/
 ├── scripts/run_rate_grid.ps1     Grid of population x greedy configuration, per instance
 ├── scripts/analyze_rate_grid.py  Scores the cells of the grid and reports the best configuration
 ├── scripts/build_reference.py    Builds the best known front of an instance (.KBP)
+├── scripts/run_front_plot.ps1    Default run of each instance, plotted against its best known front
+├── scripts/plot_fronts.py        Best known front, final front and initial population, in HTML and PNG
+├── examples/fronts/        Example of plot_fronts.py: KC30-3fl-1rl, interactive HTML and PNG
 ├── mQAPData/               Instances (.dat) and optimal fronts (.PO)
 ├── reference/v0.x/         Best known fronts (.KBP) by version, with their summary.json
 ├── mQAPMetrics/            Node.js metric and 3D plot scripts
@@ -286,7 +290,8 @@ The accumulators are 64-bit.
   grid synchronizes with `grid.sync()` between the phases of each front, inside the kernel, without going
   back to the host.
 - `--trace` is the exception: it copies the survivors once per generation, so a traced run does
-  synchronize with the device and its time is not comparable with a normal one.
+  synchronize with the device and its time is not comparable with a normal one. `--initial` is not:
+  its copy is device to device, queued on the stream, and reaches the host after the timer.
 - In Debug builds, `MQAP_SYNC_CHECK` makes `CUDA_CHECK_KERNEL()` synchronize after every kernel, so an
   execution error is reported at the launch that caused it.
 
@@ -378,6 +383,7 @@ cuda_mqap <instance.dat> [options]
   --trace FILE     write the front of every generation to FILE (CSV, overwritten)
   --trace-max N    points kept per run and generation in the trace (default 4096)
   --trace-every K  record the front every K generations, plus the last one (default 1)
+  --initial FILE   write the initial population of every run to FILE (CSV, overwritten)
   --verify         check the final populations on the CPU
   --quiet          do not print the final solutions
 ```
@@ -490,6 +496,8 @@ Independently recomputes on the CPU every solution of the final population of ev
 - that the fitness matches the CPU `cost()` exactly;
 - that rank 1 corresponds exactly to the non-dominated solutions (and that every solution with rank > 1
   is dominated by some survivor).
+
+With `--initial`, it also checks the permutations and the fitness of the whole initial population.
 
 If any check fails, the exit code is 1.
 
@@ -997,6 +1005,66 @@ change the figures already published against them, so they are left as they are.
 
 ---
 
+## Visualizing the fronts
+
+`scripts/plot_fronts.py` draws, for one instance, three series on the same axes of the objective
+space:
+
+| Series | Where it comes from |
+|---|---|
+| Initial population (grey) | The 2P random permutations the run started from, written by `--initial FILE` |
+| Run (orange) | The front the run ended with: the last block of its result file (`--output`) |
+| Best known front (blue) | `mQAPData/<instance>.PO` when there is a published optimum; otherwise `reference/<version>/<instance>.KBP`, the latest version unless `--reference` says another |
+
+It writes an interactive HTML (Plotly: a 3D scatter that rotates, zooms and hides series from the
+legend; 2D for two objectives) and, with `--png`, a static figure (matplotlib) with the three
+projections of the objective space and a 3D view. The title and the console say how many points of
+the best known front the run found and how many of its points that front does not dominate, which
+would improve it (see [`reference/README.md`](reference/README.md)).
+
+`scripts/run_front_plot.ps1` does the whole process for the KC30 instances, or the ones `-Instances`
+names: it runs the [default call](#the-default-call-of-each-instance) of each instance — one run,
+`--verify`, its initial population with `--initial` — and plots it. The files go to `results/fronts/`,
+which git ignores: `<instance>_result.txt`, `<instance>_initial.csv`, `<instance>.html` and, with
+`-Png`, `<instance>.png`.
+
+```
+:: Requirements: the Release build, and Python with numpy, plotly and matplotlib
+pip install numpy plotly matplotlib
+
+:: The seven KC30 instances, with the default call of each (P = 65536 and 300 generations)
+powershell -ExecutionPolicy Bypass -File scripts\run_front_plot.ps1 -Png
+
+:: One instance, another seed, Plotly embedded so the HTML opens without a connection
+powershell -ExecutionPolicy Bypass -File scripts\run_front_plot.ps1 -Instances KC30-3fl-1rl -Seed 2026 -SelfContained
+
+:: Any run made by hand
+build\x64\Release\cuda_mqap.exe mQAPData\KC30-3fl-2uni.dat --population 4096 --output r.txt --initial i.csv
+python scripts\plot_fronts.py KC30-3fl-2uni --result r.txt --initial i.csv --out results\fronts --png
+```
+
+Each KC30 instance is one to two minutes of GPU on the RTX 2060 (KC30-3fl-1rl: 104 s), and the
+CSV of its initial population is some 14 MB, because it holds 131,072 permutations. The HTML loads
+Plotly from its CDN, so it needs a connection; `-SelfContained` (`--self-contained` in the Python
+script) embeds the library, about 4.6 MB more per file.
+
+**Example.** [`examples/fronts/KC30-3fl-1rl.html`](examples/fronts/KC30-3fl-1rl.html) is the output
+of `scripts\run_front_plot.ps1 -Instances KC30-3fl-1rl -Png` with the default seed, 20261005. GitHub
+shows the source of an HTML file instead of rendering it: download it (*Download raw file*) and open
+it in a browser. The static version:
+
+![Best known front, final front and initial population of KC30-3fl-1rl](examples/fronts/KC30-3fl-1rl.png)
+
+The run used the default call of the instance, P = 65536, 300 generations and the greedy on every
+offspring, and verified OK. It ends with 5141 distinct non-dominated solutions, 2658 of them points of
+the best known front (`reference/v0.3`, 17,097 points): 15.5 % of it, in line with the 14.68 % the
+[grid](#the-best-configuration-for-each-problem) measured as the mean of ten runs. None of its points
+is beyond that front. The figure shows the distance the search covers: the initial population is a
+cloud of random permutations far from the front, and the run ends on it, spread along the whole of
+its length.
+
+---
+
 ## Tests and validation
 
 `test_kernels` (the `test_kernels` project in Visual Studio, or `ctest`) compares every kernel with an
@@ -1016,8 +1084,9 @@ independent CPU implementation:
 | Initial population | Every permutation is valid and shuffled |
 | Final front | Every distinct solution appears once in the result file |
 | Trace (`--trace`) | There is one front per generation and the last one matches the final front |
+| Initial population (`--initial`) | 2P valid permutations per run with their exact cost; with zero generations every survivor comes from it and the final front is exactly its non-dominated set; recording it does not change the run |
 
-There are **26 checks**; at the end it prints `ALL TESTS PASSED` or the detail of each failure with its
+There are **27 checks**; at the end it prints `ALL TESTS PASSED` or the detail of each failure with its
 file and line.
 
 ```
@@ -1539,7 +1608,7 @@ it.
    which measure. See [How many generations each instance
    needs](#how-many-generations-each-instance-needs---trace).
 
-6. **What holds the figures up.** 26 checks of the kernels against independent CPU references,
+6. **What holds the figures up.** 27 checks of the kernels against independent CPU references,
    `--verify` on every run of the campaigns, the four sanitizers with no errors, the costs of the
    374 published optimal solutions reproduced exactly, and the reference fronts versioned in
    `reference/`, with 15 instances that have one. One check sums up the method: on the eight KC10

@@ -29,15 +29,16 @@ concurrente** en una sola llamada al programa.
 7. [Compilación](#compilación)
 8. [Uso](#uso)
 9. [Experimentos y métricas](#experimentos-y-métricas)
-10. [Pruebas y validación](#pruebas-y-validación)
-11. [Rendimiento](#rendimiento)
-12. [Mejoras respecto a la versión original](#mejoras-respecto-a-la-versión-original)
-13. [Límites del tamaño de población y recursos de la GPU](#límites-del-tamaño-de-población-y-recursos-de-la-gpu)
-14. [Conclusiones](#conclusiones)
-15. [Limitaciones y trabajo futuro](#limitaciones-y-trabajo-futuro)
-16. [Solución de problemas](#solución-de-problemas)
-17. [Glosario](#glosario)
-18. [Créditos y licencia](#créditos-y-licencia)
+10. [Visualización de los frentes](#visualización-de-los-frentes)
+11. [Pruebas y validación](#pruebas-y-validación)
+12. [Rendimiento](#rendimiento)
+13. [Mejoras respecto a la versión original](#mejoras-respecto-a-la-versión-original)
+14. [Límites del tamaño de población y recursos de la GPU](#límites-del-tamaño-de-población-y-recursos-de-la-gpu)
+15. [Conclusiones](#conclusiones)
+16. [Limitaciones y trabajo futuro](#limitaciones-y-trabajo-futuro)
+17. [Solución de problemas](#solución-de-problemas)
+18. [Glosario](#glosario)
+19. [Créditos y licencia](#créditos-y-licencia)
 
 ---
 
@@ -202,6 +203,9 @@ cuda_mqap/
 ├── scripts/run_rate_grid.ps1     Rejilla de población x configuración del greedy, por instancia
 ├── scripts/analyze_rate_grid.py  Puntúa las celdas de la rejilla y da la mejor configuración
 ├── scripts/build_reference.py    Construye el mejor frente conocido de una instancia (.KBP)
+├── scripts/run_front_plot.ps1    Ejecución por defecto de cada instancia, dibujada frente a su mejor frente conocido
+├── scripts/plot_fronts.py        Mejor frente conocido, frente final y población inicial, en HTML y PNG
+├── examples/fronts/        Ejemplo de plot_fronts.py: KC30-3fl-1rl, HTML interactivo y PNG
 ├── mQAPData/               Instancias (.dat) y frentes óptimos (.PO)
 ├── reference/v0.x/         Mejores frentes conocidos (.KBP) por versión, con su summary.json
 ├── mQAPMetrics/            Scripts Node.js de métricas y gráficos 3D
@@ -289,7 +293,9 @@ Los acumuladores son de 64 bits.
   toda la malla se sincroniza con `grid.sync()` entre las fases de cada frente, dentro del kernel, sin
   volver al host.
 - `--trace` es la excepción: copia los supervivientes una vez por generación, así que una ejecución con
-  traza sí sincroniza con el dispositivo y su tiempo no es comparable con el de una normal.
+  traza sí sincroniza con el dispositivo y su tiempo no es comparable con el de una normal. `--initial`
+  no: su copia es de dispositivo a dispositivo, encolada en el stream, y llega al host después del
+  cronómetro.
 - En Debug, `MQAP_SYNC_CHECK` hace que `CUDA_CHECK_KERNEL()` sincronice después de cada kernel, de modo
   que un error de ejecución se reporta en el lanzamiento que lo causó.
 
@@ -381,6 +387,7 @@ cuda_mqap <instance.dat> [opciones]
   --trace FILE     escribe el frente de cada generacion en FILE (CSV, se sobrescribe)
   --trace-max N    puntos guardados por ejecucion y generacion en la traza (defecto 4096)
   --trace-every K  guarda el frente cada K generaciones, mas la ultima (defecto 1)
+  --initial FILE   escribe la poblacion inicial de cada ejecucion en FILE (CSV, se sobrescribe)
   --verify         verifica las poblaciones finales en CPU
   --quiet          no imprime las soluciones finales
 ```
@@ -493,6 +500,8 @@ Recalcula en CPU, de forma independiente, cada solución de la población final 
 - que el fitness coincida exactamente con `cost()` en CPU;
 - que el rango 1 corresponda exactamente a las soluciones no dominadas (y que toda solución con rango > 1
   esté dominada por alguna superviviente).
+
+Con `--initial`, comprueba además las permutaciones y el fitness de toda la población inicial.
 
 Si algo falla, el código de salida es 1.
 
@@ -1012,6 +1021,66 @@ cambiaría las cifras ya publicadas contra ellos, así que se dejan como están.
 
 ---
 
+## Visualización de los frentes
+
+`scripts/plot_fronts.py` dibuja, para una instancia, tres series sobre los mismos ejes del espacio de
+objetivos:
+
+| Serie | De dónde sale |
+|---|---|
+| Población inicial (gris) | Las 2P permutaciones aleatorias con las que empezó la ejecución, escritas por `--initial FILE` |
+| Ejecución (naranja) | El frente con el que terminó la ejecución: el último bloque de su fichero de resultados (`--output`) |
+| Mejor frente conocido (azul) | `mQAPData/<instancia>.PO` cuando hay un óptimo publicado; si no, `reference/<versión>/<instancia>.KBP`, la última versión salvo que `--reference` diga otra |
+
+Escribe un HTML interactivo (Plotly: un *scatter* 3D que se gira, se amplía y oculta series desde la
+leyenda; 2D con dos objetivos) y, con `--png`, una figura estática (matplotlib) con las tres
+proyecciones del espacio de objetivos y una vista 3D. El título y la consola dicen cuántos puntos del
+mejor frente conocido encontró la ejecución y cuántos de sus puntos no domina ese frente, que lo
+mejorarían (ver [`reference/README.md`](reference/README.md)).
+
+`scripts/run_front_plot.ps1` hace el proceso completo para las instancias KC30, o las que nombre
+`-Instances`: lanza la [ejecución por defecto](#la-ejecución-por-defecto-de-cada-instancia) de cada
+instancia —una ejecución, `--verify`, su población inicial con `--initial`— y la dibuja. Los ficheros
+van a `results/fronts/`, que git ignora: `<instancia>_result.txt`, `<instancia>_initial.csv`,
+`<instancia>.html` y, con `-Png`, `<instancia>.png`.
+
+```
+:: Requisitos: la compilación Release, y Python con numpy, plotly y matplotlib
+pip install numpy plotly matplotlib
+
+:: Las siete instancias KC30, con la llamada por defecto de cada una (P = 65536 y 300 generaciones)
+powershell -ExecutionPolicy Bypass -File scripts\run_front_plot.ps1 -Png
+
+:: Una instancia, otra semilla, Plotly incrustado para que el HTML se abra sin conexión
+powershell -ExecutionPolicy Bypass -File scripts\run_front_plot.ps1 -Instances KC30-3fl-1rl -Seed 2026 -SelfContained
+
+:: Cualquier ejecución hecha a mano
+build\x64\Release\cuda_mqap.exe mQAPData\KC30-3fl-2uni.dat --population 4096 --output r.txt --initial i.csv
+python scripts\plot_fronts.py KC30-3fl-2uni --result r.txt --initial i.csv --out results\fronts --png
+```
+
+Cada instancia KC30 es de uno a dos minutos de GPU en la RTX 2060 (KC30-3fl-1rl: 104 s), y el CSV de
+su población inicial ocupa unos 14 MB, porque tiene 131 072 permutaciones. El HTML carga Plotly desde
+su CDN, así que necesita conexión; `-SelfContained` (`--self-contained` en el script de Python)
+incrusta la biblioteca, unos 4,6 MB más por fichero.
+
+**Ejemplo.** [`examples/fronts/KC30-3fl-1rl.html`](examples/fronts/KC30-3fl-1rl.html) es la salida de
+`scripts\run_front_plot.ps1 -Instances KC30-3fl-1rl -Png` con la semilla por defecto, 20261005.
+GitHub muestra el código fuente de un HTML en lugar de dibujarlo: descárgalo (*Download raw file*) y
+ábrelo en un navegador. La versión estática:
+
+![Mejor frente conocido, frente final y población inicial de KC30-3fl-1rl](examples/fronts/KC30-3fl-1rl.png)
+
+La ejecución usó la llamada por defecto de la instancia, P = 65536, 300 generaciones y el greedy en
+todos los descendientes, y verificó OK. Termina con 5141 soluciones no dominadas distintas, 2658 de
+ellas puntos del mejor frente conocido (`reference/v0.3`, 17 097 puntos): el 15,5 % de él, en línea
+con el 14,68 % que la [rejilla](#la-mejor-configuración-de-cada-problema) midió como media de diez
+ejecuciones. Ninguno de sus puntos queda más allá de ese frente. La figura muestra la distancia que
+recorre la búsqueda: la población inicial es una nube de permutaciones aleatorias lejos del frente, y
+la ejecución termina sobre él, repartida a lo largo de todo el frente.
+
+---
+
 ## Pruebas y validación
 
 `test_kernels` (proyecto `test_kernels` en Visual Studio, o `ctest`) compara cada kernel con una
@@ -1031,8 +1100,9 @@ implementación independiente en CPU:
 | Población inicial | Todas las permutaciones son válidas y están barajadas |
 | Frente final | Cada solución distinta aparece una sola vez en el fichero de resultados |
 | Traza (`--trace`) | Hay un frente por generación y el de la última coincide con el frente final |
+| Población inicial (`--initial`) | 2P permutaciones válidas por ejecución con su coste exacto; con cero generaciones todo superviviente sale de ella y el frente final es exactamente su conjunto no dominado; registrarla no cambia la ejecución |
 
-Son **26 comprobaciones**; al terminar imprime `ALL TESTS PASSED` o el detalle de cada fallo con su
+Son **27 comprobaciones**; al terminar imprime `ALL TESTS PASSED` o el detalle de cada fallo con su
 fichero y línea.
 
 ```
@@ -1569,7 +1639,7 @@ está cada una.
    [Cuántas generaciones necesita cada
    instancia](#cuántas-generaciones-necesita-cada-instancia---trace).
 
-6. **Lo que sostiene las cifras.** 26 comprobaciones de los kernels contra referencias
+6. **Lo que sostiene las cifras.** 27 comprobaciones de los kernels contra referencias
    independientes en CPU, `--verify` en cada ejecución de las campañas, los cuatro sanitizers sin
    errores, los costes de las 374 soluciones óptimas publicadas reproducidos exactamente, y los
    frentes de referencia versionados en `reference/`, con 15 instancias que ya tienen el suyo. Una
