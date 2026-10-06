@@ -30,16 +30,16 @@ namespace mqap {
 
 constexpr unsigned int kFullWarpMask = 0xffffffffu;
 
-// Whether one offspring gets the local search in one generation, from kGreedyRate and kGreedyPeriod.
-// Stateless on purpose: it takes nothing from the random streams of the operators, so with the default
-// settings a run is identical to one made before the knobs existed, and the host side of the tests can
-// mirror the decision. Every lane of a warp computes the same value from the same arguments.
+// Whether one offspring gets the local search in one generation, from the rate and the period of the run.
+// Stateless on purpose: it takes nothing from the random streams of the operators, so a run with a rate of
+// 1.0f is identical to one made before the knobs existed, and the host side of the tests can mirror the
+// decision. Every lane of a warp computes the same value from the same arguments.
 __host__ __device__ inline bool greedyApplies(unsigned long long seed, int run, int offspring,
-                                              int generation) {
-    if (kGreedyPeriod > 1 && generation % kGreedyPeriod != 0) {
+                                              int generation, float rate, int period) {
+    if (period > 1 && generation % period != 0) {
         return false;
     }
-    if (kGreedyRate >= 1.0f) {
+    if (rate >= 1.0f) {
         return true;
     }
     unsigned long long x = seed + 0x9E3779B97F4A7C15ULL * (static_cast<unsigned long long>(generation) + 1);
@@ -51,7 +51,7 @@ __host__ __device__ inline bool greedyApplies(unsigned long long seed, int run, 
     x *= 0x94D049BB133111EBULL;
     x ^= x >> 31;
     // The top 24 bits as a float in [0, 1).
-    return static_cast<float>(x >> 40) * (1.0f / 16777216.0f) < kGreedyRate;
+    return static_cast<float>(x >> 40) * (1.0f / 16777216.0f) < rate;
 }
 
 // Copies the flow matrices and the distance matrix to shared memory (whole block, coalesced).

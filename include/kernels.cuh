@@ -84,6 +84,6 @@ void launchReproduce(const short* genes, const unsigned int* fitness,
 template <int OBJ>
 void launchGreedy2Opt(short* genes, unsigned int* fitness, const int* flow, const int* dist,
                       const int* greedyType, int population, int n, int runs,
-                      unsigned long long seed, int generation);
+                      unsigned long long seed, int generation, float rate, int period);
 
 } // namespace mqap

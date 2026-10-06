@@ -33,6 +33,12 @@ struct SolverOptions {
     int iterations = 70;             // Generations of the genetic algorithm.
     int runs = 1;                    // Independent runs executed concurrently on the GPU.
     unsigned long long seed = 0;     // Seed of the random number generator.
+    // How much of the population the greedy 2-opt improves. 1.0f and 1 are what the original version
+    // does, every offspring of every generation; lower values trade local search for diversity, which is
+    // what the small instances lose when the population is large. include/best_configuration.h holds the
+    // value measured best for each instance, and the README explains the trade-off.
+    float greedyRate = 1.0f;         // Fraction of the offspring improved, in [0, 1]; 0 disables it.
+    int greedyPeriod = 1;            // The local search runs on the generations multiple of this.
     // Records the front of every generation in SolveStats::trace, to study how the search converges.
     // It copies the survivors to the host once per generation, so it synchronizes with the device and
     // the measured time is no longer comparable with a normal run.

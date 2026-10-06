@@ -52,6 +52,12 @@ void validate(const Instance& instance, const SolverOptions& options) {
     if (options.runs < 1 || options.runs > 65535) {
         throw std::invalid_argument("runs must be in [1, 65535]");
     }
+    if (!(options.greedyRate >= 0.0f) || options.greedyRate > 1.0f) {
+        throw std::invalid_argument("the greedy rate must be in [0, 1]");
+    }
+    if (options.greedyPeriod < 1) {
+        throw std::invalid_argument("the greedy period must be >= 1");
+    }
     int maxOptin = 0;
     CUDA_CHECK(cudaDeviceGetAttribute(&maxOptin, cudaDevAttrMaxSharedMemoryPerBlockOptin, 0));
     if (matricesSharedMemory(instance.n, instance.objectives) > static_cast<size_t>(maxOptin)) {
@@ -156,7 +162,7 @@ std::vector<RunResult> solveImpl(const Instance& instance, const SolverOptions& 
                              survivorIndex.get(), survivorRank.get(), survivorCrowding.get(),
                              rng.get(), greedyType.get(), population, n, runs);
         launchGreedy2Opt<OBJ>(nextGenes, nextFitness, flow.get(), dist.get(), greedyType.get(), population, n, runs,
-                              options.seed, iteration);
+                              options.seed, iteration, options.greedyRate, options.greedyPeriod);
         std::swap(genes, nextGenes);
         std::swap(fitness, nextFitness);
     }

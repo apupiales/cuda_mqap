@@ -395,7 +395,7 @@ std::vector<short> cpuGreedy(const Instance& instance, std::vector<short> p, int
 }
 
 template <int OBJ>
-void testGreedy(int n, int population, int runs) {
+void testGreedy(int n, int population, int runs, float rate = 1.0f, int period = 1) {
     std::mt19937 rng(7 * n + OBJ);
     const Instance instance = randomInstance(n, OBJ, rng);
     const int rows = 2 * population;
@@ -417,7 +417,7 @@ void testGreedy(int n, int population, int runs) {
     const unsigned long long seed = 11 * n + OBJ;
     const int generation = 3;
     launchGreedy2Opt<OBJ>(dGenes.get(), dFitness.get(), dFlow.get(), dDist.get(), dTypes.get(), population, n, runs,
-                          seed, generation);
+                          seed, generation, rate, period);
     const std::vector<short> out = dGenes.toHost();
     const std::vector<unsigned int> fitness = dFitness.toHost();
 
@@ -430,11 +430,12 @@ void testGreedy(int n, int population, int runs) {
                 EXPECT(before == after, "greedy modified a survivor row");
                 continue;
             }
-            // greedyApplies mirrors kGreedyRate and kGreedyPeriod: an offspring it leaves out keeps its
-            // permutation, and its fitness is written all the same.
-            const std::vector<short> expected = greedyApplies(seed, r, c - population, generation)
-                                                    ? cpuGreedy(instance, before, types[r])
-                                                    : before;
+            // greedyApplies mirrors the rate and the period of the run: an offspring it leaves out keeps
+            // its permutation, and its fitness is written all the same.
+            const std::vector<short> expected =
+                greedyApplies(seed, r, c - population, generation, rate, period)
+                    ? cpuGreedy(instance, before, types[r])
+                    : before;
             EXPECT(after == expected, "greedy n=%d OBJ=%d type %d: differs from CPU", n, OBJ, types[r]);
             for (int o = 0; o < OBJ; o++) {
                 EXPECT(cost(instance, after.data(), o) == fitness[row * OBJ + o], "greedy fitness mismatch");
@@ -639,6 +640,8 @@ int main(int argc, char** argv) {
     run("greedy 2-opt == CPU greedy   n=10 OBJ=2", [] { testGreedy<2>(10, 64, 3); });
     run("greedy 2-opt == CPU greedy   n=30 OBJ=3", [] { testGreedy<3>(30, 32, 4); });
     run("greedy 2-opt == CPU greedy   n=60 OBJ=3 (>48 KB shared)", [] { testGreedy<3>(60, 16, 1); });
+    run("greedy 2-opt: rate 0.25 improves only its share", [] { testGreedy<2>(10, 64, 3, 0.25f, 1); });
+    run("greedy 2-opt: period 2 skips the odd generations", [] { testGreedy<2>(10, 64, 3, 1.0f, 2); });
     run("reproduce: survivors copied, valid children", [] { testReproduce<3>(30, 64, 3); });
     run("initial population: valid shuffled permutations", [] { testInitPopulation(30, 128, 4); });
     run("final front: every distinct solution, only once", [&] { testUniqueFront(kc10, 256, 30, 2); });

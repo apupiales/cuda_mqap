@@ -189,7 +189,7 @@ cuda_mqap/
 ├── scripts/prepare_original.py   Árbol de compilación de la versión original para una instancia
 ├── scripts/compare_versions.py   Hipervolumen, cobertura y Mann-Whitney entre dos versiones
 ├── scripts/run_rate_grid.ps1     Rejilla de población x configuración del greedy, por instancia
-├── scripts/prepare_rates.py      Árbol de compilación por configuración (kGreedyRate, kGreedyPeriod)
+├── include/best_configuration.h  Configuración medida como mejor de cada instancia, que usa por defecto
 ├── mQAPData/               Instancias (.dat) y frentes óptimos (.PO)
 ├── reference/v0.x/         Mejores frentes conocidos (.KBP) por versión, con su summary.json
 ├── mQAPMetrics/            Scripts Node.js de métricas y gráficos 3D
@@ -352,10 +352,17 @@ nvcc -O3 -arch=sm_75 -std=c++17 -Iinclude src\main.cpp src\instance.cpp src\solv
 
 ## Uso
 
+Sin opciones, la población, las generaciones y los ajustes del greedy 2-opt son los que se midieron
+mejores para la instancia ([La mejor configuración de cada
+problema](#la-mejor-configuración-de-cada-problema)); cada opción que se dé manda sobre ellos.
+
 ```
 cuda_mqap <instance.dat> [opciones]
-  --population P   tamaño de población, potencia de 2 en [16, 65536] (defecto 64)
-  --iterations N   generaciones (defecto 70)
+  --population P   tamaño de población, potencia de 2 en [16, 65536] (defecto: el de la instancia, o 64)
+  --iterations N   generaciones (defecto: las de la instancia, o 70)
+  --greedy-rate R  fracción de los descendientes que mejora el greedy 2-opt, en [0, 1]
+  --greedy-every K la búsqueda local se aplica cada K generaciones (defecto 1)
+  --untuned        ignora la tabla de la instancia: población 64, 70 generaciones, greedy al 100 %
   --runs R         ejecuciones independientes concurrentes (defecto 1)
   --seed S         semilla (defecto: aleatoria, se imprime en la salida)
   --output FILE    fichero de resultados, en modo append (defecto result_<instancia>_nsga2_greedy_2opt.txt)
@@ -1128,20 +1135,19 @@ P = 65536, en las doce instancias del libro: ver
 [Resultados en el libro de Excel](#resultados-en-el-libro-de-excel). Cuánta búsqueda local conviene
 entonces es lo que mide el apartado siguiente.
 
-### Cuánta búsqueda local conviene (`kGreedyRate`)
+### Cuánta búsqueda local conviene (`--greedy-rate`)
 
 La versión original aplica el greedy 2-opt a **todos** los descendientes de **todas** las
-generaciones, y eso es lo que hace esta versión por defecto: `kGreedyRate = 1.0f` y `kGreedyPeriod =
-1` en `include/config.h`. Las dos constantes permiten medir menos que eso —la fracción de
-descendientes que recibe la búsqueda local, y cada cuántas generaciones se aplica—, porque el
-apartado anterior deja una pregunta abierta: si una búsqueda local exhaustiva colapsa la diversidad
-cuando la población es grande, ¿cuánta conviene?
+generaciones. Esta versión lo controla con dos opciones, `--greedy-rate` y `--greedy-every`, que
+permiten medir menos que eso —la fracción de descendientes que recibe la búsqueda local, y cada
+cuántas generaciones se aplica—, porque el apartado anterior deja una pregunta abierta: si una
+búsqueda local exhaustiva colapsa la diversidad cuando la población es grande, ¿cuánta conviene?
 
 La decisión es un hash sin estado de (semilla, ejecución, descendiente, generación), así que no
 consume números de los flujos aleatorios de los operadores: con el valor por defecto no se extrae
-ninguno y la ejecución es idéntica bit a bit a las de antes de que existieran las constantes. El
-reparto medido con `kGreedyRate = 0.5f` es del 50,07 % de los descendientes, uniforme entre
-generaciones e individuos.
+ninguno y la ejecución con la tasa en 1 es idéntica bit a bit a las de antes de que existiera la
+opción. El reparto medido con `--greedy-rate 0.5` es del 50,07 % de los descendientes, uniforme
+entre generaciones e individuos.
 
 **Con el tope de la rama, P = 65536, en las instancias KC10 el cambio es enorme.** Cada celda da la
 distancia gama media, la fracción media del frente óptimo publicado encontrada por ejecución y
@@ -1170,8 +1176,8 @@ El tiempo de pared no cambia —de 18 a 21 s por ejecución con cualquiera de la
 = 65536 en una instancia KC10 lo que domina no es la búsqueda local sino el trámite de host del
 final: copiar la población, deduplicar las soluciones, verificar y escribir.
 
-**Nada de búsqueda local tampoco es la respuesta.** Con `kGreedyRate = 0.0f`, es decir NSGA-II con
-sus mutaciones y sin greedy, en 30 ejecuciones a P = 65536: KC10-2fl-1rl y KC10-2fl-5rl siguen
+**Nada de búsqueda local tampoco es la respuesta.** Con `--greedy-rate 0`, es decir NSGA-II con sus
+mutaciones y sin greedy, en 30 ejecuciones a P = 65536: KC10-2fl-1rl y KC10-2fl-5rl siguen
 encontrando el frente completo en las 30, pero KC10-2fl-3uni baja al 96,1 % de sus puntos y el
 frente completo solo aparece en una de las 30 ejecuciones, frente al 99,8 % y 23 de 30 con el 10 %
 (p = 7,1·10⁻¹¹). Un poco de búsqueda local rinde mucho; mucha quita diversidad; ninguna deja a la
@@ -1229,12 +1235,12 @@ cobertura con el hipervolumen indistinguible. Con n = 20 el espacio tiene 20! �
 permutaciones, así que ni P = 65536 lo cubre y la búsqueda local sigue haciendo falta: el efecto no
 es del tamaño de la población a secas, sino de la población **en relación con el espacio**.
 
-**Conclusión y valor por defecto.** `kGreedyRate` se queda en 1.0f: es lo que hace la versión
-original, es lo que sostiene la equivalencia estadística con ella en su propia configuración y es lo
-mejor en las instancias donde el espacio de búsqueda no se cubre. Pero si lo que se quiere es el
-frente óptimo de una instancia pequeña, el camino medido es población al tope y la búsqueda local en
-una fracción de los descendientes: con P = 65536 y el 10 %, las KC10 salen completas. La constante
-está ahí para eso, y no hay que tocar nada más.
+**Conclusión.** No hay un valor bueno para todas las instancias, así que no hay un valor por defecto
+único: el programa toma el que se midió mejor para cada instancia, y la tasa de 1 —la de la versión
+original, la que sostiene la equivalencia estadística con ella y la mejor donde el espacio de
+búsqueda no se cubre— queda como el valor de las instancias cuya mejor configuración es esa y de las
+que no están medidas. Qué configuración usa cada una está en [La mejor configuración de cada
+problema](#la-mejor-configuración-de-cada-problema).
 
 > Las ejecuciones en KC20 con P = 65536 encontraron 7 soluciones que no dominaba el frente de
 > referencia de KC20-2fl-1rl y KC20-2fl-3uni (6 con el 50 % y 1 con el 100 %), y están añadidas en
@@ -1305,7 +1311,7 @@ decir más barata. El patrón va por familias:
   lo que empuja.
 
 Es el mismo efecto que mide [Cuánta búsqueda local
-conviene](#cuánta-búsqueda-local-conviene-kgreedyrate), ahora en las 23 instancias: lo que decide no
+conviene](#cuánta-búsqueda-local-conviene---greedy-rate), ahora en las 23 instancias: lo que decide no
 es el tamaño de la instancia ni el de la población por separado, sino **la población frente al
 espacio de búsqueda**. P = 65 536 es el 1,8 % de las 10! permutaciones de una instancia KC10, el
 2,7·10⁻¹¹ % de las 20! de una KC20 y el 2,5·10⁻²⁹ % de las 30! de una KC30: cuanto menos cubre la
@@ -1349,6 +1355,28 @@ el greedy entero cada dos generaciones venía de las diez ejecuciones de la reji
 deja de ser significativa (p = 0,081). Y frenar la búsqueda local además sale más rápido, entre un
 20 % y un 34 % menos de tiempo de pared por tanda, porque hay menos intentos de intercambio que
 evaluar.
+
+**La tabla es el valor por defecto del programa.** Está en `include/best_configuration.h`, generada
+desde `results/grid/best.json`, y el programa la aplica por nombre de instancia: sin opciones,
+`cuda_mqap.exe mQAPData\KC10-2fl-5rl.dat` usa P = 16 384, 70 generaciones y el greedy en el 10 % de
+los descendientes, y lo dice al empezar. Cada opción de la línea de comandos manda sobre la tabla,
+`--untuned` la ignora entera (P = 64, 70 generaciones, greedy al 100 %) y una instancia que no esté
+en la tabla usa esos mismos valores genéricos.
+
+```
+cuda_mqap.exe mQAPData\KC10-2fl-5rl.dat                      # P = 16 384, greedy al 10 %
+cuda_mqap.exe mQAPData\KC10-2fl-5rl.dat --greedy-rate 1.0    # la tabla, con el greedy entero
+cuda_mqap.exe mQAPData\KC10-2fl-5rl.dat --untuned            # P = 64, greedy al 100 %
+```
+
+Las generaciones forman parte de la tabla porque una configuración solo es la mejor para el
+presupuesto con el que se midió. Y conviene saber lo que cuesta: en las KC20 y las KC30 la mejor
+configuración es el tope de población con 300 generaciones, así que una ejecución sin opciones de
+una instancia KC30 son minutos de GPU, no segundos.
+
+Repetir una de las ejecuciones de la confirmación sin dar ninguna opción —solo `--runs 30 --seed
+20261005`— devuelve el mismo fichero byte a byte en KC10-2fl-5rl, KC10-2fl-1uni, KC10-2fl-2uni y
+KC20-2fl-1rl, que es la comprobación de que la tabla y la medición dicen lo mismo.
 
 ### Cómo calcular el límite en otra GPU
 
@@ -1406,8 +1434,8 @@ muy por encima de lo que permite el tiempo: con P = 4096, cada ejecución de KC3
   por segmentos de CUB.
 - Más operadores de cruce y variantes del criterio del greedy 2-opt. El recorrido de pares ya es el de
   la versión original, y la diversidad que cuesta en instancias pequeñas con población grande se recupera
-  bajando `kGreedyRate` (ver
-  [Cuánta búsqueda local conviene](#cuánta-búsqueda-local-conviene-kgreedyrate)); queda abierto si un
+  bajando la tasa del greedy (ver
+  [Cuánta búsqueda local conviene](#cuánta-búsqueda-local-conviene---greedy-rate)); queda abierto si un
   criterio más barato da lo mismo sin bajar la tasa.
 
 ---

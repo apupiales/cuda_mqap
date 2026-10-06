@@ -187,7 +187,7 @@ cuda_mqap/
 ├── scripts/prepare_original.py   Build tree of the original version for one instance
 ├── scripts/compare_versions.py   Hypervolume, coverage and Mann-Whitney between two versions
 ├── scripts/run_rate_grid.ps1     Grid of population x greedy configuration, per instance
-├── scripts/prepare_rates.py      Build tree per greedy configuration (kGreedyRate, kGreedyPeriod)
+├── include/best_configuration.h  Configuration measured best for each instance, used as its defaults
 ├── mQAPData/               Instances (.dat) and optimal fronts (.PO)
 ├── reference/v0.x/         Best known fronts (.KBP) by version, with their summary.json
 ├── mQAPMetrics/            Node.js metric and 3D plot scripts
@@ -350,10 +350,17 @@ nvcc -O3 -arch=sm_75 -std=c++17 -Iinclude src\main.cpp src\instance.cpp src\solv
 
 ## Usage
 
+Without options, the population, the generations and the greedy 2-opt settings are the ones measured best
+for the instance ([The best configuration for each
+problem](#the-best-configuration-for-each-problem)); every option given overrides them.
+
 ```
 cuda_mqap <instance.dat> [options]
-  --population P   population size, power of two in [16, 65536] (default 64)
-  --iterations N   generations (default 70)
+  --population P   population size, power of two in [16, 65536] (default: of the instance, or 64)
+  --iterations N   generations (default: of the instance, or 70)
+  --greedy-rate R  fraction of the offspring the greedy 2-opt improves, in [0, 1]
+  --greedy-every K the local search runs every K generations (default 1)
+  --untuned        ignore the table of the instance: population 64, 70 generations, greedy at 100 %
   --runs R         independent runs executed concurrently (default 1)
   --seed S         random seed (default: random, printed in the output)
   --output FILE    result file, appended (default result_<instance>_nsga2_greedy_2opt.txt)
@@ -1112,17 +1119,17 @@ P = 65536, on the twelve instances of the workbook: see
 [Results in the Excel workbook](#results-in-the-excel-workbook). How much local search is worth it then
 is what the next section measures.
 
-### How much local search is worth it (`kGreedyRate`)
+### How much local search is worth it (`--greedy-rate`)
 
-The original version applies the greedy 2-opt to **every** offspring of **every** generation, and so
-does this one by default: `kGreedyRate = 1.0f` and `kGreedyPeriod = 1` in `include/config.h`. The
-two constants allow measuring less than that — the fraction of the offspring that gets the local
-search, and how often it runs — because the previous section leaves a question open: if an
-exhaustive local search collapses the diversity when the population is large, how much is worth it?
+The original version applies the greedy 2-opt to **every** offspring of **every** generation. This
+one controls it with two options, `--greedy-rate` and `--greedy-every`, which allow measuring less
+than that — the fraction of the offspring that gets the local search, and how often it runs —
+because the previous section leaves a question open: if an exhaustive local search collapses the
+diversity when the population is large, how much is worth it?
 
 The decision is a stateless hash of (seed, run, offspring, generation), so it takes no numbers from
-the random streams of the operators: at the default none is drawn and a run is bit-identical to the
-ones made before the constants existed. The share measured with `kGreedyRate = 0.5f` is 50.07 % of
+the random streams of the operators: with the rate at 1 none is drawn and a run is bit-identical to
+the ones made before the option existed. The share measured with `--greedy-rate 0.5` is 50.07 % of
 the offspring, uniform across generations and individuals.
 
 **At the cap of the branch, P = 65536, the change on the KC10 instances is large.** Each cell gives
@@ -1151,7 +1158,7 @@ The wall time does not change — 18 to 21 s per run at any of the rates — bec
 KC10 instance what dominates is not the local search but the host work at the end: copying the
 population back, deduplicating the solutions, verifying and writing them.
 
-**No local search at all is not the answer either.** With `kGreedyRate = 0.0f`, that is NSGA-II with
+**No local search at all is not the answer either.** With `--greedy-rate 0`, that is NSGA-II with
 its mutations and no greedy, over 30 runs at P = 65536: KC10-2fl-1rl and KC10-2fl-5rl still find the
 whole front in all 30, but KC10-2fl-3uni falls to 96.1 % of its points and the whole front appears
 in only one of the 30 runs, against 99.8 % and 23 of 30 at 10 % (p = 7.1·10⁻¹¹). A little local
@@ -1208,12 +1215,12 @@ with the hypervolume indistinguishable. With n = 20 the space holds 20! ≈ 2.4�
 not even P = 65536 covers it and the local search is still needed: the effect is not about the size
 of the population alone, but about the population **relative to the space**.
 
-**Conclusion and default.** `kGreedyRate` stays at 1.0f: it is what the original version does, it is
-what holds the statistical equivalence with it at its own configuration, and it is the best choice
-on the instances whose search space is not covered. But if what one wants is the optimal front of a
-small instance, the measured route is the population at the cap and the local search on a fraction
-of the offspring: with P = 65536 and 10 %, the KC10 instances come out complete. That is what the
-constant is there for, and nothing else has to change.
+**Conclusion.** No single value is good for every instance, so there is no single default: the
+program takes the one measured best for each instance, and a rate of 1 — what the original version
+does, what holds the statistical equivalence with it, and the best choice where the search space is
+not covered — is left as the value of the instances whose best configuration is that one and of
+those that are not measured. Which configuration each one uses is in [The best configuration for
+each problem](#the-best-configuration-for-each-problem).
 
 > The runs on KC20 with P = 65536 found 7 solutions the reference front of KC20-2fl-1rl and
 > KC20-2fl-3uni did not dominate (6 at 50 % and 1 at 100 %), and they are added in `reference/v0.2`.
@@ -1282,7 +1289,7 @@ rate, that is, more cheaply. The pattern goes by family:
   is not in the way: it is what pushes.
 
 It is the same effect measured in [How much local search is worth
-it](#how-much-local-search-is-worth-it-kgreedyrate), now over all 23 instances: what decides is
+it](#how-much-local-search-is-worth-it---greedy-rate), now over all 23 instances: what decides is
 neither the size of the instance nor the size of the population on its own, but **the population
 against the search space**. P = 65,536 is 1.8 % of the 10! permutations of a KC10 instance,
 2.7·10⁻¹¹ % of the 20! of a KC20 one and 2.5·10⁻²⁹ % of the 30! of a KC30 one: the less the
@@ -1325,6 +1332,28 @@ The gain holds on six of the seven, at p ≤ 1.1·10⁻⁹. The exception is KC2
 of the whole greedy every two generations came from the ten runs of the grid and stops being
 significant over thirty (p = 0.081). And throttling the local search is also faster, between 20 %
 and 34 % less wall time per batch, because there are fewer swap trials to evaluate.
+
+**The table is what the program defaults to.** It lives in `include/best_configuration.h`, generated
+from `results/grid/best.json`, and the program applies it by instance name: with no options,
+`cuda_mqap.exe mQAPData\KC10-2fl-5rl.dat` uses P = 16,384, 70 generations and the greedy on 10 % of
+the offspring, and says so when it starts. Any option on the command line wins over the table,
+`--untuned` ignores it altogether (P = 64, 70 generations, greedy at 100 %), and an instance the
+table does not list uses those same generic values.
+
+```
+cuda_mqap.exe mQAPData\KC10-2fl-5rl.dat                      # P = 16,384, greedy at 10 %
+cuda_mqap.exe mQAPData\KC10-2fl-5rl.dat --greedy-rate 1.0    # the table, with the whole greedy
+cuda_mqap.exe mQAPData\KC10-2fl-5rl.dat --untuned            # P = 64, greedy at 100 %
+```
+
+The generations are part of the table because a configuration is only best for the budget it was
+measured with. And it is worth knowing what it costs: on KC20 and KC30 the best configuration is the
+population cap with 300 generations, so a run with no options on a KC30 instance is minutes of GPU,
+not seconds.
+
+Repeating one of the confirmation runs with no options at all — only `--runs 30 --seed 20261005` —
+gives the same file byte for byte on KC10-2fl-5rl, KC10-2fl-1uni, KC10-2fl-2uni and KC20-2fl-1rl,
+which is the check that the table and the measurement say the same thing.
 
 ### How to compute the limit for another GPU
 
@@ -1380,8 +1409,8 @@ above what the time allows: with P = 4096 each run of KC30 costs about 0.7 s of 
   multi-block path the interesting costs are `grid.sync()` and the segmented sorts of CUB.
 - More crossover operators and variants of the greedy 2-opt criterion. The pair traversal is already
   the one of the original version, and the diversity it costs on small instances with a large population
-  comes back by lowering `kGreedyRate` (see
-  [How much local search is worth it](#how-much-local-search-is-worth-it-kgreedyrate)); what is open is
+  comes back by lowering the greedy rate (see
+  [How much local search is worth it](#how-much-local-search-is-worth-it---greedy-rate)); what is open is
   whether a cheaper criterion gives the same without lowering the rate.
 
 ---

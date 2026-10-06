@@ -4,10 +4,10 @@
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\run_rate_grid.ps1
 #
-# How much of the population the local search improves is a compile-time constant, so the grid needs one
-# binary per configuration: scripts\prepare_rates.py writes those trees and this script builds them. Then
-# every instance runs at every population with every configuration, the same number of runs and the same
-# seed, writing one result file per cell into -OutDir.
+# Every instance runs at every population with every greedy configuration, the same number of runs and the
+# same seed, writing one result file per cell into -OutDir. The configuration is set on the command line
+# (--greedy-rate, --greedy-every), so one binary covers the whole grid, and -Untuned keeps the per-instance
+# defaults of include/best_configuration.h out of the way: the grid is what measures them.
 #
 # The generation budget is fixed per family (KC10 70, KC20 and KC30 300), so the cells of one instance are
 # comparable: what the grid answers is which configuration is best for a given budget, not how many
@@ -19,19 +19,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 param(
+    [string]   $Exe            = 'build\x64\Release\cuda_mqap.exe',
     [string[]] $Instances      = @(),
     [string[]] $Populations    = @('1024', '4096', '16384', '65536'),
     [string[]] $Configurations = @('1.0', '0.5', '0.25', '0.1'),
     [int]      $Runs           = 10,
     [int]      $Seed           = 20260921,
-    [string]   $OutDir         = 'results\grid',
-    [string]   $BuildDir       = 'build\rates',
-    [string]   $Arch           = 'sm_75',
-    [string]   $VcVars         = 'C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat',
-    [switch]   $SkipBuild
+    [string]   $OutDir         = 'results\grid'
 )
 
-$ErrorActionPreference = 'Continue'   # vcvars64.bat writes to stderr; the exit codes are checked instead
+$ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
@@ -41,6 +38,8 @@ $Instances      = Split-List $Instances
 $Configurations = Split-List $Configurations
 $Populations    = Split-List $Populations | ForEach-Object { [int]$_ }
 
+if (-not (Test-Path $Exe)) { throw "$Exe not found. Build this version first (see the README)." }
+
 # Every instance of mQAPData, unless the caller names some.
 if (-not $Instances) {
     $Instances = Get-ChildItem (Join-Path $root 'mQAPData') -Filter '*.dat' |
@@ -48,31 +47,23 @@ if (-not $Instances) {
 }
 
 $generations = @{ 'KC10' = 70; 'KC20' = 300; 'KC30' = 300 }
-$core = 'src\instance.cpp src\fitness.cu src\nsga2.cu src\nsga2_multiblock.cu src\operators.cu src\local_search.cu src\solver.cu'
-
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 
-# One binary per configuration, from the current source of the branch.
-$names = python scripts\prepare_rates.py $BuildDir @Configurations --list | ForEach-Object { ($_ -split '\s+')[0] }
-if ($LASTEXITCODE -ne 0) { throw 'prepare_rates.py --list failed' }
-
-if (-not $SkipBuild) {
-    "### building $($names.Count) configurations"
-    python scripts\prepare_rates.py $BuildDir @Configurations
-    if ($LASTEXITCODE -ne 0) { throw 'prepare_rates.py failed' }
-    foreach ($name in $names) {
-        $tree = (Resolve-Path (Join-Path $BuildDir $name)).Path
-        $build = "call ""$VcVars"" >nul 2>&1 && cd /d ""$tree"" && nvcc -O3 -arch=$Arch -std=c++17 -Xcompiler ""/Zc:preprocessor"" -Iinclude $core src\main.cpp -o ""$tree\cuda_mqap.exe"""
-        & cmd /c $build 2>&1 | Select-String -Pattern 'error' | ForEach-Object { $_.Line }
-        if (-not (Test-Path "$tree\cuda_mqap.exe")) { throw "$name : build failed" }
-        "  $name ok"
-    }
+# `rate:period` -> the name of the cell, which is also the label of the configuration in every report.
+function Parse-Configuration($text) {
+    $pieces = $text -split ':'
+    $rate = [double]$pieces[0]
+    $period = if ($pieces.Count -gt 1) { [int]$pieces[1] } else { 1 }
+    if ($rate -lt 0 -or $rate -gt 1) { throw "the rate must be in [0, 1], got $($pieces[0])" }
+    if ($period -lt 1) { throw "the period must be at least 1, got $period" }
+    @{ rate = $rate; period = $period; name = "rate{0:d3}p{1}" -f [int][math]::Round($rate * 100), $period }
 }
 
-$total = $Instances.Count * $Populations.Count * $names.Count
+$cells = $Configurations | ForEach-Object { Parse-Configuration $_ }
+$total = $Instances.Count * $Populations.Count * $cells.Count
 $done = 0
 $watch = [Diagnostics.Stopwatch]::StartNew()
-"### $total cells: $($Instances.Count) instances x $($Populations.Count) populations x $($names.Count) configurations, $Runs runs each"
+"### $total cells: $($Instances.Count) instances x $($Populations.Count) populations x $($cells.Count) configurations, $Runs runs each"
 
 foreach ($instance in $Instances) {
     $family = $instance.Substring(0, 4)
@@ -82,20 +73,20 @@ foreach ($instance in $Instances) {
     New-Item -ItemType Directory -Force $dir | Out-Null
 
     foreach ($population in $Populations) {
-        foreach ($name in $names) {
+        foreach ($cell in $cells) {
             $done++
-            $file = Join-Path $dir "${name}_P$population.txt"
+            $file = Join-Path $dir "$($cell.name)_P$population.txt"
             if (Test-Path $file) { continue }
-            $exe = Join-Path (Join-Path $BuildDir $name) 'cuda_mqap.exe'
-            $cell = [Diagnostics.Stopwatch]::StartNew()
-            $text = & $exe "mQAPData\$instance.dat" --population $population --iterations $iterations `
+            $clock = [Diagnostics.Stopwatch]::StartNew()
+            $text = & $Exe "mQAPData\$instance.dat" --population $population --iterations $iterations `
+                --greedy-rate $cell.rate --greedy-every $cell.period --untuned `
                 --runs $Runs --seed $Seed --verify --quiet --output $file 2>&1 | Out-String
-            $cell.Stop()
+            $clock.Stop()
             if ($text -notmatch 'Verification: OK') {
-                "  !! $instance $name P=$population : verification did not report OK"
+                "  !! $instance $($cell.name) P=$population : verification did not report OK"
             }
             "[{0,4}/{1}] {2,-15} {3,-10} P={4,-6} {5,6:N1} s   (elapsed {6:N1} min)" -f `
-                $done, $total, $instance, $name, $population, $cell.Elapsed.TotalSeconds, $watch.Elapsed.TotalMinutes
+                $done, $total, $instance, $cell.name, $population, $clock.Elapsed.TotalSeconds, $watch.Elapsed.TotalMinutes
         }
     }
 }

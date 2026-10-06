@@ -44,7 +44,7 @@ template <int OBJ>
 __global__ void greedy2OptKernel(short* __restrict__ genes, unsigned int* __restrict__ fitness,
                                  const int* __restrict__ flow, const int* __restrict__ dist,
                                  const int* __restrict__ greedyType, int population, int n,
-                                 unsigned long long seed, int generation) {
+                                 unsigned long long seed, int generation, float rate, int period) {
     extern __shared__ int smem[];
     int* sFlow = smem;                                      // OBJ * n * n
     int* sDist = sFlow + OBJ * n * n;                       // n * n
@@ -78,7 +78,7 @@ __global__ void greedy2OptKernel(short* __restrict__ genes, unsigned int* __rest
     // The cost above is computed for every offspring, because this kernel is where the offspring of the
     // generation get their fitness; only the improvement below is skipped. With the default settings
     // greedyApplies() is a compile-time true and the branch disappears.
-    const bool improve = greedyApplies(seed, blockIdx.y, local, generation);
+    const bool improve = greedyApplies(seed, blockIdx.y, local, generation, rate, period);
 
     // kGreedyFullPairs selects the pair traversal; both bounds are compile-time constants, so the
     // unused branch costs nothing. See its comment in config.h and the README.
@@ -124,7 +124,7 @@ __global__ void greedy2OptKernel(short* __restrict__ genes, unsigned int* __rest
 template <int OBJ>
 void launchGreedy2Opt(short* genes, unsigned int* fitness, const int* flow, const int* dist,
                       const int* greedyType, int population, int n, int runs,
-                      unsigned long long seed, int generation) {
+                      unsigned long long seed, int generation, float rate, int period) {
     const size_t smem = matricesSharedMemory(n, OBJ);
     static bool attributeSet = false;
     if (!attributeSet) {
@@ -135,13 +135,13 @@ void launchGreedy2Opt(short* genes, unsigned int* fitness, const int* flow, cons
     }
     const dim3 grid((population + kWarpsPerBlock - 1) / kWarpsPerBlock, runs);
     detail::greedy2OptKernel<OBJ><<<grid, 32 * kWarpsPerBlock, smem>>>(genes, fitness, flow, dist, greedyType, population, n,
-                                                                       seed, generation);
+                                                                       seed, generation, rate, period);
     CUDA_CHECK_KERNEL();
 }
 
 template void launchGreedy2Opt<2>(short*, unsigned int*, const int*, const int*, const int*, int, int, int,
-                                  unsigned long long, int);
+                                  unsigned long long, int, float, int);
 template void launchGreedy2Opt<3>(short*, unsigned int*, const int*, const int*, const int*, int, int, int,
-                                  unsigned long long, int);
+                                  unsigned long long, int, float, int);
 
 } // namespace mqap

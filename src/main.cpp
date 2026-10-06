@@ -31,6 +31,7 @@
 #include <string>
 #include <vector>
 
+#include "best_configuration.h"
 #include "instance.h"
 #include "solver.h"
 
@@ -43,13 +44,25 @@ struct Arguments {
     mqap::SolverOptions options;
     bool verify = false;
     bool quiet = false;
+    // Which options the command line gave: the rest are taken from the table of the instance, so an
+    // explicit value always wins over the measured one.
+    bool setPopulation = false;
+    bool setIterations = false;
+    bool setGreedyRate = false;
+    bool setGreedyPeriod = false;
+    bool tuned = true;               // --untuned ignores include/best_configuration.h
 };
 
 void printUsage(const char* program) {
     std::printf(
         "Usage: %s <instance.dat> [options]\n"
-        "  --population P   population size, power of two in [16, 65536] (default 64)\n"
-        "  --iterations N   generations (default 70)\n"
+        "Without options, the population, the generations and the greedy 2-opt settings are the ones\n"
+        "measured best for the instance (include/best_configuration.h); every option given overrides them.\n"
+        "  --population P   population size, power of two in [16, 65536] (default: of the instance, or 64)\n"
+        "  --iterations N   generations (default: of the instance, or 70)\n"
+        "  --greedy-rate R  fraction of the offspring the greedy 2-opt improves, in [0, 1]\n"
+        "  --greedy-every K the local search runs every K generations (default 1)\n"
+        "  --untuned        ignore the table of the instance: population 64, 70 generations, greedy 1.0\n"
         "  --runs R         independent runs executed concurrently (default 1)\n"
         "  --seed S         random seed (default: random, printed in the output)\n"
         "  --output FILE    result file, appended (default result_<instance>_nsga2_greedy_2opt.txt)\n"
@@ -68,8 +81,18 @@ bool parseArguments(int argc, char** argv, Arguments& args) {
         const bool hasValue = i + 1 < argc;
         if (arg == "--population" && hasValue) {
             args.options.population = std::atoi(argv[++i]);
+            args.setPopulation = true;
         } else if (arg == "--iterations" && hasValue) {
             args.options.iterations = std::atoi(argv[++i]);
+            args.setIterations = true;
+        } else if (arg == "--greedy-rate" && hasValue) {
+            args.options.greedyRate = static_cast<float>(std::atof(argv[++i]));
+            args.setGreedyRate = true;
+        } else if (arg == "--greedy-every" && hasValue) {
+            args.options.greedyPeriod = std::atoi(argv[++i]);
+            args.setGreedyPeriod = true;
+        } else if (arg == "--untuned") {
+            args.tuned = false;
         } else if (arg == "--runs" && hasValue) {
             args.options.runs = std::atoi(argv[++i]);
         } else if (arg == "--seed" && hasValue) {
@@ -169,6 +192,24 @@ int main(int argc, char** argv) {
 
     try {
         const mqap::Instance instance = mqap::loadInstance(args.instancePath);
+
+        // The configuration measured best for this instance fills in what the command line did not give.
+        const mqap::InstanceConfiguration* tuned =
+            args.tuned ? mqap::bestConfigurationOf(instance.name) : nullptr;
+        if (tuned != nullptr) {
+            if (!args.setPopulation) {
+                args.options.population = tuned->population;
+            }
+            if (!args.setIterations) {
+                args.options.iterations = tuned->iterations;
+            }
+            if (!args.setGreedyRate) {
+                args.options.greedyRate = tuned->greedyRate;
+            }
+            if (!args.setGreedyPeriod) {
+                args.options.greedyPeriod = tuned->greedyPeriod;
+            }
+        }
         if (args.options.seed == 0) {
             args.options.seed = (static_cast<unsigned long long>(std::random_device{}()) << 32) ^ std::random_device{}();
         }
@@ -178,6 +219,14 @@ int main(int argc, char** argv) {
         std::printf("Instance %s: n = %d, objectives = %d | population = %d, iterations = %d, runs = %d, seed = %llu\n",
                     instance.name.c_str(), instance.n, instance.objectives, args.options.population,
                     args.options.iterations, args.options.runs, args.options.seed);
+        std::printf("Greedy 2-opt on %g %% of the offspring%s | %s\n",
+                    100.0 * args.options.greedyRate,
+                    args.options.greedyPeriod == 1 ? ""
+                        : (" every " + std::to_string(args.options.greedyPeriod) + " generations").c_str(),
+                    tuned != nullptr
+                        ? "configuration measured best for this instance; an option given overrides it"
+                        : (args.tuned ? "no measured configuration for this instance: generic defaults"
+                                      : "--untuned: generic defaults"));
 
         const auto begin = std::chrono::steady_clock::now();
         mqap::SolveStats stats;
