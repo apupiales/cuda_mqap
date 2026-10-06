@@ -61,6 +61,7 @@ what makes a front of hundreds of runs affordable to build.
 | `v0.1` | 2026-09-26 | The convergence campaign run with the pair traversal of the original version: 7 instances, from 8 points (KC20-2fl-2uni) to 16,989 (KC30-3fl-1rl). |
 | `v0.2` | 2026-10-04 | 7 solutions found by the greedy-rate experiment on KC20 with P = 65536, on KC20-2fl-1rl and KC20-2fl-3uni. |
 | `v0.3` | 2026-10-05 | The grid of population × greedy configuration, 690 cells of 10 runs. It gives a first front to the 8 instances that had none (KC20-2fl-2rl, 3rl, 4rl, 5rl, KC30-2fl-1rl, KC30-3fl-2rl, 3rl, 3uni) and improves 4 of the 7 that had one: KC30-3fl-1rl 16,989 → 17,097, KC30-3fl-1uni 3448 → 3562, KC30-3fl-2uni 821 → 847, KC20-2fl-3uni 241 → 243. |
+| `v0.4` | 2026-10-05 | 438 solutions found by one run of the default call on each of the 23 instances (`scripts/run_front_plot.ps1`, seed 20261005), on seven of them: KC20-2fl-3rl 215 → 216, KC20-2fl-4rl 99 → 100, KC30-2fl-1rl 251 → 251 (3 in, 3 out), KC30-3fl-1uni 3562 → 3567, KC30-3fl-2rl 13,388 → 13,421, KC30-3fl-3rl 26,219 → 26,409, KC30-3fl-3uni 4181 → 4221. The 168 points of `v0.3` they dominate leave the front. |
 
 Every instance without a published optimum now has a front: 15 of the 23 in `mQAPData`, the other 8 being
 the KC10 ones, which have theirs published.

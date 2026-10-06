@@ -28,6 +28,7 @@
 
 .EXAMPLE
     .\scripts\run_front_plot.ps1
+    .\scripts\run_front_plot.ps1 -Instances all -Png
     .\scripts\run_front_plot.ps1 -Instances KC30-3fl-1rl -Seed 2026 -Png -SelfContained
     .\scripts\run_front_plot.ps1 -Instances KC20-2fl-1rl,KC10-2fl-1rl -OutDir results\other
 #>
@@ -44,8 +45,10 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
-if ($Instances.Count -eq 0) {
-    $Instances = Get-ChildItem (Join-Path $root "mQAPData") -Filter "KC30-*.dat" | Sort-Object Name |
+if ($Instances.Count -eq 0 -or $Instances -contains "all") {
+    # By default the KC30 instances; "all" takes every .dat of mQAPData.
+    $filter = if ($Instances -contains "all") { "*.dat" } else { "KC30-*.dat" }
+    $Instances = Get-ChildItem (Join-Path $root "mQAPData") -Filter $filter | Sort-Object Name |
         ForEach-Object { $_.BaseName }
 }
 $exePath = if ([System.IO.Path]::IsPathRooted($Exe)) { $Exe } else { Join-Path $root $Exe }

@@ -202,7 +202,7 @@ cuda_mqap/
 ├── scripts/build_reference.py    Builds the best known front of an instance (.KBP)
 ├── scripts/run_front_plot.ps1    Default run of each instance, plotted against its best known front
 ├── scripts/plot_fronts.py        Best known front, final front and initial population, in HTML and PNG
-├── examples/fronts/        Output of run_front_plot.ps1 for the seven KC30 instances, HTML and PNG
+├── examples/fronts/        Output of run_front_plot.ps1 for the 23 instances, HTML and PNG
 ├── mQAPData/               Instances (.dat) and optimal fronts (.PO)
 ├── reference/v0.x/         Best known fronts (.KBP) by version, with their summary.json
 ├── mQAPMetrics/            Node.js metric and 3D plot scripts
@@ -665,24 +665,24 @@ published against an earlier version: it says the best known front improved. A p
 edited; the addition creates the next directory. The rule and the command are in
 [`reference/README.md`](reference/README.md).
 
-| Instance | Reference front | `v0.1` | `v0.2` | `v0.3` |
-|---|---|---|---|---|
-| KC10-2fl-* | published optimum | 1 to 130, in [`mQAPData/*.PO`](mQAPData/) | the same, never versioned | — |
-| KC20-2fl-1rl | best known | [91](reference/v0.1/KC20-2fl-1rl.KBP) | [94](reference/v0.2/KC20-2fl-1rl.KBP) | [94](reference/v0.3/KC20-2fl-1rl.KBP) |
-| KC20-2fl-1uni | best known | [71](reference/v0.1/KC20-2fl-1uni.KBP) | [71](reference/v0.2/KC20-2fl-1uni.KBP) | [71](reference/v0.3/KC20-2fl-1uni.KBP) |
-| KC20-2fl-2rl | best known | — | — | [150](reference/v0.3/KC20-2fl-2rl.KBP) |
-| KC20-2fl-2uni | best known | [8](reference/v0.1/KC20-2fl-2uni.KBP) | [8](reference/v0.2/KC20-2fl-2uni.KBP) | [8](reference/v0.3/KC20-2fl-2uni.KBP) |
-| KC20-2fl-3rl | best known | — | — | [215](reference/v0.3/KC20-2fl-3rl.KBP) |
-| KC20-2fl-3uni | best known | [243](reference/v0.1/KC20-2fl-3uni.KBP) | [241](reference/v0.2/KC20-2fl-3uni.KBP) | [243](reference/v0.3/KC20-2fl-3uni.KBP) |
-| KC20-2fl-4rl | best known | — | — | [99](reference/v0.3/KC20-2fl-4rl.KBP) |
-| KC20-2fl-5rl | best known | — | — | [174](reference/v0.3/KC20-2fl-5rl.KBP) |
-| KC30-2fl-1rl | best known | — | — | [251](reference/v0.3/KC30-2fl-1rl.KBP) |
-| KC30-3fl-1rl | best known | [16,989](reference/v0.1/KC30-3fl-1rl.KBP) | [16,989](reference/v0.2/KC30-3fl-1rl.KBP) | [17,097](reference/v0.3/KC30-3fl-1rl.KBP) |
-| KC30-3fl-1uni | best known | [3448](reference/v0.1/KC30-3fl-1uni.KBP) | [3448](reference/v0.2/KC30-3fl-1uni.KBP) | [3562](reference/v0.3/KC30-3fl-1uni.KBP) |
-| KC30-3fl-2rl | best known | — | — | [13,388](reference/v0.3/KC30-3fl-2rl.KBP) |
-| KC30-3fl-2uni | best known | [821](reference/v0.1/KC30-3fl-2uni.KBP) | [821](reference/v0.2/KC30-3fl-2uni.KBP) | [847](reference/v0.3/KC30-3fl-2uni.KBP) |
-| KC30-3fl-3rl | best known | — | — | [26,219](reference/v0.3/KC30-3fl-3rl.KBP) |
-| KC30-3fl-3uni | best known | — | — | [4181](reference/v0.3/KC30-3fl-3uni.KBP) |
+| Instance | Reference front | `v0.1` | `v0.2` | `v0.3` | `v0.4` |
+|---|---|---|---|---|---|
+| KC10-2fl-* | published optimum | 1 to 130, in [`mQAPData/*.PO`](mQAPData/) | the same, never versioned | — | — |
+| KC20-2fl-1rl | best known | [91](reference/v0.1/KC20-2fl-1rl.KBP) | [94](reference/v0.2/KC20-2fl-1rl.KBP) | [94](reference/v0.3/KC20-2fl-1rl.KBP) | [94](reference/v0.4/KC20-2fl-1rl.KBP) |
+| KC20-2fl-1uni | best known | [71](reference/v0.1/KC20-2fl-1uni.KBP) | [71](reference/v0.2/KC20-2fl-1uni.KBP) | [71](reference/v0.3/KC20-2fl-1uni.KBP) | [71](reference/v0.4/KC20-2fl-1uni.KBP) |
+| KC20-2fl-2rl | best known | — | — | [150](reference/v0.3/KC20-2fl-2rl.KBP) | [150](reference/v0.4/KC20-2fl-2rl.KBP) |
+| KC20-2fl-2uni | best known | [8](reference/v0.1/KC20-2fl-2uni.KBP) | [8](reference/v0.2/KC20-2fl-2uni.KBP) | [8](reference/v0.3/KC20-2fl-2uni.KBP) | [8](reference/v0.4/KC20-2fl-2uni.KBP) |
+| KC20-2fl-3rl | best known | — | — | [215](reference/v0.3/KC20-2fl-3rl.KBP) | [216](reference/v0.4/KC20-2fl-3rl.KBP) |
+| KC20-2fl-3uni | best known | [243](reference/v0.1/KC20-2fl-3uni.KBP) | [241](reference/v0.2/KC20-2fl-3uni.KBP) | [243](reference/v0.3/KC20-2fl-3uni.KBP) | [243](reference/v0.4/KC20-2fl-3uni.KBP) |
+| KC20-2fl-4rl | best known | — | — | [99](reference/v0.3/KC20-2fl-4rl.KBP) | [100](reference/v0.4/KC20-2fl-4rl.KBP) |
+| KC20-2fl-5rl | best known | — | — | [174](reference/v0.3/KC20-2fl-5rl.KBP) | [174](reference/v0.4/KC20-2fl-5rl.KBP) |
+| KC30-2fl-1rl | best known | — | — | [251](reference/v0.3/KC30-2fl-1rl.KBP) | [251](reference/v0.4/KC30-2fl-1rl.KBP) |
+| KC30-3fl-1rl | best known | [16,989](reference/v0.1/KC30-3fl-1rl.KBP) | [16,989](reference/v0.2/KC30-3fl-1rl.KBP) | [17,097](reference/v0.3/KC30-3fl-1rl.KBP) | [17,097](reference/v0.4/KC30-3fl-1rl.KBP) |
+| KC30-3fl-1uni | best known | [3448](reference/v0.1/KC30-3fl-1uni.KBP) | [3448](reference/v0.2/KC30-3fl-1uni.KBP) | [3562](reference/v0.3/KC30-3fl-1uni.KBP) | [3567](reference/v0.4/KC30-3fl-1uni.KBP) |
+| KC30-3fl-2rl | best known | — | — | [13,388](reference/v0.3/KC30-3fl-2rl.KBP) | [13,421](reference/v0.4/KC30-3fl-2rl.KBP) |
+| KC30-3fl-2uni | best known | [821](reference/v0.1/KC30-3fl-2uni.KBP) | [821](reference/v0.2/KC30-3fl-2uni.KBP) | [847](reference/v0.3/KC30-3fl-2uni.KBP) | [847](reference/v0.4/KC30-3fl-2uni.KBP) |
+| KC30-3fl-3rl | best known | — | — | [26,219](reference/v0.3/KC30-3fl-3rl.KBP) | [26,409](reference/v0.4/KC30-3fl-3rl.KBP) |
+| KC30-3fl-3uni | best known | — | — | [4181](reference/v0.3/KC30-3fl-3uni.KBP) | [4221](reference/v0.4/KC30-3fl-3uni.KBP) |
 
 `v0.2` adds the seven solutions the greedy-rate experiment found on KC20 with P = 65536. `v0.3` is the one
 of the configuration grid: it gives a front for the first time to eight instances and improves four of the
@@ -691,6 +691,12 @@ tables of this document say which version they were measured against: the conver
 comparison with the original against `v0.1`, and the grid and the Excel workbook against `v0.3`. A
 hypervolume share published against `v0.1` rescales by 0.9999825 on KC20-2fl-1rl and 0.9999194 on
 KC20-2fl-3uni, and a coverage share by 0.96809 and 1.00830.
+
+`v0.4` adds the 438 solutions that the runs of [Visualizing the fronts](#visualizing-the-fronts) found
+on seven instances, a single run each with the default call: 1 on KC20-2fl-3rl, 1 on KC20-2fl-4rl, 3
+on KC30-2fl-1rl, 11 on KC30-3fl-1uni, 67 on KC30-3fl-2rl, 299 on KC30-3fl-3rl and 56 on KC30-3fl-3uni.
+They push out 168 points of `v0.3` that they dominate, which is why KC30-2fl-1rl keeps 251. The figures of that section
+are measured against `v0.4`; every other table keeps the version it names.
 
 The points are those that survive the dominance filter over the union of the final fronts of every
 run and every population: 821 of 4428 on KC30-3fl-2uni, and 16,989 of 39,644 on KC30-3fl-1rl. Every
@@ -1022,8 +1028,8 @@ projections of the objective space and a 3D view. The title and the console say 
 the best known front the run found and how many of its points that front does not dominate, which
 would improve it (see [`reference/README.md`](reference/README.md)).
 
-`scripts/run_front_plot.ps1` does the whole process for the KC30 instances, or the ones `-Instances`
-names: it runs the [default call](#the-default-call-of-each-instance) of each instance — one run,
+`scripts/run_front_plot.ps1` does the whole process for the KC30 instances, the ones `-Instances`
+names, or all 23 with `-Instances all`: it runs the [default call](#the-default-call-of-each-instance) of each instance — one run,
 `--verify`, its initial population with `--initial` — and plots it. The files go to `results/fronts/`,
 which git ignores: `<instance>_result.txt`, `<instance>_initial.csv`, `<instance>.html` and, with
 `-Png`, `<instance>.png`.
@@ -1035,6 +1041,9 @@ pip install numpy plotly matplotlib
 :: The seven KC30 instances, with the default call of each (P = 65536 and 300 generations)
 powershell -ExecutionPolicy Bypass -File scripts\run_front_plot.ps1 -Png
 
+:: All 23 instances of mQAPData
+powershell -ExecutionPolicy Bypass -File scripts\run_front_plot.ps1 -Instances all -Png
+
 :: One instance, another seed, Plotly embedded so the HTML opens without a connection
 powershell -ExecutionPolicy Bypass -File scripts\run_front_plot.ps1 -Instances KC30-3fl-1rl -Seed 2026 -SelfContained
 
@@ -1043,49 +1052,99 @@ build\x64\Release\cuda_mqap.exe mQAPData\KC30-3fl-2uni.dat --population 4096 --o
 python scripts\plot_fronts.py KC30-3fl-2uni --result r.txt --initial i.csv --out results\fronts --png
 ```
 
-Each KC30 instance is one to two minutes of GPU on the RTX 2060 (KC30-3fl-1rl: 104 s), and the
-CSV of its initial population is some 14 MB, because it holds 131,072 permutations. The HTML loads
+On the RTX 2060 a KC30 instance is one to two minutes of GPU, a KC20 one 30 to 50 s and a KC10 one
+less than 7 s, and the CSV of the initial population of a KC30 instance is some 14 MB, because it holds 131,072
+permutations. The HTML loads
 Plotly from its CDN, so it needs a connection; `-SelfContained` (`--self-contained` in the Python
 script) embeds the library, about 4.6 MB more per file.
 
 **Example.** [`examples/fronts/`](examples/fronts/) holds the output of
-`scripts\run_front_plot.ps1 -Png` for the seven KC30 instances, with the default seed, 20261005: the
-default call of each one, a single run, verified OK. GitHub shows the source of an HTML file instead of
-rendering it: download it (*Download raw file*) and open it in a browser.
+`scripts\run_front_plot.ps1 -Instances all -Png` for the 23 instances of `mQAPData`, with the default seed,
+20261005: the default call of each one, a single run, verified OK. GitHub shows the source of an HTML
+file instead of rendering it: download it (*Download raw file*) and open it in a browser.
 
-| Instance | Objectives | Default call | GPU | Distinct solutions | Points of the best known front found | Grid, mean of 10 runs | Beyond the front | Figures |
-|---|---|---|---|---|---|---|---|---|
-| KC30-2fl-1rl | 2 | P = 65536, greedy 50 % | 53 s | 204 | 116 of 251 (46.2 %) | 45.30 % | 3 | [HTML](examples/fronts/KC30-2fl-1rl.html) · [PNG](examples/fronts/KC30-2fl-1rl.png) |
-| KC30-3fl-1rl | 3 | P = 65536, greedy 100 % | 104 s | 5141 | 2658 of 17,097 (15.5 %) | 14.68 % | 0 | [HTML](examples/fronts/KC30-3fl-1rl.html) · [PNG](examples/fronts/KC30-3fl-1rl.png) |
-| KC30-3fl-1uni | 3 | P = 65536, greedy 100 % | 105 s | 1439 | 575 of 3562 (16.1 %) | 14.64 % | 11 | [HTML](examples/fronts/KC30-3fl-1uni.html) · [PNG](examples/fronts/KC30-3fl-1uni.png) |
-| KC30-3fl-2rl | 3 | P = 65536, greedy 100 % | 104 s | 6991 | 3324 of 13,388 (24.8 %) | 24.33 % | 67 | [HTML](examples/fronts/KC30-3fl-2rl.html) · [PNG](examples/fronts/KC30-3fl-2rl.png) |
-| KC30-3fl-2uni | 3 | P = 65536, greedy 100 % | 104 s | 622 | 381 of 847 (45.0 %) | 42.99 % | 0 | [HTML](examples/fronts/KC30-3fl-2uni.html) · [PNG](examples/fronts/KC30-3fl-2uni.png) |
-| KC30-3fl-3rl | 3 | P = 65536, greedy 100 % | 104 s | 13,061 | 7739 of 26,219 (29.5 %) | 28.20 % | 299 | [HTML](examples/fronts/KC30-3fl-3rl.html) · [PNG](examples/fronts/KC30-3fl-3rl.png) |
-| KC30-3fl-3uni | 3 | P = 65536, greedy 100 % | 105 s | 2338 | 927 of 4181 (22.2 %) | 22.82 % | 56 | [HTML](examples/fronts/KC30-3fl-3uni.html) · [PNG](examples/fronts/KC30-3fl-3uni.png) |
+The best known front is the `.PO` of KC10 and `reference/v0.4` on the rest. The grid column is the
+coverage the [grid](#the-best-configuration-for-each-problem) measured for that same configuration,
+against `v0.3` on KC20 and KC30; "new points" counts the points of the run that `v0.3` does not
+dominate, which are what `v0.4` added.
 
-All seven use 300 generations. The best known front is `reference/v0.3`; "beyond the front" counts
-the points of the run that front does not dominate.
+| Instance | Default call | GPU | Distinct solutions | Points of the best known front found | Grid, mean of 10 runs | New points | Figures |
+|---|---|---|---|---|---|---|---|
+| KC10-2fl-1rl | P = 16384, greedy 50 %, 70 gen. | 0.8 s | 58 | 58 of 58 (100.0 %) | 100.00 % | 0 | [HTML](examples/fronts/KC10-2fl-1rl.html) · [PNG](examples/fronts/KC10-2fl-1rl.png) |
+| KC10-2fl-1uni | P = 1024, greedy 25 %, 70 gen. | 0.1 s | 13 | 13 of 13 (100.0 %) | 100.00 % | 0 | [HTML](examples/fronts/KC10-2fl-1uni.html) · [PNG](examples/fronts/KC10-2fl-1uni.png) |
+| KC10-2fl-2rl | P = 1024, greedy 10 %, 70 gen. | 0.1 s | 15 | 15 of 15 (100.0 %) | 100.00 % | 0 | [HTML](examples/fronts/KC10-2fl-2rl.html) · [PNG](examples/fronts/KC10-2fl-2rl.png) |
+| KC10-2fl-2uni | P = 256, greedy 10 %, 70 gen. | 0.1 s | 1 | 1 of 1 (100.0 %) | 100.00 % | 0 | [HTML](examples/fronts/KC10-2fl-2uni.html) · [PNG](examples/fronts/KC10-2fl-2uni.png) |
+| KC10-2fl-3rl | P = 16384, greedy 10 %, 70 gen. | 0.7 s | 55 | 55 of 55 (100.0 %) | 100.00 % | 0 | [HTML](examples/fronts/KC10-2fl-3rl.html) · [PNG](examples/fronts/KC10-2fl-3rl.png) |
+| KC10-2fl-3uni | P = 65536, greedy 10 %, 70 gen. | 6.7 s | 130 | 130 of 130 (100.0 %) | 100.00 % | 0 | [HTML](examples/fronts/KC10-2fl-3uni.html) · [PNG](examples/fronts/KC10-2fl-3uni.png) |
+| KC10-2fl-4rl | P = 16384, greedy 10 %, 70 gen. | 0.7 s | 53 | 53 of 53 (100.0 %) | 100.00 % | 0 | [HTML](examples/fronts/KC10-2fl-4rl.html) · [PNG](examples/fronts/KC10-2fl-4rl.png) |
+| KC10-2fl-5rl | P = 16384, greedy 10 %, 70 gen. | 0.7 s | 49 | 49 of 49 (100.0 %) | 100.00 % | 0 | [HTML](examples/fronts/KC10-2fl-5rl.html) · [PNG](examples/fronts/KC10-2fl-5rl.png) |
+| KC20-2fl-1rl | P = 65536, greedy 25 %, 300 gen. | 33 s | 92 | 92 of 94 (97.9 %) | 96.60 % | 0 | [HTML](examples/fronts/KC20-2fl-1rl.html) · [PNG](examples/fronts/KC20-2fl-1rl.png) |
+| KC20-2fl-1uni | P = 65536, greedy 100 % every 2 gen., 300 gen. | 39 s | 70 | 70 of 71 (98.6 %) | 98.03 % | 0 | [HTML](examples/fronts/KC20-2fl-1uni.html) · [PNG](examples/fronts/KC20-2fl-1uni.png) |
+| KC20-2fl-2rl | P = 65536, greedy 25 %, 300 gen. | 35 s | 115 | 91 of 150 (60.7 %) | 58.87 % | 0 | [HTML](examples/fronts/KC20-2fl-2rl.html) · [PNG](examples/fronts/KC20-2fl-2rl.png) |
+| KC20-2fl-2uni | P = 65536, greedy 10 %, 300 gen. | 32 s | 8 | 8 of 8 (100.0 %) | 100.00 % | 0 | [HTML](examples/fronts/KC20-2fl-2uni.html) · [PNG](examples/fronts/KC20-2fl-2uni.png) |
+| KC20-2fl-3rl | P = 65536, greedy 25 %, 300 gen. | 33 s | 158 | 130 of 216 (60.2 %) | 59.67 % | 1 | [HTML](examples/fronts/KC20-2fl-3rl.html) · [PNG](examples/fronts/KC20-2fl-3rl.png) |
+| KC20-2fl-3uni | P = 65536, greedy 100 %, 300 gen. | 48 s | 227 | 181 of 243 (74.5 %) | 73.54 % | 0 | [HTML](examples/fronts/KC20-2fl-3uni.html) · [PNG](examples/fronts/KC20-2fl-3uni.png) |
+| KC20-2fl-4rl | P = 65536, greedy 10 %, 300 gen. | 31 s | 69 | 46 of 100 (46.0 %) | 48.38 % | 1 | [HTML](examples/fronts/KC20-2fl-4rl.html) · [PNG](examples/fronts/KC20-2fl-4rl.png) |
+| KC20-2fl-5rl | P = 65536, greedy 25 %, 300 gen. | 34 s | 137 | 112 of 174 (64.4 %) | 63.45 % | 0 | [HTML](examples/fronts/KC20-2fl-5rl.html) · [PNG](examples/fronts/KC20-2fl-5rl.png) |
+| KC30-2fl-1rl | P = 65536, greedy 50 %, 300 gen. | 53 s | 204 | 119 of 251 (47.4 %) | 45.30 % | 3 | [HTML](examples/fronts/KC30-2fl-1rl.html) · [PNG](examples/fronts/KC30-2fl-1rl.png) |
+| KC30-3fl-1rl | P = 65536, greedy 100 %, 300 gen. | 104 s | 5,141 | 2,658 of 17,097 (15.5 %) | 14.68 % | 0 | [HTML](examples/fronts/KC30-3fl-1rl.html) · [PNG](examples/fronts/KC30-3fl-1rl.png) |
+| KC30-3fl-1uni | P = 65536, greedy 100 %, 300 gen. | 107 s | 1,439 | 586 of 3,567 (16.4 %) | 14.64 % | 11 | [HTML](examples/fronts/KC30-3fl-1uni.html) · [PNG](examples/fronts/KC30-3fl-1uni.png) |
+| KC30-3fl-2rl | P = 65536, greedy 100 %, 300 gen. | 104 s | 6,991 | 3,391 of 13,421 (25.3 %) | 24.33 % | 67 | [HTML](examples/fronts/KC30-3fl-2rl.html) · [PNG](examples/fronts/KC30-3fl-2rl.png) |
+| KC30-3fl-2uni | P = 65536, greedy 100 %, 300 gen. | 104 s | 622 | 381 of 847 (45.0 %) | 42.99 % | 0 | [HTML](examples/fronts/KC30-3fl-2uni.html) · [PNG](examples/fronts/KC30-3fl-2uni.png) |
+| KC30-3fl-3rl | P = 65536, greedy 100 %, 300 gen. | 104 s | 13,061 | 8,038 of 26,409 (30.4 %) | 28.20 % | 299 | [HTML](examples/fronts/KC30-3fl-3rl.html) · [PNG](examples/fronts/KC30-3fl-3rl.png) |
+| KC30-3fl-3uni | P = 65536, greedy 100 %, 300 gen. | 105 s | 2,338 | 983 of 4,221 (23.3 %) | 22.82 % | 56 | [HTML](examples/fronts/KC30-3fl-3uni.html) · [PNG](examples/fronts/KC30-3fl-3uni.png) |
 
 What the figures show:
 
 - **The distance the search covers.** The initial population is a cloud of random permutations far
   from the front, and the run ends on it, spread along its whole length.
-- **One run covers what the grid measured.** The share of the best known front found is within two
-  points of the mean of the ten runs of the [grid](#the-best-configuration-for-each-problem), above it
-  on six of the seven.
-- **The best known fronts of KC30 can still improve.** On five of the seven instances this single run
-  found points `reference/v0.3` does not dominate, 436 in all, 299 of them on KC30-3fl-3rl. The run
-  verified OK, so their costs are exact. It is what [Conclusions](#conclusions) warns about: those
-  fronts are the best this project knows, not proven optima. They are not added here, because a new
-  version of the reference changes the figures published against it; `scripts/build_reference.py
-  --from v0.3` would make `v0.4` from these result files.
+- **The eight KC10 instances close the published optimal front** in this run too, in less than a
+  second of GPU each except KC10-2fl-3uni, which needs P = 65536 (6.7 s).
+- **One run covers what the grid measured.** Measured against `v0.3`, as the grid was, the share of
+  the best known front this single run finds equals the mean of the ten runs of the grid on 9
+  instances, is above it on 12 and below on 2: KC20-2fl-4rl, by 2.9 points, and KC30-3fl-3uni, by
+  0.6.
+- **The best known fronts of KC20 and KC30 could still improve.** On seven instances this run found
+  438 points `v0.3` does not dominate, 299 of them on KC30-3fl-3rl. The run verified OK, so their
+  costs are exact; they went into [`reference/v0.4`](#reference-versions). It is what
+  [Conclusions](#conclusions) warns about: those fronts are the best this project knows, not proven
+  optima.
 
 ![Best known front, final front and initial population of KC30-3fl-1rl](examples/fronts/KC30-3fl-1rl.png)
 
 <details>
-<summary>The other six instances</summary>
+<summary>The eight KC10 instances</summary>
+
+![KC10-2fl-1rl](examples/fronts/KC10-2fl-1rl.png)
+![KC10-2fl-1uni](examples/fronts/KC10-2fl-1uni.png)
+![KC10-2fl-2rl](examples/fronts/KC10-2fl-2rl.png)
+![KC10-2fl-2uni](examples/fronts/KC10-2fl-2uni.png)
+![KC10-2fl-3rl](examples/fronts/KC10-2fl-3rl.png)
+![KC10-2fl-3uni](examples/fronts/KC10-2fl-3uni.png)
+![KC10-2fl-4rl](examples/fronts/KC10-2fl-4rl.png)
+![KC10-2fl-5rl](examples/fronts/KC10-2fl-5rl.png)
+
+</details>
+
+<details>
+<summary>The eight KC20 instances</summary>
+
+![KC20-2fl-1rl](examples/fronts/KC20-2fl-1rl.png)
+![KC20-2fl-1uni](examples/fronts/KC20-2fl-1uni.png)
+![KC20-2fl-2rl](examples/fronts/KC20-2fl-2rl.png)
+![KC20-2fl-2uni](examples/fronts/KC20-2fl-2uni.png)
+![KC20-2fl-3rl](examples/fronts/KC20-2fl-3rl.png)
+![KC20-2fl-3uni](examples/fronts/KC20-2fl-3uni.png)
+![KC20-2fl-4rl](examples/fronts/KC20-2fl-4rl.png)
+![KC20-2fl-5rl](examples/fronts/KC20-2fl-5rl.png)
+
+</details>
+
+<details>
+<summary>The seven KC30 instances</summary>
 
 ![KC30-2fl-1rl](examples/fronts/KC30-2fl-1rl.png)
+![KC30-3fl-1rl](examples/fronts/KC30-3fl-1rl.png)
 ![KC30-3fl-1uni](examples/fronts/KC30-3fl-1uni.png)
 ![KC30-3fl-2rl](examples/fronts/KC30-3fl-2rl.png)
 ![KC30-3fl-2uni](examples/fronts/KC30-3fl-2uni.png)
@@ -1093,6 +1152,7 @@ What the figures show:
 ![KC30-3fl-3uni](examples/fronts/KC30-3fl-3uni.png)
 
 </details>
+
 
 ---
 
