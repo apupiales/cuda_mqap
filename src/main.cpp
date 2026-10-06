@@ -61,7 +61,7 @@ void printUsage(const char* program) {
         "  --population P   population size, power of two in [16, 65536] (default: of the instance, or 64)\n"
         "  --iterations N   generations (default: of the instance, or 70)\n"
         "  --greedy-rate R  fraction of the offspring the greedy 2-opt improves, in [0, 1]\n"
-        "  --greedy-every K the local search runs every K generations (default 1)\n"
+        "  --greedy-every K the local search runs every K generations (default: of the instance, or 1)\n"
         "  --untuned        ignore the table of the instance: population 64, 70 generations, greedy 1.0\n"
         "  --runs R         independent runs executed concurrently (default 1)\n"
         "  --seed S         random seed (default: random, printed in the output)\n"

@@ -8,9 +8,9 @@
  * or a single objective). The effect of a swap is evaluated in O(n) with warpSwapDelta, so the
  * whole local search of all offspring of all runs is a single kernel launch.
  *
- * kGreedyRate and kGreedyPeriod can leave part of the offspring without the improvement; the
- * kernel writes the fitness of every one of them in any case, because this is where the offspring
- * of the generation get theirs.
+ * The greedy rate and period (--greedy-rate, --greedy-every) can leave part of the offspring without
+ * the improvement; the kernel writes the fitness of every one of them in any case, because this is
+ * where the offspring of the generation get theirs.
  *
  * Copyright (C) 2019-2026 Andres Pupiales Arevalo <apupiales@gmail.com>
  *

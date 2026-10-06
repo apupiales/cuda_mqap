@@ -157,7 +157,7 @@ Parameters:
 | Population size `P` | `--population` | the one of the instance, or 64 (power of 2 between 16 and 65536) |
 | Generations | `--iterations` | the ones of the instance, or 70 |
 | Fraction of the offspring with local search | `--greedy-rate` | the one of the instance, or 1.0 |
-| Generations between local searches | `--greedy-every` | 1 |
+| Generations between local searches | `--greedy-every` | the one of the instance, or 1 |
 | Independent runs | `--runs` | 1 |
 | Seed | `--seed` | random (printed) |
 | Exchange mutations per child | `include/config.h` (`kExchangeMutations`) | 2 |
@@ -258,7 +258,7 @@ generations only the pointers of the double buffer are swapped.
   (`cudaFuncAttributeMaxDynamicSharedMemorySize`), which allows n = 63 with 3 objectives on Turing,
   whose opt-in maximum is 64 KB: n = 63 needs 64,008 bytes and n = 64 needs 66,048, which the loader
   rejects.
-- **Survival:** up to ~46 KB with P = 256 (single-block path). The multi-block path (P > 256) only uses
+- **Survival:** up to 46 KB with P = 256 (single-block path; 47,168 bytes with 3 objectives). The multi-block path (P > 256) only uses
   fitness tiles of about 3 KB; see [Population size limits](#population-size-limits-and-gpu-resources).
 
 ### Incremental evaluation of the greedy 2-opt
@@ -370,7 +370,7 @@ cuda_mqap <instance.dat> [options]
   --population P   population size, power of two in [16, 65536] (default: of the instance, or 64)
   --iterations N   generations (default: of the instance, or 70)
   --greedy-rate R  fraction of the offspring the greedy 2-opt improves, in [0, 1]
-  --greedy-every K the local search runs every K generations (default 1)
+  --greedy-every K the local search runs every K generations (default: of the instance, or 1)
   --untuned        ignore the table of the instance: population 64, 70 generations, greedy at 100 %
   --runs R         independent runs executed concurrently (default 1)
   --seed S         random seed (default: random, printed in the output)
@@ -637,7 +637,7 @@ What the campaign says:
   KC10-2fl-1uni stays at 84.6 % of the published optimal points with all three populations. What is
   left is the algorithm: this combination of NSGA-II with the greedy 2-opt converges to a subset of
   the optimal front.
-- **The 3-objective instances never stop**: KC30-3fl-1rl were still improving at generation 100,000
+- **The 3-objective instances never stop**: KC30-3fl-1rl was still improving at generation 100,000
   with P = 65536, having reached 99.70 % of the reference hypervolume. Going from 5000 to 100,000
   generations added 0.21 points, measured on the trace curves. There the number of generations is a
   budget decision, not a measurement.
@@ -698,12 +698,13 @@ the KC20 ones). No figure of the workbook is left from the previous traversal.
 - **Instance tabs (KC10-\*, KC20-\*):** each tab has two blocks of this version to the right of the
   original ones, with 10 or 20 genes and 2 objectives per row, and two series in its chart: the
   **baseline** (green) uses the population and iterations of the tab, and **population cap** (red)
-  those same iterations with P = 65536, the maximum of the branch. Both with `--verify` OK. - On
-  KC10 the baseline plots the first of 100 concurrent runs and the population cap a single run. On
-  KC20, one run in both. - Under each block there is a note with the date, the branch, the command,
-  the seed and the number of distinct solutions. - KC10-2fl-2uni ran with P = 16 (the original
-  series used P = 2) and 30 iterations, which is what every series of its tab says, although its
-  former settings file says 70.
+  those same iterations with P = 65536, the maximum of the branch. Both with `--verify` OK.
+- On KC10 the baseline plots the first of 100 concurrent runs and the population cap a single run.
+  On KC20, one run in both.
+- Under each block there is a note with the date, the branch, the command, the seed and the number
+  of distinct solutions.
+- KC10-2fl-2uni ran with P = 16 (the original series used P = 2) and 30 iterations, which is what
+  every series of its tab says, although its former settings file says 70.
 
 On 2026-10-05 two more series were added, and the two earlier ones took the name of their role in
 the experiment instead of their colour, which is what the legend of each chart says:
@@ -716,18 +717,27 @@ the experiment instead of their colour, which is what the legend of each chart s
 
 | Instance | Best configuration | Points | Best known front | Points |
 |---|---|---|---|---|
-| KC10-2fl-1rl | P = 16384, greedy 50 %, 70 iteraciones | 58 | published optimum | 58 |
-| KC10-2fl-1uni | P = 1024, greedy 25 %, 70 iteraciones | 13 | published optimum | 13 |
-| KC10-2fl-2rl | P = 1024, greedy 10 %, 70 iteraciones | 15 | published optimum | 15 |
-| KC10-2fl-2uni | P = 256, greedy 10 %, 30 iteraciones | 1 | published optimum | 1 |
-| KC10-2fl-3rl | P = 16384, greedy 10 %, 70 iteraciones | 55 | published optimum | 55 |
-| KC10-2fl-3uni | P = 65536, greedy 10 %, 25 iteraciones | 130 | published optimum | 130 |
-| KC10-2fl-4rl | P = 16384, greedy 10 %, 70 iteraciones | 53 | published optimum | 53 |
-| KC10-2fl-5rl | P = 16384, greedy 10 %, 70 iteraciones | 49 | published optimum | 49 |
-| KC20-2fl-1rl | P = 65536, greedy 25 %, 300 iteraciones | 92 | reference/v0.3 | 94 |
-| KC20-2fl-1uni | P = 65536, greedy 100 % cada 2 generaciones, 300 iteraciones | 70 | reference/v0.3 | 71 |
-| KC20-2fl-2uni | P = 65536, greedy 10 %, 300 iteraciones | 8 | reference/v0.3 | 8 |
+| KC10-2fl-1rl | P = 16384, greedy 50 %, 70 iterations | 58 | published optimum | 58 |
+| KC10-2fl-1uni | P = 1024, greedy 25 %, 70 iterations | 13 | published optimum | 13 |
+| KC10-2fl-2rl | P = 1024, greedy 10 %, 70 iterations | 15 | published optimum | 15 |
+| KC10-2fl-2uni | P = 256, greedy 10 %, 30 iterations | 1 | published optimum | 1 |
+| KC10-2fl-3rl | P = 16384, greedy 10 %, 70 iterations | 55 | published optimum | 55 |
+| KC10-2fl-3uni | P = 65536, greedy 10 %, 25 iterations | 130 | published optimum | 130 |
+| KC10-2fl-4rl | P = 16384, greedy 10 %, 70 iterations | 53 | published optimum | 53 |
+| KC10-2fl-5rl | P = 16384, greedy 10 %, 70 iterations | 49 | published optimum | 49 |
+| KC20-2fl-1rl | P = 65536, greedy 25 %, 300 iterations | 92 | reference/v0.3 | 94 |
+| KC20-2fl-1uni | P = 65536, greedy 100 % every 2 generations, 300 iterations | 70 | reference/v0.3 | 71 |
+| KC20-2fl-2uni | P = 65536, greedy 10 %, 300 iterations | 8 | reference/v0.3 | 8 |
 | KC20-2fl-3uni | — | — | reference/v0.3 | 243 |
+
+Every series of a tab uses the iterations of that tab, so on KC10-2fl-2uni and KC10-2fl-3uni the
+best configuration ran with 30 and 25 iterations, not with the 70 the grid measured it with and the
+program defaults to; with fewer generations it still reproduces the whole optimal front.
+
+The notes of 2026-10-03 record the command as it was run then, before the program took its defaults
+from the table of each instance: repeating them now needs `--untuned`, or the greedy settings of the
+table are applied. The notes of 2026-10-05 name those settings `kGreedyRate` and `kGreedyPeriod`,
+which are `--greedy-rate` and `--greedy-every` on the command line.
 
 KC20-2fl-3uni has no best-configuration series because its best is the one the population cap
 already plots, and repeating it with another seed would only crowd the legend. And a correction: the
@@ -1060,9 +1070,10 @@ Nsight Systems profile (KC10-2fl-1rl, 70 generations, 1 run):
 | Total kernel time | ~340 ms | ~8.3 ms, 73 % of it in the greedy 2-opt |
 
 **Solution quality.** The quality comparison against the original version is in [Quality versus the
-original Greedy 2-opt](#quality-vs-original), with 30 runs of each version on each instance,
-measured as the gamma distance to the published optimal front and the share of its points found
-exactly; it replaces the single run per version that used to be reported here. Over the whole
+original Greedy 2-opt](#quality-vs-original): on KC10, 100 runs per instance measured as the gamma
+distance to the published optimal front and the share of its points found exactly; on KC20, 30 runs
+of each version per instance measured as hypervolume and coverage of the best known front, with the
+Mann-Whitney U test. It replaces the single run per version that used to be reported here. Over the whole
 campaign of the Excel workbook the results are mixed: see [Results in the Excel
 workbook](#results-in-the-excel-workbook).
 
@@ -1098,7 +1109,7 @@ workbook](#results-in-the-excel-workbook).
 | Area | Before | Now |
 |---|---|---|
 | Fitness | 3 dense O(n³) matrix products, 32×32-thread blocks (≈10 % useful with n = 10), uncoalesced accesses and serialized constant memory | O(n²), one warp per chromosome, matrices in *shared memory*, *shuffle* reduction |
-| NSGA-II | Host loop per front, with ~10 kernels and copies per front; bitonic sort with 2-thread blocks (28 launches per sort) | A single kernel per generation, everything in *shared memory* |
+| NSGA-II | Host loop per front, with ~10 kernels and copies per front; bitonic sort with 2-thread blocks (28 launches per sort) | Up to P = 256, a single kernel per generation, everything in *shared memory*; above it, the multi-block survival, which does not go back to the host either |
 | Greedy 2-opt | ~50 API calls per evaluated pair (full fitness, `cudaMalloc`/`cudaFree`, copies) | One launch per generation, O(n) delta |
 | Launch configuration | 13 kernels with 1 thread per block (1/32 SIMT efficiency) | 1 thread or 1 warp per element, 128-thread blocks |
 | Transfers | Always-on debug copies (~1,150 per generation) | Only 6 copies at the end of the run |
@@ -1337,28 +1348,28 @@ of the cells of the grid itself.
 
 | Instance | Best configuration | Coverage | Best with the greedy at 100 % | Coverage | p |
 |---|---|---|---|---|---|
-| KC10-2fl-1rl | P = 16,384, greedy 50 % | 100.00 % | P = 65,536, greedy 100 % | 74.65 % | 4.0·10⁻⁵ |
-| KC10-2fl-1uni | P = 1024, greedy 25 % | 100.00 % | P = 256, greedy 100 % | 84.61 % | 1.5·10⁻⁵ |
+| KC10-2fl-1rl | P = 16,384, greedy 50 % | 100.00 % | P = 65,536, greedy 100 % | 74.66 % | 4.0·10⁻⁵ |
+| KC10-2fl-1uni | P = 1024, greedy 25 % | 100.00 % | P = 256, greedy 100 % | 84.62 % | 1.6·10⁻⁵ |
 | KC10-2fl-2rl | P = 1024, greedy 10 % | 100.00 % | P = 16,384, greedy 100 % | 100.00 % | — |
 | KC10-2fl-2uni | P = 256, greedy 10 % | 100.00 % | P = 256, greedy 100 % | 100.00 % | — |
-| KC10-2fl-3rl | P = 16,384, greedy 10 % | 100.00 % | P = 65,536, greedy 100 % | 55.63 % | 4.8·10⁻⁵ |
-| KC10-2fl-3uni | P = 65,536, greedy 10 % | 100.00 % | P = 65,536, greedy 100 % | 72.76 % | 5.4·10⁻⁵ |
-| KC10-2fl-4rl | P = 16,384, greedy 10 % | 100.00 % | P = 65,536, greedy 100 % | 47.54 % | 4.7·10⁻⁵ |
+| KC10-2fl-3rl | P = 16,384, greedy 10 % | 100.00 % | P = 65,536, greedy 100 % | 55.64 % | 4.8·10⁻⁵ |
+| KC10-2fl-3uni | P = 65,536, greedy 10 % | 100.00 % | P = 65,536, greedy 100 % | 72.77 % | 5.5·10⁻⁵ |
+| KC10-2fl-4rl | P = 16,384, greedy 10 % | 100.00 % | P = 65,536, greedy 100 % | 47.55 % | 4.8·10⁻⁵ |
 | KC10-2fl-5rl | P = 16,384, greedy 10 % | 100.00 % | P = 65,536, greedy 100 % | 54.69 % | 5.4·10⁻⁵ |
-| KC20-2fl-1rl | P = 65,536, greedy 25 % | 96.59 % | P = 65,536, greedy 100 % | 89.25 % | 1.6·10⁻⁴ |
-| KC20-2fl-1uni | P = 65,536, greedy 100 %, every 2 generations | 98.02 % | P = 65,536, greedy 100 % | 95.91 % | 0.005 |
-| KC20-2fl-2rl | P = 65,536, greedy 25 % | 58.86 % | P = 65,536, greedy 100 % | 41.20 % | 1.5·10⁻⁴ |
+| KC20-2fl-1rl | P = 65,536, greedy 25 % | 96.60 % | P = 65,536, greedy 100 % | 89.26 % | 1.6·10⁻⁴ |
+| KC20-2fl-1uni | P = 65,536, greedy 100 %, every 2 generations | 98.03 % | P = 65,536, greedy 100 % | 95.92 % | 0.005 |
+| KC20-2fl-2rl | P = 65,536, greedy 25 % | 58.87 % | P = 65,536, greedy 100 % | 41.20 % | 1.5·10⁻⁴ |
 | KC20-2fl-2uni | P = 65,536, greedy 10 % | 100.00 % | P = 65,536, greedy 100 % | 100.00 % | — |
-| KC20-2fl-3rl | P = 65,536, greedy 25 % | 59.67 % | P = 65,536, greedy 100 % | 45.62 % | 1.6·10⁻⁴ |
-| KC20-2fl-3uni | **the same** | 73.53 % | P = 65,536, greedy 100 % | 73.53 % | — |
-| KC20-2fl-4rl | P = 65,536, greedy 10 % | 48.38 % | P = 65,536, greedy 100 % | 30.90 % | 1.6·10⁻⁴ |
-| KC20-2fl-5rl | P = 65,536, greedy 25 % | 63.44 % | P = 65,536, greedy 100 % | 54.25 % | 1.6·10⁻⁴ |
-| KC30-2fl-1rl | P = 65,536, greedy 50 % | 45.29 % | P = 65,536, greedy 100 % | 41.27 % | 1.6·10⁻⁴ |
+| KC20-2fl-3rl | P = 65,536, greedy 25 % | 59.67 % | P = 65,536, greedy 100 % | 45.63 % | 1.7·10⁻⁴ |
+| KC20-2fl-3uni | **the same** | 73.54 % | P = 65,536, greedy 100 % | 73.54 % | — |
+| KC20-2fl-4rl | P = 65,536, greedy 10 % | 48.38 % | P = 65,536, greedy 100 % | 30.91 % | 1.6·10⁻⁴ |
+| KC20-2fl-5rl | P = 65,536, greedy 25 % | 63.45 % | P = 65,536, greedy 100 % | 54.25 % | 1.7·10⁻⁴ |
+| KC30-2fl-1rl | P = 65,536, greedy 50 % | 45.30 % | P = 65,536, greedy 100 % | 41.27 % | 1.7·10⁻⁴ |
 | KC30-3fl-1rl | **the same** | 14.68 % | P = 65,536, greedy 100 % | 14.68 % | — |
 | KC30-3fl-1uni | **the same** | 14.64 % | P = 65,536, greedy 100 % | 14.64 % | — |
 | KC30-3fl-2rl | **the same** | 24.33 % | P = 65,536, greedy 100 % | 24.33 % | — |
-| KC30-3fl-2uni | **the same** | 42.98 % | P = 65,536, greedy 100 % | 42.98 % | — |
-| KC30-3fl-3rl | **the same** | 28.19 % | P = 65,536, greedy 100 % | 28.19 % | — |
+| KC30-3fl-2uni | **the same** | 42.99 % | P = 65,536, greedy 100 % | 42.99 % | — |
+| KC30-3fl-3rl | **the same** | 28.20 % | P = 65,536, greedy 100 % | 28.20 % | — |
 | KC30-3fl-3uni | **the same** | 22.82 % | P = 65,536, greedy 100 % | 22.82 % | — |
 
 On 13 of the 23 instances a configuration with the greedy throttled covers more front than any with
@@ -1368,9 +1379,9 @@ rate, that is, more cheaply. The pattern goes by family:
 - **KC10** (n = 10): the local search has to be throttled. With the greedy on 10-50 % of the
   offspring all eight instances find **the whole published optimal front**, and at populations well
   below the cap: P = 256 on KC10-2fl-2uni, P = 1024 on two and P = 16,384 on four. On the six where
-  the greedy at 100 % did not reach the whole front, it stays between 47 % and 84 % of its points.
+  the greedy at 100 % did not reach the whole front, it stays between 47.5 % and 84.6 % of its points.
 - **KC20** (n = 20): the population cap always, P = 65,536, and the local search throttled on six of
-  the eight, usually to 25 %, gaining 7 to 17 points of coverage. On KC20-2fl-3uni the default wins,
+  the eight, usually to 25 %, gaining 7 to 18 points of coverage. On KC20-2fl-3uni the default wins,
   and on KC20-2fl-1uni what wins is the whole greedy every two generations.
 - **KC30** (n = 30): the greedy at 100 % on every generation is the best on the six with three
   objectives; on KC30-2fl-1rl, the one with two, throttling it to 50 % wins. Here the local search
@@ -1451,7 +1462,7 @@ greedy on every offspring, which is what the original does, so the table must no
 
 1. **Code cap:** P ≤ 65536 (`kMaxPopulation` in `include/config.h`). It is a time limit, not a memory or
    index-type one: survivor indices and ranks are `int`.
-2. **Shared memory:** only matters for P ≤ 256 (single-block path, 47 KB at most). The multi-block path
+2. **Shared memory:** only matters for P ≤ 256 (single-block path, 46 KB at most). The multi-block path
    uses fitness tiles of about 3 KB.
 3. **Cooperative launch:** required for the front peeling; supported by every NVIDIA GPU since Pascal.
 4. **VRAM:** determines how many concurrent runs fit:
@@ -1507,9 +1518,9 @@ it.
    This is the central result of the grid: on 13 of the 23 instances a configuration with the greedy
    throttled covers more of the reference front than any with the whole greedy. On the eight KC10
    instances, with the greedy on 10-50 % of the offspring **the whole published optimal front** is
-   found, while the whole greedy stays between 47 % and 84 % of its points; on KC20 the gain is 7 to
-   17 points of coverage; and on the six KC30 instances with three objectives the configuration of
-   the original is still the best. What decides is neither the size of the instance nor the size of
+   found, while the whole greedy stays between 47.5 % and 84.6 % of its points; on KC20 the gain is 7 to
+   18 points of coverage; and on the six KC30 instances with three objectives the whole greedy on
+   every generation, what the original does, is still the best, at the population cap. What decides is neither the size of the instance nor the size of
    the population on its own, but the population against the search space. See [How much local
    search is worth it](#how-much-local-search-is-worth-it---greedy-rate) and [The best configuration
    for each problem](#the-best-configuration-for-each-problem).
@@ -1557,7 +1568,8 @@ it.
 
 **Possible improvements:**
 - Island model with migration between the concurrent runs.
-- CUDA Graphs to capture a generation; with 3 kernels per generation, the expected benefit is small.
+- CUDA Graphs to capture a generation: with 3 launches per generation up to P = 256 the expected benefit is
+  small, but with the 36 to 38 of the multi-block survival it is worth measuring.
 - Nsight Compute analysis of the survival: the single-block path (P ≤ 256) is latency bound, and in the
   multi-block path the interesting costs are `grid.sync()` and the segmented sorts of CUB.
 - More crossover operators and variants of the greedy 2-opt criterion. The pair traversal is already
