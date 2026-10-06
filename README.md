@@ -202,7 +202,7 @@ cuda_mqap/
 ├── scripts/build_reference.py    Builds the best known front of an instance (.KBP)
 ├── scripts/run_front_plot.ps1    Default run of each instance, plotted against its best known front
 ├── scripts/plot_fronts.py        Best known front, final front and initial population, in HTML and PNG
-├── examples/fronts/        Example of plot_fronts.py: KC30-3fl-1rl, interactive HTML and PNG
+├── examples/fronts/        Output of run_front_plot.ps1 for the seven KC30 instances, HTML and PNG
 ├── mQAPData/               Instances (.dat) and optimal fronts (.PO)
 ├── reference/v0.x/         Best known fronts (.KBP) by version, with their summary.json
 ├── mQAPMetrics/            Node.js metric and 3D plot scripts
@@ -1048,20 +1048,51 @@ CSV of its initial population is some 14 MB, because it holds 131,072 permutatio
 Plotly from its CDN, so it needs a connection; `-SelfContained` (`--self-contained` in the Python
 script) embeds the library, about 4.6 MB more per file.
 
-**Example.** [`examples/fronts/KC30-3fl-1rl.html`](examples/fronts/KC30-3fl-1rl.html) is the output
-of `scripts\run_front_plot.ps1 -Instances KC30-3fl-1rl -Png` with the default seed, 20261005. GitHub
-shows the source of an HTML file instead of rendering it: download it (*Download raw file*) and open
-it in a browser. The static version:
+**Example.** [`examples/fronts/`](examples/fronts/) holds the output of
+`scripts\run_front_plot.ps1 -Png` for the seven KC30 instances, with the default seed, 20261005: the
+default call of each one, a single run, verified OK. GitHub shows the source of an HTML file instead of
+rendering it: download it (*Download raw file*) and open it in a browser.
+
+| Instance | Objectives | Default call | GPU | Distinct solutions | Points of the best known front found | Grid, mean of 10 runs | Beyond the front | Figures |
+|---|---|---|---|---|---|---|---|---|
+| KC30-2fl-1rl | 2 | P = 65536, greedy 50 % | 53 s | 204 | 116 of 251 (46.2 %) | 45.30 % | 3 | [HTML](examples/fronts/KC30-2fl-1rl.html) · [PNG](examples/fronts/KC30-2fl-1rl.png) |
+| KC30-3fl-1rl | 3 | P = 65536, greedy 100 % | 104 s | 5141 | 2658 of 17,097 (15.5 %) | 14.68 % | 0 | [HTML](examples/fronts/KC30-3fl-1rl.html) · [PNG](examples/fronts/KC30-3fl-1rl.png) |
+| KC30-3fl-1uni | 3 | P = 65536, greedy 100 % | 105 s | 1439 | 575 of 3562 (16.1 %) | 14.64 % | 11 | [HTML](examples/fronts/KC30-3fl-1uni.html) · [PNG](examples/fronts/KC30-3fl-1uni.png) |
+| KC30-3fl-2rl | 3 | P = 65536, greedy 100 % | 104 s | 6991 | 3324 of 13,388 (24.8 %) | 24.33 % | 67 | [HTML](examples/fronts/KC30-3fl-2rl.html) · [PNG](examples/fronts/KC30-3fl-2rl.png) |
+| KC30-3fl-2uni | 3 | P = 65536, greedy 100 % | 104 s | 622 | 381 of 847 (45.0 %) | 42.99 % | 0 | [HTML](examples/fronts/KC30-3fl-2uni.html) · [PNG](examples/fronts/KC30-3fl-2uni.png) |
+| KC30-3fl-3rl | 3 | P = 65536, greedy 100 % | 104 s | 13,061 | 7739 of 26,219 (29.5 %) | 28.20 % | 299 | [HTML](examples/fronts/KC30-3fl-3rl.html) · [PNG](examples/fronts/KC30-3fl-3rl.png) |
+| KC30-3fl-3uni | 3 | P = 65536, greedy 100 % | 105 s | 2338 | 927 of 4181 (22.2 %) | 22.82 % | 56 | [HTML](examples/fronts/KC30-3fl-3uni.html) · [PNG](examples/fronts/KC30-3fl-3uni.png) |
+
+All seven use 300 generations. The best known front is `reference/v0.3`; "beyond the front" counts
+the points of the run that front does not dominate.
+
+What the figures show:
+
+- **The distance the search covers.** The initial population is a cloud of random permutations far
+  from the front, and the run ends on it, spread along its whole length.
+- **One run covers what the grid measured.** The share of the best known front found is within two
+  points of the mean of the ten runs of the [grid](#the-best-configuration-for-each-problem), above it
+  on six of the seven.
+- **The best known fronts of KC30 can still improve.** On five of the seven instances this single run
+  found points `reference/v0.3` does not dominate, 436 in all, 299 of them on KC30-3fl-3rl. The run
+  verified OK, so their costs are exact. It is what [Conclusions](#conclusions) warns about: those
+  fronts are the best this project knows, not proven optima. They are not added here, because a new
+  version of the reference changes the figures published against it; `scripts/build_reference.py
+  --from v0.3` would make `v0.4` from these result files.
 
 ![Best known front, final front and initial population of KC30-3fl-1rl](examples/fronts/KC30-3fl-1rl.png)
 
-The run used the default call of the instance, P = 65536, 300 generations and the greedy on every
-offspring, and verified OK. It ends with 5141 distinct non-dominated solutions, 2658 of them points of
-the best known front (`reference/v0.3`, 17,097 points): 15.5 % of it, in line with the 14.68 % the
-[grid](#the-best-configuration-for-each-problem) measured as the mean of ten runs. None of its points
-is beyond that front. The figure shows the distance the search covers: the initial population is a
-cloud of random permutations far from the front, and the run ends on it, spread along the whole of
-its length.
+<details>
+<summary>The other six instances</summary>
+
+![KC30-2fl-1rl](examples/fronts/KC30-2fl-1rl.png)
+![KC30-3fl-1uni](examples/fronts/KC30-3fl-1uni.png)
+![KC30-3fl-2rl](examples/fronts/KC30-3fl-2rl.png)
+![KC30-3fl-2uni](examples/fronts/KC30-3fl-2uni.png)
+![KC30-3fl-3rl](examples/fronts/KC30-3fl-3rl.png)
+![KC30-3fl-3uni](examples/fronts/KC30-3fl-3uni.png)
+
+</details>
 
 ---
 

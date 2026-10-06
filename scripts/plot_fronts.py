@@ -32,6 +32,7 @@ import argparse
 import csv
 import os
 import sys
+import textwrap
 
 import numpy as np
 
@@ -138,7 +139,8 @@ def plot_png(path, instance, series, objectives, title):
     legend = axes[0].legend(loc='upper right', markerscale=4)
     for handle in legend.legend_handles:
         handle.set_alpha(1)
-    figure.suptitle(title, fontsize=11)
+    width = 150 if objectives == 3 else 90  # characters per line that fit the width of the figure
+    figure.suptitle('\n'.join(textwrap.fill(line, width) for line in title.split('\n')), fontsize=11)
     figure.tight_layout()
     figure.savefig(path, dpi=110)
     plt.close(figure)

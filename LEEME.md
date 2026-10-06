@@ -205,7 +205,7 @@ cuda_mqap/
 ├── scripts/build_reference.py    Construye el mejor frente conocido de una instancia (.KBP)
 ├── scripts/run_front_plot.ps1    Ejecución por defecto de cada instancia, dibujada frente a su mejor frente conocido
 ├── scripts/plot_fronts.py        Mejor frente conocido, frente final y población inicial, en HTML y PNG
-├── examples/fronts/        Ejemplo de plot_fronts.py: KC30-3fl-1rl, HTML interactivo y PNG
+├── examples/fronts/        Salida de run_front_plot.ps1 para las siete instancias KC30, HTML y PNG
 ├── mQAPData/               Instancias (.dat) y frentes óptimos (.PO)
 ├── reference/v0.x/         Mejores frentes conocidos (.KBP) por versión, con su summary.json
 ├── mQAPMetrics/            Scripts Node.js de métricas y gráficos 3D
@@ -1064,20 +1064,52 @@ su población inicial ocupa unos 14 MB, porque tiene 131 072 permutaciones. El H
 su CDN, así que necesita conexión; `-SelfContained` (`--self-contained` en el script de Python)
 incrusta la biblioteca, unos 4,6 MB más por fichero.
 
-**Ejemplo.** [`examples/fronts/KC30-3fl-1rl.html`](examples/fronts/KC30-3fl-1rl.html) es la salida de
-`scripts\run_front_plot.ps1 -Instances KC30-3fl-1rl -Png` con la semilla por defecto, 20261005.
-GitHub muestra el código fuente de un HTML en lugar de dibujarlo: descárgalo (*Download raw file*) y
-ábrelo en un navegador. La versión estática:
+**Ejemplo.** [`examples/fronts/`](examples/fronts/) guarda la salida de
+`scripts\run_front_plot.ps1 -Png` para las siete instancias KC30, con la semilla por defecto, 20261005:
+la llamada por defecto de cada una, una sola ejecución, verificada OK. GitHub muestra el código fuente
+de un HTML en lugar de dibujarlo: descárgalo (*Download raw file*) y ábrelo en un navegador.
+
+| Instancia | Objetivos | Llamada por defecto | GPU | Soluciones distintas | Puntos del mejor frente conocido encontrados | Rejilla, media de 10 ejecuciones | Más allá del frente | Figuras |
+|---|---|---|---|---|---|---|---|---|
+| KC30-2fl-1rl | 2 | P = 65536, greedy 50 % | 53 s | 204 | 116 de 251 (46,2 %) | 45,30 % | 3 | [HTML](examples/fronts/KC30-2fl-1rl.html) · [PNG](examples/fronts/KC30-2fl-1rl.png) |
+| KC30-3fl-1rl | 3 | P = 65536, greedy 100 % | 104 s | 5141 | 2658 de 17 097 (15,5 %) | 14,68 % | 0 | [HTML](examples/fronts/KC30-3fl-1rl.html) · [PNG](examples/fronts/KC30-3fl-1rl.png) |
+| KC30-3fl-1uni | 3 | P = 65536, greedy 100 % | 105 s | 1439 | 575 de 3562 (16,1 %) | 14,64 % | 11 | [HTML](examples/fronts/KC30-3fl-1uni.html) · [PNG](examples/fronts/KC30-3fl-1uni.png) |
+| KC30-3fl-2rl | 3 | P = 65536, greedy 100 % | 104 s | 6991 | 3324 de 13 388 (24,8 %) | 24,33 % | 67 | [HTML](examples/fronts/KC30-3fl-2rl.html) · [PNG](examples/fronts/KC30-3fl-2rl.png) |
+| KC30-3fl-2uni | 3 | P = 65536, greedy 100 % | 104 s | 622 | 381 de 847 (45,0 %) | 42,99 % | 0 | [HTML](examples/fronts/KC30-3fl-2uni.html) · [PNG](examples/fronts/KC30-3fl-2uni.png) |
+| KC30-3fl-3rl | 3 | P = 65536, greedy 100 % | 104 s | 13 061 | 7739 de 26 219 (29,5 %) | 28,20 % | 299 | [HTML](examples/fronts/KC30-3fl-3rl.html) · [PNG](examples/fronts/KC30-3fl-3rl.png) |
+| KC30-3fl-3uni | 3 | P = 65536, greedy 100 % | 105 s | 2338 | 927 de 4181 (22,2 %) | 22,82 % | 56 | [HTML](examples/fronts/KC30-3fl-3uni.html) · [PNG](examples/fronts/KC30-3fl-3uni.png) |
+
+Las siete usan 300 generaciones. El mejor frente conocido es `reference/v0.3`; "más allá del frente"
+cuenta los puntos de la ejecución que ese frente no domina.
+
+Lo que muestran las figuras:
+
+- **La distancia que recorre la búsqueda.** La población inicial es una nube de permutaciones
+  aleatorias lejos del frente, y la ejecución termina sobre él, repartida a lo largo de todo el frente.
+- **Una ejecución cubre lo que midió la rejilla.** La fracción del mejor frente conocido que encuentra
+  queda a menos de dos puntos de la media de las diez ejecuciones de la
+  [rejilla](#la-mejor-configuración-de-cada-problema), por encima en seis de las siete.
+- **Los mejores frentes conocidos de KC30 todavía pueden mejorar.** En cinco de las siete instancias
+  esta única ejecución encontró puntos que `reference/v0.3` no domina, 436 en total, 299 de ellos en
+  KC30-3fl-3rl. La ejecución verificó OK, así que sus costes son exactos. Es lo que advierten las
+  [Conclusiones](#conclusiones): esos frentes son los mejores que conoce este proyecto, no óptimos
+  demostrados. No se añaden aquí, porque una versión nueva de la referencia cambia las cifras
+  publicadas contra ella; `scripts/build_reference.py --from v0.3` crearía `v0.4` a partir de estos
+  ficheros de resultados.
 
 ![Mejor frente conocido, frente final y población inicial de KC30-3fl-1rl](examples/fronts/KC30-3fl-1rl.png)
 
-La ejecución usó la llamada por defecto de la instancia, P = 65536, 300 generaciones y el greedy en
-todos los descendientes, y verificó OK. Termina con 5141 soluciones no dominadas distintas, 2658 de
-ellas puntos del mejor frente conocido (`reference/v0.3`, 17 097 puntos): el 15,5 % de él, en línea
-con el 14,68 % que la [rejilla](#la-mejor-configuración-de-cada-problema) midió como media de diez
-ejecuciones. Ninguno de sus puntos queda más allá de ese frente. La figura muestra la distancia que
-recorre la búsqueda: la población inicial es una nube de permutaciones aleatorias lejos del frente, y
-la ejecución termina sobre él, repartida a lo largo de todo el frente.
+<details>
+<summary>Las otras seis instancias</summary>
+
+![KC30-2fl-1rl](examples/fronts/KC30-2fl-1rl.png)
+![KC30-3fl-1uni](examples/fronts/KC30-3fl-1uni.png)
+![KC30-3fl-2rl](examples/fronts/KC30-3fl-2rl.png)
+![KC30-3fl-2uni](examples/fronts/KC30-3fl-2uni.png)
+![KC30-3fl-3rl](examples/fronts/KC30-3fl-3rl.png)
+![KC30-3fl-3uni](examples/fronts/KC30-3fl-3uni.png)
+
+</details>
 
 ---
 
