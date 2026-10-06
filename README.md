@@ -32,10 +32,11 @@ parallel primitives), and it is 36 launches per generation from P = 512 to P = 4
 11. [Performance](#performance)
 12. [Improvements over the original version](#improvements-over-the-original-version)
 13. [Population size limits and GPU resources](#population-size-limits-and-gpu-resources)
-14. [Limitations and future work](#limitations-and-future-work)
-15. [Troubleshooting](#troubleshooting)
-16. [Glossary](#glossary)
-17. [Credits and license](#credits-and-license)
+14. [Conclusions](#conclusions)
+15. [Limitations and future work](#limitations-and-future-work)
+16. [Troubleshooting](#troubleshooting)
+17. [Glossary](#glossary)
+18. [Credits and license](#credits-and-license)
 
 ---
 
@@ -1481,6 +1482,67 @@ above what the time allows: with P = 4096 each run of KC30 costs about 0.7 s of 
    dominance counting dominates the cost of the generation, so the useful limit is the time you are willing
    to spend, not the memory.
 3. **Both:** the product (runs × P) is limited by the VRAM, and in practice by the time.
+
+---
+
+## Conclusions
+
+What follows is what the measurements in this repository support, each with the section that holds
+it.
+
+1. **Parallelizing costs no quality; what did cost it was an operator.** At the configuration the
+   original version ships with, P = 64 and 300 generations, the Mann-Whitney U test over 30 runs
+   does not separate the two versions on three of the four KC20 instances (p up to 0.98 on
+   hypervolume). Getting there was not a matter of tuning the GPU but of visiting the pairs of the
+   greedy 2-opt the way the original does: with a single pass over `r < s` the original won on all
+   four at p ≤ 1.1·10⁻⁵. See [Quality versus the original Greedy 2-opt](#quality-vs-original).
+
+2. **The GPU changes the scale of the experiment, not just the clock.** From 2.2 s to 0.13 s on one
+   run of KC10-2fl-1rl and from ~21 min to 0.34 s on 30 runs of KC30-3fl-1rl, with 87,510 kernel
+   launches cut to 214 and 80,558 `cudaMemcpy` to 6. That is what makes the rest affordable: a
+   campaign of 690 cells, 100 runs per metric batch, and populations up to 65,536 against the 64 of
+   the original. See [Performance](#performance).
+
+3. **An exhaustive local search stops being the best choice once the population covers the space.**
+   This is the central result of the grid: on 13 of the 23 instances a configuration with the greedy
+   throttled covers more of the reference front than any with the whole greedy. On the eight KC10
+   instances, with the greedy on 10-50 % of the offspring **the whole published optimal front** is
+   found, while the whole greedy stays between 47 % and 84 % of its points; on KC20 the gain is 7 to
+   17 points of coverage; and on the six KC30 instances with three objectives the configuration of
+   the original is still the best. What decides is neither the size of the instance nor the size of
+   the population on its own, but the population against the search space. See [How much local
+   search is worth it](#how-much-local-search-is-worth-it---greedy-rate) and [The best configuration
+   for each problem](#the-best-configuration-for-each-problem).
+
+4. **That result is applied, not just documented.** Each instance defaults to the configuration
+   measured best for it, and repeating the measurement with no options at all gives the same file
+   byte for byte. The confirmation with thirty runs and another seed holds: five of the eight KC10
+   instances close the optimal front in all thirty, and on KC20 and KC30 the advantage holds on six
+   of the seven at p ≤ 1.1·10⁻⁹. Throttling the local search also costs less time. See [The default
+   call of each instance](#the-default-call-of-each-instance).
+
+5. **The generation budget is set by the instance, not by the population.** With P = 65,536 the KC10
+   instances stop changing within tens of generations, KC20-2fl-3uni needs some 8950, and the three
+   KC30 instances with three objectives were still changing at 100,000. The hypervolume, on the
+   other hand, saturates far earlier than the front, so saying "it converges" requires saying by
+   which measure. See [How many generations each instance
+   needs](#how-many-generations-each-instance-needs---trace).
+
+6. **What holds the figures up.** 26 checks of the kernels against independent CPU references,
+   `--verify` on every run of the campaigns, the four sanitizers with no errors, the costs of the
+   374 published optimal solutions reproduced exactly, and the reference fronts versioned in
+   `reference/`, with 15 instances that have one. One check sums up the method: on the eight KC10
+   instances, out of 300 runs each, **0** found a point the published optimum does not dominate,
+   which is exactly what must happen with a front that is proven optimal.
+
+7. **What these measurements do not say.** The grid uses ten runs per cell and a single seed, so it
+   picks a slightly optimistic configuration: the three KC10 instances that do not close the front
+   over the thirty runs of the confirmation show it. The reference fronts of KC20 and KC30 are the
+   best this project knows, not proven optima, so their percentages move when someone finds
+   something better — which is why they are versioned. The generation budget is fixed per family,
+   not per instance, so "best configuration" means "for that budget". And everything is measured on
+   one RTX 2060: the relative times between configurations should carry over, the absolute ones
+   should not. What is left to do is in [Limitations and future work](#limitations-and-future-work).
 
 ---
 

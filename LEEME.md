@@ -33,10 +33,11 @@ concurrente** en una sola llamada al programa.
 11. [Rendimiento](#rendimiento)
 12. [Mejoras respecto a la versión original](#mejoras-respecto-a-la-versión-original)
 13. [Límites del tamaño de población y recursos de la GPU](#límites-del-tamaño-de-población-y-recursos-de-la-gpu)
-14. [Limitaciones y trabajo futuro](#limitaciones-y-trabajo-futuro)
-15. [Solución de problemas](#solución-de-problemas)
-16. [Glosario](#glosario)
-17. [Créditos y licencia](#créditos-y-licencia)
+14. [Conclusiones](#conclusiones)
+15. [Limitaciones y trabajo futuro](#limitaciones-y-trabajo-futuro)
+16. [Solución de problemas](#solución-de-problemas)
+17. [Glosario](#glosario)
+18. [Créditos y licencia](#créditos-y-licencia)
 
 ---
 
@@ -1505,6 +1506,71 @@ muy por encima de lo que permite el tiempo: con P = 4096, cada ejecución de KC3
    dominancia O(N²) domina el coste de la generación, así que el límite útil es el tiempo que se quiera
    gastar, no la memoria.
 3. **Ambas cosas:** el producto (ejecuciones × P) lo limita la VRAM y, en la práctica, el tiempo.
+
+---
+
+## Conclusiones
+
+Lo que sigue es lo que las mediciones de este repositorio permiten afirmar, con el apartado donde
+está cada una.
+
+1. **La paralelización no cuesta calidad; lo que la costaba era un operador.** En la configuración
+   con la que se distribuye la versión original, P = 64 y 300 generaciones, la prueba U de
+   Mann-Whitney sobre 30 ejecuciones no distingue las dos versiones en tres de las cuatro instancias
+   KC20 (p hasta 0,98 en hipervolumen). Llegar ahí no fue cuestión de ajustar la GPU, sino de
+   recorrer los pares del greedy 2-opt como los recorre la original: con una sola pasada `r < s` la
+   original ganaba en las cuatro con p ≤ 1,1·10⁻⁵. Ver [Calidad frente al Greedy 2-opt
+   original](#quality-vs-original).
+
+2. **La GPU cambia la escala del experimento, no solo el reloj.** De 2,2 s a 0,13 s en una ejecución
+   de KC10-2fl-1rl y de ~21 min a 0,34 s en 30 ejecuciones de KC30-3fl-1rl, con 87 510 lanzamientos
+   de kernel reducidos a 214 y 80 558 `cudaMemcpy` a 6. Eso es lo que hace asequible lo demás: una
+   campaña de 690 celdas, 100 ejecuciones por lote de métrica y poblaciones de hasta 65 536 frente a
+   las 64 de la original. Ver [Rendimiento](#rendimiento).
+
+3. **La búsqueda local exhaustiva deja de ser la mejor opción cuando la población cubre el
+   espacio.** Es el resultado central de la rejilla: en 13 de las 23 instancias una configuración
+   con el greedy frenado cubre más frente de referencia que cualquiera con el greedy entero. En las
+   ocho KC10, con el greedy en el 10-50 % de los descendientes se encuentra **el frente óptimo
+   publicado completo**, mientras que con el greedy entero se queda entre el 47 % y el 84 % de sus
+   puntos; en KC20 la ganancia es de 7 a 17 puntos de cobertura; y en las seis KC30 de tres
+   objetivos la configuración de la original sigue siendo la mejor. Lo que decide no es el tamaño de
+   la instancia ni el de la población por separado, sino la población frente al espacio de búsqueda.
+   Ver [Cuánta búsqueda local conviene](#cuánta-búsqueda-local-conviene---greedy-rate) y [La mejor
+   configuración de cada problema](#la-mejor-configuración-de-cada-problema).
+
+4. **Ese resultado está aplicado, no solo documentado.** Cada instancia usa por defecto la
+   configuración que se midió mejor para ella, y repetir la medición sin dar ninguna opción devuelve
+   el mismo fichero byte a byte. La confirmación con treinta ejecuciones y otra semilla aguanta:
+   cinco de las ocho instancias KC10 cierran el frente óptimo en las treinta, y en KC20 y KC30 la
+   ventaja se mantiene en seis de las siete con p ≤ 1,1·10⁻⁹. Frenar la búsqueda local además cuesta
+   menos tiempo. Ver [La ejecución por defecto de cada
+   instancia](#la-ejecución-por-defecto-de-cada-instancia).
+
+5. **El presupuesto de generaciones lo manda la instancia, no la población.** Con P = 65 536 las
+   KC10 dejan de cambiar en decenas de generaciones, KC20-2fl-3uni necesita unas 8950 y las tres
+   KC30 de tres objetivos medidas seguían cambiando a las 100 000. El hipervolumen, en cambio, se
+   satura mucho antes que el frente, así que decir «converge» obliga a decir en qué medida. Ver
+   [Cuántas generaciones necesita cada
+   instancia](#cuántas-generaciones-necesita-cada-instancia---trace).
+
+6. **Lo que sostiene las cifras.** 26 comprobaciones de los kernels contra referencias
+   independientes en CPU, `--verify` en cada ejecución de las campañas, los cuatro sanitizers sin
+   errores, los costes de las 374 soluciones óptimas publicadas reproducidos exactamente, y los
+   frentes de referencia versionados en `reference/`, con 15 instancias que ya tienen el suyo. Una
+   comprobación resume el método: en las ocho KC10, de 300 ejecuciones por instancia, **0**
+   encontraron un punto que el óptimo publicado no domine, que es exactamente lo que debe pasar con
+   un frente demostrado óptimo.
+
+7. **Lo que estas mediciones no dicen.** La rejilla usa diez ejecuciones por celda y una sola
+   semilla, así que elige una configuración algo optimista: las tres KC10 que no cierran el frente
+   en las treinta ejecuciones de confirmación lo muestran. Los frentes de referencia de KC20 y KC30
+   son los mejores que conoce este proyecto, no óptimos demostrados, de modo que sus porcentajes se
+   mueven cuando alguien encuentra algo mejor —y por eso están versionados—. El presupuesto de
+   generaciones está fijado por familia, no por instancia, así que «mejor configuración» quiere
+   decir «para ese presupuesto». Y todo está medido en una RTX 2060: los tiempos relativos entre
+   configuraciones deberían trasladarse, pero los absolutos no. Lo que queda por hacer está en
+   [Limitaciones y trabajo futuro](#limitaciones-y-trabajo-futuro).
 
 ---
 
