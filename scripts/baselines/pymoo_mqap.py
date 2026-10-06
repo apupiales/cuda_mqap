@@ -16,7 +16,8 @@ Algorithms, all with permutation operators (random sampling, order crossover, in
                                get worse) and a criterion drawn per generation among the sum and each objective.
                                --greedy-rate applies it to that fraction of the offspring.
 
-The budget is either --gen generations of --pop individuals or --evals full evaluations (pymoo's n_eval);
+The budget is --gen generations of --pop individuals, --evals full evaluations (pymoo's n_eval) or --seconds of
+wall time per run;
 the swap deltas of the local search are counted apart, as cuda_mqap counts them, so that the analysis can
 put every algorithm on the same scale.
 
@@ -46,6 +47,7 @@ from pymoo.operators.crossover.ox import OrderCrossover
 from pymoo.operators.mutation.inversion import InversionMutation
 from pymoo.operators.sampling.rnd import PermutationRandomSampling
 from pymoo.optimize import minimize
+from pymoo.termination.max_time import TimeBasedTermination
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 from pymoo.util.ref_dirs import get_reference_directions
 
@@ -160,12 +162,15 @@ def build(name, m, pop, rate, rng):
 
 
 def one_run(job):
-    path, name, pop, gen, evals, rate, seed = job
+    path, name, pop, gen, evals, seconds_budget, rate, seed = job
     n, m, D, F = load_instance(path)
     problem = MQAP(n, m, D, F)
     rng = np.random.default_rng(seed)
     algorithm, _ = build(name, m, pop, rate, rng)
-    termination = ('n_eval', evals) if evals else ('n_gen', gen)
+    if seconds_budget:
+        termination = TimeBasedTermination(seconds_budget)
+    else:
+        termination = ('n_eval', evals) if evals else ('n_gen', gen)
     begin = time.perf_counter()
     result = minimize(problem, algorithm, termination, seed=seed, verbose=False)
     seconds = time.perf_counter() - begin
@@ -188,6 +193,7 @@ def main():
     parser.add_argument('--pop', type=int, default=64, help='population size (default 64)')
     parser.add_argument('--gen', type=int, default=300, help='generations, when --evals is not given (default 300)')
     parser.add_argument('--evals', type=int, default=0, help='budget of full evaluations instead of --gen')
+    parser.add_argument('--seconds', type=float, default=0.0, help='wall-time budget per run instead of --gen')
     parser.add_argument('--greedy-rate', type=float, default=1.0, help='share of the offspring the -ls variants improve')
     parser.add_argument('--runs', type=int, default=30)
     parser.add_argument('--seed', type=int, default=1, help='seed of the first run; run i uses seed + i')
@@ -198,7 +204,7 @@ def main():
     instance = os.path.splitext(os.path.basename(args.instance))[0]
     output = args.output or os.path.join('results', 'baselines', '%s_%s.txt' % (instance, args.algorithm))
     os.makedirs(os.path.dirname(os.path.abspath(output)), exist_ok=True)
-    jobs = [(args.instance, args.algorithm, args.pop, args.gen, args.evals, args.greedy_rate, args.seed + i)
+    jobs = [(args.instance, args.algorithm, args.pop, args.gen, args.evals, args.seconds, args.greedy_rate, args.seed + i)
             for i in range(args.runs)]
     with ProcessPoolExecutor(max_workers=min(args.jobs, args.runs)) as pool:
         runs = list(pool.map(one_run, jobs))
@@ -210,6 +216,7 @@ def main():
                 f.write("'%s': [%s],\n" % (''.join(str(v) for v in permutation), ', '.join(str(v) for v in values)))
             f.write('},\n')
     meta = {'instance': instance, 'algorithm': args.algorithm, 'pop': args.pop, 'gen': args.gen, 'evals': args.evals,
+            'seconds': args.seconds,
             'greedy_rate': args.greedy_rate,
             'runs': [{k: r[k] for k in ('seed', 'seconds', 'full_evaluations', 'swap_evaluations', 'generations')}
                      | {'front_size': len(r['front'])} for r in runs]}
