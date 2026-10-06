@@ -400,6 +400,55 @@ Results appended to result_KC10-2fl-1rl_nsga2_greedy_2opt.txt
 Time Spent: 0.148970 s (GPU 13.494 ms)
 ```
 
+### The default call of each instance
+
+With no options at all, the program takes the configuration measured best for the instance, so the
+call is just the file of the instance:
+
+```
+build\x64\Release\cuda_mqap.exe mQAPData\KC10-2fl-1rl.dat
+```
+
+The second column of the table is the equivalent command written out. It gives exactly the same run
+— checked byte for byte on KC10-2fl-1uni, KC10-2fl-2rl and KC10-2fl-2uni — and, carrying
+`--untuned`, it does not depend on the table: it will keep meaning the same even if the table
+changes. To either form the usual options are then added, `--runs`, `--seed`, `--verify`,
+`--output`:
+
+| Instance | Equivalent options |
+|---|---|
+| KC10-2fl-1rl | `--population 16384 --iterations 70 --greedy-rate 0.5 --untuned` |
+| KC10-2fl-1uni | `--population 1024 --iterations 70 --greedy-rate 0.25 --untuned` |
+| KC10-2fl-2rl | `--population 1024 --iterations 70 --greedy-rate 0.1 --untuned` |
+| KC10-2fl-2uni | `--population 256 --iterations 70 --greedy-rate 0.1 --untuned` |
+| KC10-2fl-3rl | `--population 16384 --iterations 70 --greedy-rate 0.1 --untuned` |
+| KC10-2fl-3uni | `--population 65536 --iterations 70 --greedy-rate 0.1 --untuned` |
+| KC10-2fl-4rl | `--population 16384 --iterations 70 --greedy-rate 0.1 --untuned` |
+| KC10-2fl-5rl | `--population 16384 --iterations 70 --greedy-rate 0.1 --untuned` |
+| KC20-2fl-1rl | `--population 65536 --iterations 300 --greedy-rate 0.25 --untuned` |
+| KC20-2fl-1uni | `--population 65536 --iterations 300 --greedy-rate 1.0 --greedy-every 2 --untuned` |
+| KC20-2fl-2rl | `--population 65536 --iterations 300 --greedy-rate 0.25 --untuned` |
+| KC20-2fl-2uni | `--population 65536 --iterations 300 --greedy-rate 0.1 --untuned` |
+| KC20-2fl-3rl | `--population 65536 --iterations 300 --greedy-rate 0.25 --untuned` |
+| KC20-2fl-3uni | `--population 65536 --iterations 300 --greedy-rate 1.0 --untuned` |
+| KC20-2fl-4rl | `--population 65536 --iterations 300 --greedy-rate 0.1 --untuned` |
+| KC20-2fl-5rl | `--population 65536 --iterations 300 --greedy-rate 0.25 --untuned` |
+| KC30-2fl-1rl | `--population 65536 --iterations 300 --greedy-rate 0.5 --untuned` |
+| KC30-3fl-1rl | `--population 65536 --iterations 300 --greedy-rate 1.0 --untuned` |
+| KC30-3fl-1uni | `--population 65536 --iterations 300 --greedy-rate 1.0 --untuned` |
+| KC30-3fl-2rl | `--population 65536 --iterations 300 --greedy-rate 1.0 --untuned` |
+| KC30-3fl-2uni | `--population 65536 --iterations 300 --greedy-rate 1.0 --untuned` |
+| KC30-3fl-3rl | `--population 65536 --iterations 300 --greedy-rate 1.0 --untuned` |
+| KC30-3fl-3uni | `--population 65536 --iterations 300 --greedy-rate 1.0 --untuned` |
+
+It is worth knowing what it costs: on 15 of the 23 instances the best configuration is the
+population cap with 300 generations, so a call with no options is minutes of GPU, not seconds.
+`--untuned` on its own goes back to the generic configuration — population 64, 70 generations,
+greedy at 100 % — which is the one the measurement scripts of the repository use.
+
+The instances the table does not list use that generic configuration too, and the program says so
+when it starts, on the line after the one with the instance.
+
 ### Result file
 
 It keeps the original format, so the `mQAPMetrics` scripts still work. Each run appends a block with
