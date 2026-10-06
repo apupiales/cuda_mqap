@@ -99,7 +99,10 @@ foreach ($b in $Block) {
                     foreach ($r in 0..2) {
                         $s = $Seed + $r
                         if ($done -match "^$name,$p,$device,$s,") { continue }
-                        $extra = if ($device -eq 'cpu') { @('--cpu') } else { @() }
+                        # Built this way on purpose: "if (...) { @('--cpu') }" unrolls to a string, which
+                        # splatting would not pass as one argument.
+                        $extra = @()
+                        if ($device -eq 'cpu') { $extra += '--cpu' }
                         $text = & $Exe "mQAPData\$name.dat" --untuned --population $p --iterations 20 --seed $s --quiet --output "$env:TEMP\cuda_mqap_speed.txt" @extra 2>&1
                         $ms = ($text | Select-String '(GPU|CPU) ([\d.]+) ms').Matches[0].Groups[2].Value
                         "$name,$p,$device,$s,20,$ms" | Out-File $csv -Append -Encoding utf8
