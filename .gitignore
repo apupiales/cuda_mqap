@@ -78,3 +78,6 @@ ANALISIS_CLAUDE_OPUS5.md
 # Python bytecode of the analysis scripts
 __pycache__/
 *.pyc
+
+# Third-party instances without a license, fetched by scripts/fetch_gar60.ps1
+data/

@@ -45,6 +45,7 @@
   <ItemGroup>
     <ClCompile Include="src\instance.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\solver_cpu.cpp" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\fitness.cu" />
@@ -59,6 +60,7 @@
     <ClInclude Include="include\cuda_check.cuh" />
     <ClInclude Include="include\device_buffer.cuh" />
     <ClInclude Include="include\device_common.cuh" />
+    <ClInclude Include="include\gate.h" />
     <ClInclude Include="include\instance.h" />
     <ClInclude Include="include\kernels.cuh" />
     <ClInclude Include="include\solver.h" />

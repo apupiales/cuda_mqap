@@ -43,6 +43,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="src\instance.cpp" />
+    <ClCompile Include="src\solver_cpu.cpp" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\fitness.cu" />

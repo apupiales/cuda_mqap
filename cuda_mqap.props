@@ -11,6 +11,8 @@
     <ClCompile>
       <WarningLevel>Level4</WarningLevel>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <!-- The CPU baseline (solver_cpu.cpp, option cpu of the program) is parallelized with OpenMP. -->
+      <OpenMPSupport>true</OpenMPSupport>
       <!-- CUB (used by the multi-block survival) requires the conforming MSVC preprocessor. -->
       <AdditionalOptions>/Zc:preprocessor %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>

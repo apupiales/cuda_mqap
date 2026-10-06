@@ -31,6 +31,8 @@
 #include <string>
 #include <vector>
 
+#include <omp.h>
+
 #include "best_configuration.h"
 #include "instance.h"
 #include "solver.h"
@@ -45,6 +47,8 @@ struct Arguments {
     mqap::SolverOptions options;
     bool verify = false;
     bool quiet = false;
+    bool cpu = false;                // --cpu: the OpenMP baseline instead of the GPU
+    int threads = 0;                 // --threads: OpenMP threads of --cpu (0 = all)
     // Which options the command line gave: the rest are taken from the table of the instance, so an
     // explicit value always wins over the measured one.
     bool setPopulation = false;
@@ -73,7 +77,9 @@ void printUsage(const char* program) {
         "  --trace-every K  record the front every K generations, plus the last one (default 1)\n"
         "  --initial FILE   write the initial population of every run to FILE (CSV, overwritten)\n"
         "  --verify         check the final populations on the CPU\n"
-        "  --quiet          do not print the final solutions\n",
+        "  --quiet          do not print the final solutions\n"
+        "  --cpu            run the same algorithm on the CPU with OpenMP (baseline of the GPU version)\n"
+        "  --threads N      OpenMP threads of --cpu (default: all the cores)\n",
         program);
 }
 
@@ -113,6 +119,10 @@ bool parseArguments(int argc, char** argv, Arguments& args) {
             args.options.recordInitial = true;
         } else if (arg == "--verify") {
             args.verify = true;
+        } else if (arg == "--cpu") {
+            args.cpu = true;
+        } else if (arg == "--threads" && hasValue) {
+            args.threads = std::atoi(argv[++i]);
         } else if (arg == "--quiet") {
             args.quiet = true;
         } else if (!arg.empty() && arg[0] != '-' && args.instancePath.empty()) {
@@ -255,7 +265,14 @@ int main(int argc, char** argv) {
 
         const auto begin = std::chrono::steady_clock::now();
         mqap::SolveStats stats;
-        const std::vector<mqap::RunResult> results = mqap::solve(instance, args.options, &stats);
+        if (args.cpu) {
+            if (args.threads > 0) {
+                omp_set_num_threads(args.threads);
+            }
+            std::printf("Device: CPU, OpenMP with %d threads\n", omp_get_max_threads());
+        }
+        const std::vector<mqap::RunResult> results = args.cpu ? mqap::solveCpu(instance, args.options, &stats)
+                                                              : mqap::solve(instance, args.options, &stats);
         const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - begin).count();
 
         std::ofstream file(args.outputPath, std::ios::app);
@@ -354,7 +371,9 @@ int main(int argc, char** argv) {
         }
 
         std::printf("\nResults appended to %s\n", args.outputPath.c_str());
-        std::printf("Time Spent: %f s (GPU %.3f ms)\n", seconds, stats.gpuMilliseconds);
+        std::printf("Evaluations: %lld full, %lld swap deltas of the greedy 2-opt\n", stats.fullEvaluations,
+                    stats.swapEvaluations);
+        std::printf("Time Spent: %f s (%s %.3f ms)\n", seconds, args.cpu ? "CPU" : "GPU", stats.gpuMilliseconds);
         return exitCode;
     } catch (const std::exception& error) {
         std::fprintf(stderr, "Error: %s\n", error.what());

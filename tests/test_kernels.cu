@@ -440,6 +440,58 @@ void testInitialPopulation(const Instance& instance, int population, int runs) {
     }
 }
 
+// The CPU baseline (--cpu) must produce what --verify accepts: P survivors per run with valid permutations,
+// exact fitness and rank 1 exactly on the non-dominated ones; a front without repetitions; and the same
+// count of work as the GPU version for the same options, since it is the same algorithm.
+void testCpuSolver(const Instance& instance, int population, int iterations, int runs, float rate) {
+    SolverOptions options;
+    options.population = population;
+    options.iterations = iterations;
+    options.runs = runs;
+    options.seed = 11;
+    options.greedyRate = rate;
+    SolveStats stats;
+    const std::vector<RunResult> results = solveCpu(instance, options, &stats);
+    SolveStats expected;
+    countWork(instance.n, options, expected);
+    EXPECT(stats.fullEvaluations == expected.fullEvaluations && stats.swapEvaluations == expected.swapEvaluations,
+           "the CPU solver counts %lld/%lld evaluations instead of %lld/%lld", stats.fullEvaluations,
+           stats.swapEvaluations, expected.fullEvaluations, expected.swapEvaluations);
+    EXPECT(static_cast<int>(results.size()) == runs, "solveCpu returned %zu runs", results.size());
+    for (const RunResult& result : results) {
+        EXPECT(static_cast<int>(result.population.size()) == population, "the CPU population has %zu solutions",
+               result.population.size());
+        for (const Solution& a : result.population) {
+            std::vector<short> sorted = a.permutation;
+            std::sort(sorted.begin(), sorted.end());
+            bool valid = static_cast<int>(sorted.size()) == instance.n;
+            for (int i = 0; valid && i < instance.n; i++) valid = sorted[i] == i;
+            EXPECT(valid, "the CPU solver returned an invalid permutation");
+            if (!valid) continue;
+            for (int o = 0; o < instance.objectives; o++) {
+                EXPECT(cost(instance, a.permutation.data(), o) == static_cast<long long>(a.fitness[o]),
+                       "the CPU fitness differs from the cost (objective %d)", o);
+            }
+            bool dominated = false;
+            for (const Solution& b : result.population) {
+                bool noWorse = true;
+                bool better = false;
+                for (int o = 0; o < instance.objectives; o++) {
+                    noWorse &= b.fitness[o] <= a.fitness[o];
+                    better |= b.fitness[o] < a.fitness[o];
+                }
+                dominated |= noWorse && better;
+            }
+            EXPECT(dominated != (a.rank == 1), "CPU rank %d inconsistent with dominance", a.rank);
+        }
+        std::set<std::vector<short>> seen;
+        for (const Solution& s : result.paretoFront) {
+            EXPECT(seen.insert(s.permutation).second, "the CPU front repeats a solution");
+        }
+        EXPECT(!result.paretoFront.empty(), "the CPU front is empty");
+    }
+}
+
 // CPU greedy 2-opt with full cost recomputation (no delta formula). Same pair traversal as the kernel,
 // selected by kGreedyFullPairs, so the test checks whichever one is configured.
 std::vector<short> cpuGreedy(const Instance& instance, std::vector<short> p, int type) {
@@ -720,6 +772,8 @@ int main(int argc, char** argv) {
     run("final front: every distinct solution, only once", [&] { testUniqueFront(kc10, 256, 30, 2); });
     run("--trace: one front per generation, ending in the final one", [&] { testTrace(kc10, 64, 10, 2); });
     run("--initial: the population the run starts from", [&] { testInitialPopulation(kc30, 512, 2); });
+    run("--cpu: valid, verified results   KC10 P=64, 2 runs", [&] { testCpuSolver(kc10, 64, 20, 2, 1.0f); });
+    run("--cpu: valid, verified results   KC30 P=512 rate 0.25", [&] { testCpuSolver(kc30, 512, 5, 1, 0.25f); });
 
     std::printf("\n%s (%d failure%s)\n", failures == 0 ? "ALL TESTS PASSED" : "TESTS FAILED", failures,
                 failures == 1 ? "" : "s");

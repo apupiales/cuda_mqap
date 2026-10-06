@@ -33,6 +33,7 @@
 #include "config.h"
 #include "cuda_check.cuh"
 #include "device_buffer.cuh"
+#include "device_common.cuh"
 #include "kernels.cuh"
 #include "survival_workspace.cuh"
 
@@ -234,6 +235,9 @@ std::vector<RunResult> solveImpl(const Instance& instance, const SolverOptions& 
 
 std::vector<RunResult> solve(const Instance& instance, const SolverOptions& options, SolveStats* stats) {
     validate(instance, options);
+    if (stats != nullptr) {
+        countWork(instance.n, options, *stats);
+    }
     switch (instance.objectives) {
     case 2:
         return solveImpl<2>(instance, options, stats);
@@ -242,6 +246,31 @@ std::vector<RunResult> solve(const Instance& instance, const SolverOptions& opti
     default:
         throw std::invalid_argument("only 2 and 3 objective instances are supported");
     }
+}
+
+void countWork(int n, const SolverOptions& options, SolveStats& stats) {
+    const long long runs = options.runs;
+    const long long population = options.population;
+    const long long trials = kGreedyFullPairs ? static_cast<long long>(n - 1) + static_cast<long long>(n - 2) * (n - 2)
+                                              : static_cast<long long>(n) * (n - 1) / 2;
+    // The initial population, then the P offspring of every generation, which the greedy kernel evaluates
+    // in full whether or not the gate lets it improve them.
+    stats.fullEvaluations = runs * 2 * population + runs * population * options.iterations;
+    long long improved = 0;
+    for (int generation = 0; generation < options.iterations; generation++) {
+        if (options.greedyRate >= 1.0f) {
+            // Every offspring of the generations the period lets through: no need to ask the gate each one.
+            improved += greedyApplies(options.seed, 0, 0, generation, options.greedyRate, options.greedyPeriod)
+                            ? runs * population : 0;
+            continue;
+        }
+        for (int run = 0; run < options.runs; run++) {
+            for (int i = 0; i < options.population; i++) {
+                improved += greedyApplies(options.seed, run, i, generation, options.greedyRate, options.greedyPeriod);
+            }
+        }
+    }
+    stats.swapEvaluations = improved * trials;
 }
 
 } // namespace mqap

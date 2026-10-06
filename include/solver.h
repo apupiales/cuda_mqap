@@ -76,7 +76,19 @@ struct SolveStats {
     std::vector<TracePoint> trace;   // Front of every generation, when SolverOptions::trace is set.
     int traceTruncated = 0;          // Generations whose front did not fit in traceMaxPoints.
     std::vector<std::vector<Solution>> initialPopulation; // [run][2P], when SolverOptions::recordInitial is set.
+    // Work done, over all runs, so that algorithms with different structures can be given the same budget:
+    // full O(n^2) evaluations of a permutation (the initial population and every offspring), and O(n)
+    // evaluations of one swap by the greedy 2-opt. Counted on the host from the deterministic gate.
+    long long fullEvaluations = 0;
+    long long swapEvaluations = 0;
 };
+
+// Fills SolveStats::fullEvaluations and swapEvaluations for a run with these options on n facilities.
+void countWork(int n, const SolverOptions& options, SolveStats& stats);
+
+// The same algorithm on the CPU with OpenMP (solver_cpu.cpp), the baseline of the GPU version. The
+// time it reports in SolveStats::gpuMilliseconds is the CPU time of the whole algorithm.
+std::vector<RunResult> solveCpu(const Instance& instance, const SolverOptions& options, SolveStats* stats = nullptr);
 
 // Throws std::invalid_argument when the options or the instance are not supported.
 std::vector<RunResult> solve(const Instance& instance, const SolverOptions& options, SolveStats* stats = nullptr);

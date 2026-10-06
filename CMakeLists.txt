@@ -37,8 +37,12 @@ add_library(mqap_core STATIC
     src/operators.cu
     src/local_search.cu
     src/solver.cu
+    src/solver_cpu.cpp
 )
 target_include_directories(mqap_core PUBLIC include)
+# The CPU baseline (solver_cpu.cpp, --cpu) is parallelized with OpenMP.
+find_package(OpenMP REQUIRED COMPONENTS CXX)
+target_link_libraries(mqap_core PUBLIC OpenMP::OpenMP_CXX)
 # Debug builds synchronize after every kernel to report errors at the failing launch.
 target_compile_definitions(mqap_core PUBLIC $<$<CONFIG:Debug>:MQAP_SYNC_CHECK>)
 target_compile_options(mqap_core PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
