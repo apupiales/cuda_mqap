@@ -2,6 +2,11 @@
 
 [English](README.md) | **Español**
 
+> **Rama `develop_comparison_vs_cpu_and_moeas`.** Todo lo que sigue describe el programa tal como viene de
+> `develop_large_population_multiblock`. Esta rama añade la comparación de `cuda_mqap` con el mismo algoritmo en una CPU
+> multinúcleo (`--cpu`) y con NSGA-II, NSGA-III y MOEA/D de pymoo, a igual trabajo y a igual tiempo de reloj, en las
+> instancias de Knowles–Corne y en 16 instancias con n = 60: ver **[COMPARACION.md](COMPARACION.md)**.
+
 Implementación paralela en GPU (CUDA C++) del algoritmo evolutivo multiobjetivo **NSGA-II**,
 combinado con una búsqueda local **Greedy 2-opt adaptada**, para resolver instancias del
 **Problema de Asignación Cuadrática Multiobjetivo** (mQAP, *multiobjective Quadratic Assignment Problem*).
@@ -74,6 +79,8 @@ concurrente** en una sola llamada al programa.
 
 **Ingeniería**
 - Separación estricta host/device: `main.cpp` no contiene código CUDA, y los kernels se exponen mediante funciones lanzadoras.
+- El mismo algoritmo en CPU con OpenMP (`--cpu`), como referencia contra la que se mide la GPU, y un conteo del trabajo
+  hecho (evaluaciones completas y deltas de intercambio) en cada ejecución; ver [COMPARACION.md](COMPARACION.md).
 - Instancias leídas de los ficheros `.dat` en tiempo de ejecución; los parámetros se pasan por línea
   de comandos, y los que no se dan salen de la tabla de la instancia (`include/best_configuration.h`).
 - Control de errores `CUDA_CHECK`/`CUDA_CHECK_KERNEL` y gestión de memoria RAII (`DeviceBuffer<T>`).
@@ -182,7 +189,8 @@ cuda_mqap/
 │   ├── device_common.cuh   Funciones __device__ compartidas (coste por warp, delta del greedy 2-opt, bitonic sort)
 │   ├── instance.h          Struct Instance, loadInstance(), cost() de referencia en CPU
 │   ├── kernels.cuh         Declaración de los lanzadores de kernels y del layout de memoria
-│   ├── solver.h            SolverOptions, Solution, RunResult, solve()
+│   ├── gate.h              Compuerta del greedy 2-opt, compartida por los kernels, la versión CPU y el host
+│   ├── solver.h            SolverOptions, Solution, RunResult, solve(), solveCpu(), countWork()
 │   └── survival_workspace.cuh   Búferes de la supervivencia multibloque (se reservan una vez)
 ├── src/
 │   ├── main.cpp            Línea de comandos, fichero de resultados y --verify (solo host)
@@ -191,6 +199,7 @@ cuda_mqap/
 │   ├── fitness.cu          Kernel de fitness
 │   ├── nsga2.cu            Kernel de supervivencia NSGA-II (un bloque por ejecución, P ≤ 256)
 │   ├── nsga2_multiblock.cu Supervivencia NSGA-II repartida en varios bloques (P > 256)
+│   ├── solver_cpu.cpp      El mismo algoritmo en CPU con OpenMP (--cpu)
 │   ├── operators.cu        RNG, población inicial, torneo y mutaciones
 │   └── local_search.cu     Kernel Greedy 2-opt
 ├── tests/test_kernels.cu   Pruebas de cada kernel contra referencias en CPU
@@ -203,6 +212,11 @@ cuda_mqap/
 ├── scripts/run_rate_grid.ps1     Rejilla de población x configuración del greedy, por instancia
 ├── scripts/analyze_rate_grid.py  Puntúa las celdas de la rejilla y da la mejor configuración
 ├── scripts/build_reference.py    Construye el mejor frente conocido de una instancia (.KBP)
+├── scripts/fetch_gar60.ps1       Descarga las instancias de Garrett (n = 60) en data/, que git ignora
+├── scripts/baselines/pymoo_mqap.py   NSGA-II, NSGA-III y MOEA/D de pymoo, con y sin el greedy 2-opt
+├── scripts/run_comparison.ps1    Campaña de la comparación con la CPU y con pymoo (COMPARACION.md)
+├── scripts/analyze_comparison.py Estadística de esa campaña
+├── COMPARISON.md, COMPARACION.md Comparación con la CPU y con otros MOEA
 ├── scripts/run_front_plot.ps1    Ejecución por defecto de cada instancia, dibujada frente a su mejor frente conocido
 ├── scripts/plot_fronts.py        Mejor frente conocido, frente final y población inicial, en HTML y PNG
 ├── examples/fronts/        Salida de run_front_plot.ps1 para las 23 instancias, HTML y PNG
@@ -320,7 +334,7 @@ Los acumuladores son de 64 bits.
 ```
 git clone https://github.com/apupiales/cuda_mqap.git
 cd cuda_mqap
-git checkout develop_large_population_multiblock
+git checkout develop_comparison_vs_cpu_and_moeas
 start cuda_mqap.slnx
 ```
 
@@ -363,7 +377,8 @@ Desde una consola *x64 Native Tools*:
 
 ```
 nvcc -O3 -arch=sm_75 -std=c++17 -Iinclude src\main.cpp src\instance.cpp src\solver.cu src\fitness.cu ^
-     src\nsga2.cu src\nsga2_multiblock.cu src\operators.cu src\local_search.cu -o cuda_mqap.exe
+     src\nsga2.cu src\nsga2_multiblock.cu src\operators.cu src\local_search.cu src\solver_cpu.cpp ^
+     -Xcompiler /openmp -o cuda_mqap.exe
 ```
 
 ---
@@ -390,6 +405,8 @@ cuda_mqap <instance.dat> [opciones]
   --initial FILE   escribe la poblacion inicial de cada ejecucion en FILE (CSV, se sobrescribe)
   --verify         verifica las poblaciones finales en CPU
   --quiet          no imprime las soluciones finales
+  --cpu            ejecuta el mismo algoritmo en CPU con OpenMP (referencia de la versión GPU)
+  --threads N      hilos OpenMP de --cpu (defecto: todos los núcleos)
 ```
 
 Ejemplos:
@@ -422,6 +439,7 @@ FINAL SOLUTION (run 0, 37 non-dominated)
 Verification: OK
 
 Results appended to result_KC10-2fl-1rl_nsga2_greedy_2opt.txt
+Evaluations: 4608 full, 327040 swap deltas of the greedy 2-opt
 Time Spent: 0.112270 s (GPU 12.258 ms)
 ```
 
@@ -1195,8 +1213,9 @@ implementación independiente en CPU:
 | Frente final | Cada solución distinta aparece una sola vez en el fichero de resultados |
 | Traza (`--trace`) | Hay un frente por generación y el de la última coincide con el frente final |
 | Población inicial (`--initial`) | 2P permutaciones válidas por ejecución con su coste exacto; con cero generaciones todo superviviente sale de ella y el frente final es exactamente su conjunto no dominado; registrarla no cambia la ejecución |
+| Versión CPU (`--cpu`) | Permutaciones válidas, fitness exacto, rangos coherentes con la dominancia, frente sin repeticiones y el mismo conteo de trabajo que la versión GPU, en KC10 (P = 64) y KC30 (P = 512, tasa 0,25) |
 
-Son **27 comprobaciones**; al terminar imprime `ALL TESTS PASSED` o el detalle de cada fallo con su
+Son **29 comprobaciones**; al terminar imprime `ALL TESTS PASSED` o el detalle de cada fallo con su
 fichero y línea.
 
 ```
@@ -1733,7 +1752,7 @@ está cada una.
    [Cuántas generaciones necesita cada
    instancia](#cuántas-generaciones-necesita-cada-instancia---trace).
 
-6. **Lo que sostiene las cifras.** 27 comprobaciones de los kernels contra referencias
+6. **Lo que sostiene las cifras.** 29 comprobaciones de los kernels contra referencias
    independientes en CPU, `--verify` en cada ejecución de las campañas, los cuatro sanitizers sin
    errores, los costes de las 374 soluciones óptimas publicadas reproducidos exactamente, y los
    frentes de referencia versionados en `reference/`, con 15 instancias que ya tienen el suyo. Una
