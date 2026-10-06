@@ -1104,9 +1104,10 @@ Excel](#resultados-en-el-libro-de-excel).
 
 ## Límites del tamaño de población y recursos de la GPU
 
-**En esta rama la población máxima es P = 65536 en cualquier GPU, para las 15 instancias.** Hasta P = 256 la
-supervivencia NSGA-II de cada ejecución la sigue haciendo un único bloque de 2P hilos (`nsga2.cu`); por
-encima se usa la supervivencia multibloque de `nsga2_multiblock.cu`:
+**En esta rama la población máxima es P = 65536 en cualquier GPU, para las 23 instancias de
+`mQAPData/`**, que la rejilla de configuraciones ejecutó a esa población con `--verify` OK. Hasta
+P = 256 la supervivencia NSGA-II de cada ejecución la sigue haciendo un único bloque de 2P hilos
+(`nsga2.cu`); por encima se usa la supervivencia multibloque de `nsga2_multiblock.cu`:
 
 1. `countDominatorsKernel`: cuántos individuos dominan a cada uno, leyendo el fitness en teselas en memoria
    compartida.

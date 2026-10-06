@@ -1090,9 +1090,10 @@ workbook](#results-in-the-excel-workbook).
 
 ## Population size limits and GPU resources
 
-**In this branch the maximum population is P = 65536 on any GPU, for all 15 instances.** Up to P = 256 the
-NSGA-II survival of each run still runs in a single block of 2P threads (`nsga2.cu`); above it, the
-multi-block survival of `nsga2_multiblock.cu` is used:
+**In this branch the maximum population is P = 65536 on any GPU, for the 23 instances of
+`mQAPData/`**, which the grid of configurations ran at that population with `--verify` OK. Up to
+P = 256 the NSGA-II survival of each run still runs in a single block of 2P threads (`nsga2.cu`);
+above it, the multi-block survival of `nsga2_multiblock.cu` is used:
 
 1. `countDominatorsKernel`: how many individuals dominate each one, with the fitness read in shared memory tiles.
 2. `peelFrontsKernel`: **cooperative launch**, so the whole grid can synchronize (`grid.sync()`). For each
