@@ -1072,17 +1072,20 @@ workbook](#results-in-the-excel-workbook).
 
 ### Engineering
 
-- Monolithic `kernel.cu` (2,081 lines) → modules with host/device separation.
+- Monolithic `kernel.cu` (2096 lines) → modules with host/device separation.
 - 15 `settings_*.cu` files recompiled per instance → instance and parameters at runtime.
 - Ignored errors → `CUDA_CHECK` / `CUDA_CHECK_KERNEL` that abort with file and line.
-- Unversioned Visual Studio project (excluded by `.gitignore`) → versioned `cuda_mqap.slnx` + `CMakeLists.txt`.
+- The original versions its own Visual Studio project since 2026-09-19; this one adds
+  `CMakeLists.txt` and the project of the tests, so it builds without Visual Studio as well.
 - No tests → `test_kernels` + `--verify` + `compute-sanitizer`.
 
 ### Behavior differences
 
-- The greedy 2-opt evaluates each pair once. With the "all objectives" criterion it compares the exact
-  sum of the changes instead of averages truncated to integers.
-- The result file contains only the non-dominated solutions of the final population.
+- The greedy 2-opt visits the pairs in the order of the original version (`kGreedyFullPairs`), but
+  with the "all objectives" criterion it compares the exact sum of the changes instead of averages
+  truncated to integers.
+- The result file contains only the non-dominated solutions of the final population; the original
+  writes the whole final population, each distinct solution once since 2026-09-21.
 - The minimum population is 16 (KC10-2fl-2uni used 4) and it must be a power of 2.
 - The tournament adversary is chosen uniformly among the P survivors.
 

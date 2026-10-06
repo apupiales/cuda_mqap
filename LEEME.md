@@ -1086,17 +1086,20 @@ Excel](#resultados-en-el-libro-de-excel).
 
 ### Ingeniería
 
-- `kernel.cu` monolítico (2 081 líneas) → módulos con separación host/device.
+- `kernel.cu` monolítico (2096 líneas) → módulos con separación host/device.
 - 15 `settings_*.cu` recompilados por instancia → instancia y parámetros en tiempo de ejecución.
 - Errores ignorados → `CUDA_CHECK` / `CUDA_CHECK_KERNEL` que abortan con fichero y línea.
-- Proyecto de Visual Studio no versionado (excluido por `.gitignore`) → `cuda_mqap.slnx` + `CMakeLists.txt` versionados.
+- La original versiona su propio proyecto de Visual Studio desde el 19-09-2026; esta versión añade
+  `CMakeLists.txt` y el proyecto de las pruebas, así que también compila sin Visual Studio.
 - Sin pruebas → `test_kernels` + `--verify` + `compute-sanitizer`.
 
 ### Diferencias de comportamiento
 
-- El greedy 2-opt evalúa cada par una sola vez. Con el criterio "todos los objetivos" compara la suma
-  exacta de las variaciones, en lugar de medias truncadas a entero.
-- El fichero de resultados contiene solo las soluciones no dominadas de la población final.
+- El greedy 2-opt recorre los pares en el orden de la versión original (`kGreedyFullPairs`), pero con
+  el criterio "todos los objetivos" compara la suma exacta de las variaciones, en lugar de medias
+  truncadas a entero.
+- El fichero de resultados contiene solo las soluciones no dominadas de la población final; la
+  original escribe la población final entera, cada solución distinta una vez desde el 21-09-2026.
 - La población mínima es 16 (antes KC10-2fl-2uni usaba 4) y debe ser potencia de 2.
 - El adversario del torneo se elige de forma uniforme entre las P supervivientes.
 
