@@ -34,11 +34,13 @@ import os
 import statistics
 import sys
 
+import numpy as np
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 from analyze_convergence import hypervolume, minimal, reference_point_of  # noqa: E402
-from compare_versions import dominates, read_front, read_runs, reference_path  # noqa: E402
+from compare_versions import read_front, read_runs, reference_path  # noqa: E402
 from scipy.stats import friedmanchisquare, mannwhitneyu, rankdata  # noqa: E402
 
 OURS = 'cuda_mqap'
@@ -60,6 +62,19 @@ def holm(pvalues):
         running = max(running, min(1.0, (len(pvalues) - rank) * pvalues[i]))
         adjusted[i] = running
     return adjusted
+
+
+def not_dominated(points, front, chunk=512):
+    """The points no point of front dominates (front holds no point equal to them)."""
+    if not points:
+        return set()
+    data = np.array(points, dtype=np.int64)
+    keep = np.ones(len(data), dtype=bool)
+    for start in range(0, len(data), chunk):
+        block = data[start:start + chunk][:, None, :]
+        weakly = np.all(front[None, :, :] <= block, axis=2) & np.any(front[None, :, :] < block, axis=2)
+        keep[start:start + chunk] = ~np.any(weakly, axis=1)
+    return {tuple(int(v) for v in row) for row in data[keep]}
 
 
 def measure(runs, reference, point, total):
@@ -119,6 +134,7 @@ def main():
             path = reference_path(instance)
             reference = {costs for _permutation, costs in read_front(path)}
             source = os.path.relpath(path, os.path.dirname(HERE)).replace(os.sep, '/')
+        reference_array = np.array(sorted(reference), dtype=np.int64)
         point = reference_point_of(sorted(reference))
         total = hypervolume(minimal(sorted(reference)), point)
         entry = {'reference': source, 'reference_points': len(reference), 'algorithms': {}}
@@ -126,10 +142,8 @@ def main():
             hv, cov = measure(data, reference, point, total)
             beyond = set()
             if not instance.startswith('Gar60'):
-                for run in data:
-                    for _key, costs in run:
-                        if costs not in reference and not any(dominates(r, costs) for r in reference):
-                            beyond.add(costs)
+                candidates = sorted({costs for run in data for _key, costs in run} - reference)
+                beyond = not_dominated(candidates, reference_array)
             entry['algorithms'][label] = {'runs': len(data), 'hv': hv, 'coverage': cov,
                                           'hv_mean': statistics.fmean(hv), 'coverage_mean': statistics.fmean(cov),
                                           'hv_sd': statistics.pstdev(hv), 'coverage_sd': statistics.pstdev(cov),

@@ -105,7 +105,7 @@ python scripts\analyze_comparison.py results\comparison --block time
 ```
 
 En la RTX 2060 y el i5-11400 de la medición, los bloques tardaron 4 min (`speedup`), 1 h 12 min (`budget`),
-5 h 15 min (`gar60`), y el bloque `time` se estima en unas 17 h (dominado por las siete instancias KC30, cuya ejecución por defecto tarda
+5 h 15 min (`gar60`) y 18 h 19 min (`time`, dominado por las siete instancias KC30, cuya ejecución por defecto tarda
 104 s). Cada resultado va a `results\comparison\<bloque>\<instancia>\<algoritmo>_<protocolo>.txt`, en el formato del
 fichero de resultados, con un `.json` (pymoo) o un `.log` (`cuda_mqap`) al lado.
 
@@ -206,9 +206,62 @@ Fracción media del hipervolumen de referencia (%) de `cuda_mqap` y del mejor ri
 
 ### 4. Igual tiempo de reloj en las instancias de Knowles–Corne
 
-*En curso.* Con 9 de las 23 instancias terminadas, `cuda_mqap` encuentra el 98–100 % del frente óptimo publicado
-en las ocho KC10, frente al 37–90 % del mejor rival, y el 95,4 % frente al 65,4 % del frente de referencia en
-KC20-2fl-1rl. La tabla se completará cuando termine la campaña.
+`cuda_mqap` con la [ejecución por defecto](LEEME.md#la-ejecución-por-defecto-de-cada-instancia) de cada instancia;
+cada ejecución de pymoo, con P = 100, recibe el tiempo de reloj de una de esas ejecuciones. 30 ejecuciones, 23
+instancias.
+
+| Algoritmo | Rango medio, cobertura | Rango medio, hipervolumen | cuda_mqap V/E/D, cobertura | cuda_mqap V/E/D, hipervolumen |
+|---|---|---|---|---|
+| **cuda_mqap** | **1,00** | **1,00** | — | — |
+| NSGA-II+LS | 2,59 | 2,46 | 22 / 1 / 0 | 22 / 1 / 0 |
+| NSGA-III+LS | 2,63 | 2,59 | 22 / 1 / 0 | 22 / 1 / 0 |
+| MOEA/D+LS | 3,98 | 4,00 | 22 / 1 / 0 | 22 / 1 / 0 |
+| NSGA-II | 5,74 | 5,35 | 23 / 0 / 0 | 23 / 0 / 0 |
+| NSGA-III | 5,78 | 5,67 | 23 / 0 / 0 | 23 / 0 / 0 |
+| MOEA/D | 6,28 | 6,93 | 23 / 0 / 0 | 23 / 0 / 0 |
+
+Friedman p = 1,1·10⁻²⁴ (cobertura) y 6,7·10⁻²⁶ (hipervolumen).
+
+Por instancia, la media de `cuda_mqap` y la del mejor rival en cada indicador:
+
+| Instancia | Llamada por defecto: tiempo por ejecución | cuda_mqap, cobertura | mejor rival | cuda_mqap, hipervolumen | mejor rival |
+|---|---|---|---|---|---|
+| KC10-2fl-1rl | 0,9 s | **99,7 %** | 64,1 % (NSGA-II+LS) | **100,00 %** | 99,83 % (NSGA-II+LS) |
+| KC10-2fl-1uni | 0,2 s | **97,9 %** | 64,6 % (NSGA-III+LS) | **99,96 %** | 94,81 % (NSGA-III+LS) |
+| KC10-2fl-2rl | 0,2 s | **100,0 %** | 75,8 % (NSGA-II+LS) | **100,00 %** | 96,83 % (NSGA-II+LS) |
+| KC10-2fl-2uni | 0,2 s | **100,0 %** | 90,0 % (NSGA-II+LS) | **100,00 %** | 90,00 % (NSGA-II+LS) |
+| KC10-2fl-3rl | 0,8 s | **100,0 %** | 48,3 % (NSGA-II+LS) | **100,00 %** | 98,85 % (NSGA-II+LS) |
+| KC10-2fl-3uni | 6,8 s | **100,0 %** | 61,5 % (NSGA-II+LS) | **100,00 %** | 99,65 % (NSGA-II+LS) |
+| KC10-2fl-4rl | 0,8 s | **99,9 %** | 37,1 % (NSGA-II+LS) | **100,00 %** | 99,06 % (NSGA-II+LS) |
+| KC10-2fl-5rl | 0,8 s | **100,0 %** | 42,0 % (NSGA-II+LS) | **100,00 %** | 99,68 % (NSGA-II+LS) |
+| KC20-2fl-1rl | 33,1 s | **95,4 %** | 65,8 % (NSGA-III+LS) | **99,99 %** | 99,76 % (NSGA-II+LS) |
+| KC20-2fl-1uni | 39,0 s | **97,7 %** | 34,1 % (NSGA-III+LS) | **99,99 %** | 98,90 % (NSGA-III+LS) |
+| KC20-2fl-2rl | 34,1 s | **59,2 %** | 28,7 % (NSGA-II+LS) | **99,75 %** | 99,16 % (NSGA-II+LS) |
+| KC20-2fl-2uni | 32,2 s | **100,0 %** | 61,2 % (NSGA-III+LS) | **100,00 %** | 98,53 % (NSGA-II+LS) |
+| KC20-2fl-3rl | 33,2 s | **58,2 %** | 21,4 % (NSGA-II+LS) | **99,16 %** | 97,72 % (NSGA-II+LS) |
+| KC20-2fl-3uni | 47,2 s | **73,7 %** | 14,9 % (NSGA-III+LS) | **99,68 %** | 98,41 % (NSGA-II+LS) |
+| KC20-2fl-4rl | 31,0 s | **46,8 %** | 25,2 % (NSGA-III+LS) | **98,74 %** | 95,22 % (NSGA-III+LS) |
+| KC20-2fl-5rl | 33,9 s | **62,7 %** | 22,6 % (NSGA-II+LS) | **99,83 %** | 99,34 % (NSGA-II+LS) |
+| KC30-2fl-1rl | 53,5 s | **45,0 %** | 10,3 % (NSGA-III+LS) | **99,60 %** | 98,44 % (NSGA-II+LS) |
+| KC30-3fl-1rl | 103,3 s | **14,6 %** | 0,1 % (MOEA/D+LS) | **96,79 %** | 88,14 % (NSGA-III+LS) |
+| KC30-3fl-1uni | 104,6 s | **14,3 %** | 0,0 % (NSGA-III+LS) | **95,40 %** | 76,43 % (NSGA-III+LS) |
+| KC30-3fl-2rl | 103,2 s | **23,7 %** | 0,1 % (MOEA/D+LS) | **98,63 %** | 91,28 % (NSGA-III+LS) |
+| KC30-3fl-2uni | 103,2 s | **43,0 %** | 0,7 % (NSGA-III+LS) | **98,33 %** | 82,61 % (NSGA-III+LS) |
+| KC30-3fl-3rl | 103,7 s | **26,9 %** | 0,0 % (NSGA-II+LS) | **98,45 %** | 87,95 % (NSGA-III+LS) |
+| KC30-3fl-3uni | 104,8 s | **20,4 %** | 0,0 % (NSGA-II+LS) | **96,25 %** | 77,23 % (NSGA-III+LS) |
+
+- `cuda_mqap` tiene rango medio **1,00** en los dos indicadores y gana en 22 o 23 de las 23 instancias frente a cada
+  rival. El único empate es KC10-2fl-2uni, cuyo frente óptimo tiene un solo punto, que los rivales meméticos también
+  encuentran en la mayoría de las ejecuciones.
+- **KC10**: en menos de 7 s por ejecución, `cuda_mqap` encuentra el 97,9–100 % del frente óptimo publicado; con el
+  mismo tiempo, el mejor rival encuentra el 37,1–90,0 %.
+- **KC20 y KC30**: el 45,0–100 % del frente de referencia en las instancias de dos objetivos, frente al 10,3–65,8 %
+  del mejor rival; en las KC30 de tres objetivos, el 14,3–43,0 % frente a como mucho el 0,7 %, y el 95,4–98,6 % del
+  hipervolumen de referencia frente al 76,4–91,3 %.
+- **Los mejores frentes conocidos todavía pueden mejorar.** En 11 instancias la campaña encontró puntos que
+  `reference/v0.4` no domina: la mayoría de `cuda_mqap` (de 2 en KC20-2fl-5rl a 5342 en KC30-3fl-3rl), pero también
+  algunos de los rivales (hasta 15 de NSGA-II en KC20-2fl-3rl). Son candidatos para una `v0.5`, que todavía no se ha
+  construido; todas las cifras de aquí están medidas contra `v0.4`.
 
 ## Qué dicen los resultados
 
@@ -219,7 +272,8 @@ KC20-2fl-1rl. La tabla se completará cuando termine la campaña.
   NSGA-II y NSGA-III meméticos de pymoo las diferencias son sobre todo empates, y en varias instancias pequeñas o
   uniformes el cruce con eliminación de duplicados de pymoo es mejor. Lo que separa a todo algoritmo memético de su
   versión sin búsqueda local es esa búsqueda local, como ya recogía la literatura del mQAP.
-- **A igual tiempo la ventaja se vuelve sistemática**, porque la GPU dedica los mismos segundos a poblaciones entre
+- **A igual tiempo la ventaja se vuelve sistemática**: rango medio 1,00 en las 23 instancias de Knowles–Corne y en
+  las 16 de Garrett, porque la GPU dedica los mismos segundos a poblaciones entre
   40 y 650 veces mayores que las 100 de los demás. Las mejoras de calidad de este proyecto vienen sobre todo de la
   población que la GPU vuelve asequible, junto con la intensidad ajustada de la búsqueda local, y no de un mejor
   diseño de operadores.
